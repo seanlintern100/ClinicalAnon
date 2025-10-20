@@ -21,10 +21,17 @@ struct ClinicalAnonApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // TODO: Conditional view rendering based on setup state
-            // Will be implemented in Phase 2
-            ContentView()
-                .frame(minWidth: 900, minHeight: 600)
+            ZStack {
+                // Show setup wizard until ready
+                if setupManager.state == .ready {
+                    ContentView()
+                        .frame(minWidth: 900, minHeight: 600)
+                } else {
+                    SetupView()
+                        .frame(minWidth: 900, minHeight: 600)
+                        .environmentObject(setupManager)
+                }
+            }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
