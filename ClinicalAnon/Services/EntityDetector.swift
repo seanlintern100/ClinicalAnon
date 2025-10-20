@@ -17,9 +17,9 @@ class EntityDetector {
 
     /// Parse LLM JSON response and extract entities
     /// - Parameter jsonResponse: The JSON string from the LLM
-    /// - Returns: Tuple of (anonymizedText, entities array)
+    /// - Returns: Array of Entity objects
     /// - Throws: AppError if parsing fails
-    static func parseResponse(_ jsonResponse: String) throws -> (anonymizedText: String, entities: [Entity]) {
+    static func parseResponse(_ jsonResponse: String) throws -> [Entity] {
         // Clean the response (remove markdown code blocks if present)
         let cleanedJSON = cleanJSON(jsonResponse)
 
@@ -35,15 +35,10 @@ class EntityDetector {
             throw AppError.malformedJSON("Failed to decode JSON: \(error.localizedDescription)")
         }
 
-        // Validate response
-        guard !llmResponse.anonymized_text.isEmpty else {
-            throw AppError.emptyResponse
-        }
-
         // Convert LLM entities to our Entity objects
         let entities = try convertLLMEntities(llmResponse.entities)
 
-        return (llmResponse.anonymized_text, entities)
+        return entities
     }
 
     // MARK: - Private Methods
@@ -204,7 +199,6 @@ class EntityDetector {
 
 /// Response structure from the LLM
 private struct LLMResponse: Codable {
-    let anonymized_text: String
     let entities: [LLMEntity]
 }
 
@@ -264,7 +258,6 @@ extension EntityDetector {
     /// Sample valid JSON response
     static let sampleValidJSON = """
     {
-      "anonymized_text": "[CLIENT_A] attended her session on [DATE_A].",
       "entities": [
         {
           "original": "Jane Smith",
@@ -286,7 +279,6 @@ extension EntityDetector {
     static let sampleMarkdownJSON = """
     ```json
     {
-      "anonymized_text": "[CLIENT_A] attended session.",
       "entities": [
         {
           "original": "Sarah",
@@ -302,7 +294,6 @@ extension EntityDetector {
     /// Sample JSON with multiple occurrences
     static let sampleMultipleOccurrences = """
     {
-      "anonymized_text": "[CLIENT_A] saw [PROVIDER_A]. [CLIENT_A] reported improvement.",
       "entities": [
         {
           "original": "Jane",
@@ -321,7 +312,7 @@ extension EntityDetector {
     """
 
     /// Test parsing with sample data
-    static func testParseSample() throws -> (String, [Entity]) {
+    static func testParseSample() throws -> [Entity] {
         return try parseResponse(sampleValidJSON)
     }
 }

@@ -138,101 +138,74 @@ class PromptBuilder {
     private static let outputFormat = """
     OUTPUT FORMAT:
 
-    Return ONLY valid JSON in this exact structure:
+    Return ONLY valid JSON with the entities array:
     {
-      "anonymized_text": "The complete text with [REPLACEMENT_CODES] in place of PII",
       "entities": [
         {
           "original": "exact text that was replaced",
           "replacement": "[REPLACEMENT_CODE]",
           "type": "entity_type",
-          "positions": [[start, end], [start, end]]
+          "positions": [[start, end]]
         }
       ]
     }
 
     REQUIREMENTS:
-    - "anonymized_text": Full text with ALL PII replaced by codes
-    - "entities": Array of ALL entities found and replaced
+    - "entities": Array of ALL PII entities found in the text
     - "original": Exact text as it appeared (preserve capitalization, spacing)
-    - "replacement": The replacement code used (e.g., "[CLIENT_A]")
+    - "replacement": The replacement code to use (e.g., "[CLIENT_A]")
     - "type": One of: person_client, person_provider, person_other, date, location, organization, identifier, contact
     - "positions": Array of [startIndex, endIndex] for EVERY occurrence in the ORIGINAL text
 
     CRITICAL:
-    - Character positions are 0-indexed
-    - End index is exclusive (like Python slicing)
-    - List ALL occurrences of each entity
-    - Ensure JSON is valid and properly escaped
+    - Character positions are 0-indexed (0 = first character)
+    - End index is exclusive (like Python slicing: text[start:end])
+    - List ALL occurrences of each entity with all their positions
+    - Same entity = same replacement code throughout
+    - Return valid JSON only - no extra text
     """
 
     private static let examples = """
-    EXAMPLES:
+    EXAMPLE:
 
-    Example 1 - Simple case:
-    Input: "Jane Smith attended her session on March 15, 2024."
+    Input: "Dr. Wilson saw Sarah on March 15, 2024. Sarah reported improvement."
     Output:
     {
-      "anonymized_text": "[CLIENT_A] attended her session on [DATE_A].",
-      "entities": [
-        {
-          "original": "Jane Smith",
-          "replacement": "[CLIENT_A]",
-          "type": "person_client",
-          "positions": [[0, 10]]
-        },
-        {
-          "original": "March 15, 2024",
-          "replacement": "[DATE_A]",
-          "type": "date",
-          "positions": [[39, 53]]
-        }
-      ]
-    }
-
-    Example 2 - Multiple occurrences:
-    Input: "Dr. Wilson saw Sarah today. Sarah reported improvement. Dr. Wilson noted good progress."
-    Output:
-    {
-      "anonymized_text": "[PROVIDER_A] saw [CLIENT_A] today. [CLIENT_A] reported improvement. [PROVIDER_A] noted good progress.",
       "entities": [
         {
           "original": "Dr. Wilson",
           "replacement": "[PROVIDER_A]",
           "type": "person_provider",
-          "positions": [[0, 10], [58, 68]]
+          "positions": [[0, 10]]
         },
         {
           "original": "Sarah",
           "replacement": "[CLIENT_A]",
           "type": "person_client",
-          "positions": [[15, 20], [28, 33]]
+          "positions": [[15, 20], [41, 46]]
+        },
+        {
+          "original": "March 15, 2024",
+          "replacement": "[DATE_A]",
+          "type": "date",
+          "positions": [[24, 38]]
         }
       ]
     }
 
-    Example 3 - Preserve clinical context:
-    Input: "35-year-old client presented with anxiety and depression. Symptoms worsened 6 months ago."
-    Output:
-    {
-      "anonymized_text": "35-year-old client presented with anxiety and depression. Symptoms worsened 6 months ago.",
-      "entities": []
-    }
-    Note: Age, symptoms, and relative timeframe are preserved. No PII detected.
+    Note: If no PII is found, return {"entities": []}
     """
 
     private static let finalInstructions = """
     FINAL REMINDERS:
 
-    1. PRESERVE therapeutic value - the text must remain clinically useful
-    2. REPLACE only personally identifiable information
-    3. MAINTAIN consistency - same entity = same code throughout
-    4. RESPECT cultural context, especially te reo Māori
-    5. RETURN valid JSON only - no markdown, no explanations, just JSON
-    6. TRACK all positions accurately for every occurrence
-    7. PRESERVE relative dates, general locations, ages, genders, symptoms, diagnoses
+    1. IDENTIFY only personally identifiable information - preserve everything else
+    2. MAINTAIN consistency - same entity = same replacement code throughout
+    3. RESPECT cultural context, especially te reo Māori
+    4. TRACK all positions accurately for every occurrence
+    5. RETURN only the entities array as valid JSON
 
-    Now process the clinical text provided and return the JSON response.
+    Process the text and return ONLY the JSON with detected entities.
     """
 
     // MARK: - Helper Methods

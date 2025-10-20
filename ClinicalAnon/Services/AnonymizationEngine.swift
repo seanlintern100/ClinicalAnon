@@ -84,11 +84,11 @@ class AnonymizationEngine: ObservableObject {
             throw AppError.networkError(error)
         }
 
-        // Step 3: Parse response
+        // Step 3: Parse response to get entities
         progress = 0.6
         statusMessage = "Processing response..."
 
-        let (anonymizedText, rawEntities) = try EntityDetector.parseResponse(llmResponse)
+        let rawEntities = try EntityDetector.parseResponse(llmResponse)
 
         // Step 4: Apply entity mapping for consistency
         progress = 0.7
@@ -96,8 +96,14 @@ class AnonymizationEngine: ObservableObject {
 
         let mappedEntities = applyEntityMapping(to: rawEntities)
 
-        // Step 5: Validate and verify
+        // Step 5: Generate anonymized text locally using TextReplacer
         progress = 0.8
+        statusMessage = "Anonymizing text..."
+
+        let anonymizedText = try TextReplacer.replaceEntities(in: originalText, with: mappedEntities)
+
+        // Step 6: Validate positions
+        progress = 0.9
         statusMessage = "Validating results..."
 
         let validationIssues = EntityDetector.validatePositions(
@@ -108,8 +114,8 @@ class AnonymizationEngine: ObservableObject {
         // Note: Validation issues are logged but don't prevent processing
         // The LLM may have slightly imprecise position markers but correct replacements
 
-        // Step 6: Create result
-        progress = 0.9
+        // Step 7: Create result
+        progress = 0.95
         statusMessage = "Finalizing..."
 
         let processingTime = Date().timeIntervalSince(startTime)

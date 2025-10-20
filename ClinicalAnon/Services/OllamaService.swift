@@ -47,11 +47,19 @@ class OllamaService: OllamaServiceProtocol {
             return try await generateMockResponse(for: text)
         }
 
+        let startTime = Date()
+        print("⏱️ Starting request to Ollama with model: \(modelName)")
+        print("📝 Input text length: \(text.count) chars, System prompt length: \(systemPrompt.count) chars")
+
         // Build the request
         let request = try buildRequest(text: text, systemPrompt: systemPrompt)
 
         // Send with timeout
+        print("🌐 Sending HTTP request...")
         let (data, response) = try await URLSession.shared.data(for: request)
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        print("✅ Received response in \(String(format: "%.1f", elapsed))s")
 
         // Validate response
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -126,6 +134,14 @@ class OllamaService: OllamaServiceProtocol {
         Return your response as valid JSON only.
         """
 
+        // Calculate appropriate max tokens based on input length
+        // Need ~same length for anonymized text + overhead for entities JSON
+        // Estimate: 4 chars per token, then allow 1.5x for safety
+        let estimatedInputTokens = (text.count + systemPrompt.count) / 4
+        let maxOutputTokens = max(600, min(2000, Int(Double(text.count) / 4.0 * 1.5) + 300))
+
+        print("🧮 Estimated input tokens: \(estimatedInputTokens), Max output tokens: \(maxOutputTokens)")
+
         // Build request body
         let requestBody = OllamaRequest(
             model: modelName,
@@ -133,7 +149,7 @@ class OllamaService: OllamaServiceProtocol {
             stream: false,
             options: OllamaRequest.OllamaOptions(
                 temperature: 0.1,  // Low temperature for consistent output
-                num_predict: 2000   // Max tokens
+                num_predict: maxOutputTokens
             )
         )
 
