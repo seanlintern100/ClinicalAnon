@@ -26,6 +26,7 @@
 		BED740E805A7B17E543319AE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */; };
 		C459430DD92E2C888FA69914 /* SourceSans3-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */; };
 		D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */; };
+		FCF666650B7ED18C8D58B187 /* EntityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = D283D54D8952DB9D71D72D79 /* EntityDetector.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +59,7 @@
 		B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		C0FAD264CF63B5F813E89B8B /* Entity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entity.swift; sourceTree = "<group>"; };
 		C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationResult.swift; sourceTree = "<group>"; };
+		D283D54D8952DB9D71D72D79 /* EntityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityDetector.swift; sourceTree = "<group>"; };
 		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
 		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
 		EFD141C928FBD98682F47FE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
@@ -159,6 +161,7 @@
 		AE88B234EE8EDF8826B3D08E /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				D283D54D8952DB9D71D72D79 /* EntityDetector.swift */,
 				1401B2AB259CD0721DA60054 /* OllamaService.swift */,
 				B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */,
 			);
@@ -274,6 +277,7 @@
 				D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
 				7BD00CACD935BCBBCFF9FC97 /* Entity.swift in Sources */,
+				FCF666650B7ED18C8D58B187 /* EntityDetector.swift in Sources */,
 				0E085DEAC7C367FC64D14900 /* EntityMapping.swift in Sources */,
 				16183A6417260B823C8E2805 /* EntityType.swift in Sources */,
 				47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */,
