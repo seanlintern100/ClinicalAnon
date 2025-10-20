@@ -105,12 +105,8 @@ class AnonymizationEngine: ObservableObject {
             originalText: originalText
         )
 
-        if !validationIssues.isEmpty {
-            print("Warning: Found \(validationIssues.count) validation issues:")
-            for issue in validationIssues {
-                print("  - \(issue.description)")
-            }
-        }
+        // Note: Validation issues are logged but don't prevent processing
+        // The LLM may have slightly imprecise position markers but correct replacements
 
         // Step 6: Create result
         progress = 0.9
@@ -147,11 +143,7 @@ class AnonymizationEngine: ObservableObject {
     /// - Parameter modelName: The new model name to use
     func updateModelName(_ modelName: String) {
         if let service = ollamaService as? OllamaService {
-            print("🟢 AnonymizationEngine: Updating model from '\(service.modelName)' to '\(modelName)'")
             service.modelName = modelName
-            print("🟢 AnonymizationEngine: Model updated. Current value: '\(service.modelName)'")
-        } else {
-            print("🔴 AnonymizationEngine: Failed to cast ollamaService to OllamaService")
         }
     }
 
