@@ -244,6 +244,16 @@ struct DesignSystem {
 
 extension Color {
     init(light: Color, dark: Color) {
+        #if os(macOS)
+        self.init(NSColor(name: nil) { appearance in
+            switch appearance.name {
+            case .darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua:
+                return NSColor(dark)
+            default:
+                return NSColor(light)
+            }
+        })
+        #else
         self.init(UIColor { traitCollection in
             switch traitCollection.userInterfaceStyle {
             case .dark:
@@ -252,6 +262,7 @@ extension Color {
                 return UIColor(light)
             }
         })
+        #endif
     }
 }
 
