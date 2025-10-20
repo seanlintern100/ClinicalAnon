@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import AppKit
+import SwiftUI
 
 // MARK: - Model Info
 
@@ -48,7 +49,9 @@ class SetupManager: ObservableObject {
     // MARK: - Private Properties
 
     private var pollTimer: Timer?
-    @Published var selectedModel: String = "mistral:latest"
+
+    // Persisted model selection - remembers user's choice across app launches
+    @AppStorage("selectedModel") var selectedModel: String = "mistral:latest"
 
     // Available models for clinical anonymization
     let availableModels: [ModelInfo] = [

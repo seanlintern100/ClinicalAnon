@@ -167,10 +167,10 @@ struct HeaderView: View {
 struct SessionInfoBadge: View {
     @ObservedObject var setupManager: SetupManager
     @State private var cachedInstalledModels: [ModelInfo] = []
+    @State private var cachedSelectedModel: String = ""
+    @State private var cachedModelDisplayName: String = "Model"
 
     var body: some View {
-        let modelDisplayName = setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
-
         HStack(spacing: DesignSystem.Spacing.small) {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: "checkmark.circle.fill")
@@ -191,10 +191,12 @@ struct SessionInfoBadge: View {
                 ForEach(cachedInstalledModels) { model in
                     Button(action: {
                         setupManager.selectedModel = model.name
+                        cachedSelectedModel = model.name
+                        cachedModelDisplayName = model.displayName
                     }) {
                         HStack {
                             Text(model.displayName)
-                            if setupManager.selectedModel == model.name {
+                            if cachedSelectedModel == model.name {
                                 Image(systemName: "checkmark")
                             }
                         }
@@ -213,7 +215,7 @@ struct SessionInfoBadge: View {
                         .foregroundColor(DesignSystem.Colors.primaryTeal)
                         .font(.system(size: 12))
 
-                    Text(modelDisplayName)
+                    Text(cachedModelDisplayName)
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.textPrimary)
 
@@ -229,10 +231,21 @@ struct SessionInfoBadge: View {
             .menuStyle(.borderlessButton)
         }
         .onAppear {
-            // Cache installed models on appear to avoid repeated command execution
-            let installed = setupManager.getInstalledModels()
-            cachedInstalledModels = setupManager.availableModels.filter { installed.contains($0.name) }
+            updateCache()
         }
+        .onChange(of: setupManager.selectedModel) { newValue in
+            updateCache()
+        }
+    }
+
+    private func updateCache() {
+        // Cache installed models to avoid repeated command execution
+        let installed = setupManager.getInstalledModels()
+        cachedInstalledModels = setupManager.availableModels.filter { installed.contains($0.name) }
+
+        // Cache selected model info
+        cachedSelectedModel = setupManager.selectedModel
+        cachedModelDisplayName = setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
     }
 }
 

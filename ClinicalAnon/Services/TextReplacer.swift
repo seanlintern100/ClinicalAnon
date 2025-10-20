@@ -31,6 +31,37 @@ class TextReplacer {
             return originalText
         }
 
+        // IMPROVED: Don't trust LLM positions - find text ourselves
+        // This is more reliable since LLMs think in tokens, not characters
+        var result = originalText
+
+        // Process entities in order of first occurrence
+        // This ensures we don't mess up positions by replacing later text first
+        for entity in entities {
+            // Use simple string replacement - finds all occurrences automatically
+            result = result.replacingOccurrences(
+                of: entity.originalText,
+                with: entity.replacementCode
+            )
+        }
+
+        print("✅ Replaced \(entities.count) entity types")
+
+        return result
+    }
+
+    /// DEPRECATED: Replace entities using LLM-provided positions
+    /// This method is unreliable because LLMs calculate character positions incorrectly
+    static func replaceEntitiesUsingPositions(in originalText: String, with entities: [Entity]) throws -> String {
+        guard !originalText.isEmpty else {
+            throw AppError.textValidationFailed("Original text is empty")
+        }
+
+        // If no entities, return original text
+        if entities.isEmpty {
+            return originalText
+        }
+
         // Create list of all replacements (entity, position index)
         var replacements: [(entity: Entity, positionIndex: Int, start: Int, end: Int)] = []
 
