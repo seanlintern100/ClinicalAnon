@@ -12,6 +12,7 @@
 		16183A6417260B823C8E2805 /* EntityType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01915D69A51DDDEA81FD955A /* EntityType.swift */; };
 		217744CD6A72F04212DC21A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8096B7BFDB5397D700CDA6FD /* Assets.xcassets */; };
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
+		25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */; };
 		2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */; };
 		47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1401B2AB259CD0721DA60054 /* OllamaService.swift */; };
 		4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */; };
@@ -49,6 +50,7 @@
 		304B514DF56B1A7F70285358 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4F7B43C6A99E8D91F07BFFD4 /* RedactorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RedactorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityListView.swift; sourceTree = "<group>"; };
 		8096B7BFDB5397D700CDA6FD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationEngine.swift; sourceTree = "<group>"; };
 		846F1B468F8E9926702E98A0 /* AppError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
@@ -74,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				ABB7055B7C628D5B3DDB2864 /* SetupView.swift */,
+				F73F9C4D26018A4728868190 /* Components */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -172,6 +175,14 @@
 				F110215B1181B8B98076418E /* TextReplacer.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		F73F9C4D26018A4728868190 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 		FCEE095B0C3DEE685B005279 /* Tests */ = {
@@ -285,6 +296,7 @@
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
 				7BD00CACD935BCBBCFF9FC97 /* Entity.swift in Sources */,
 				FCF666650B7ED18C8D58B187 /* EntityDetector.swift in Sources */,
+				25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */,
 				0E085DEAC7C367FC64D14900 /* EntityMapping.swift in Sources */,
 				16183A6417260B823C8E2805 /* EntityType.swift in Sources */,
 				47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */,
