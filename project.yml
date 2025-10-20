@@ -1,0 +1,85 @@
+name: Redactor
+options:
+  bundleIdPrefix: com.3bigthings
+  deploymentTarget:
+    macOS: "13.0"
+  developmentLanguage: en
+
+settings:
+  MARKETING_VERSION: 1.0
+  CURRENT_PROJECT_VERSION: 1
+
+targets:
+  Redactor:
+    type: application
+    platform: macOS
+    sources:
+      - path: ClinicalAnon
+        excludes:
+          - "**/*.md"
+          - "**/Tests"
+    resources:
+      - path: ClinicalAnon/Resources/Fonts
+      - path: ClinicalAnon/Resources/Assets.xcassets
+      - path: ClinicalAnon/Preview Content
+    info:
+      path: ClinicalAnon/Resources/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: $(DEVELOPMENT_LANGUAGE)
+        CFBundleDisplayName: Redactor
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: "13.0"
+        NSHumanReadableCopyright: "Copyright © 2025 3 Big Things. All rights reserved."
+        NSPrincipalClass: NSApplication
+        UIAppFonts:
+          - Fonts/Lora-Regular.ttf
+          - Fonts/Lora-Bold.ttf
+          - Fonts/Lora-Italic.ttf
+          - Fonts/SourceSans3-Regular.ttf
+          - Fonts/SourceSans3-SemiBold.ttf
+          - Fonts/SourceSans3-Bold.ttf
+        LSApplicationCategoryType: public.app-category.healthcare-fitness
+        NSSupportsAutomaticTermination: true
+        NSSupportsSuddenTermination: true
+    settings:
+      base:
+        PRODUCT_NAME: Redactor
+        PRODUCT_BUNDLE_IDENTIFIER: com.3bigthings.Redactor
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        ENABLE_PREVIEWS: true
+        DEVELOPMENT_ASSET_PATHS: "\"ClinicalAnon/Preview Content\""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        COMBINE_HIDPI_IMAGES: true
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: false
+        INFOPLIST_FILE: ClinicalAnon/Resources/Info.plist
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 3 Big Things. All rights reserved."
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        MARKETING_VERSION: 1.0
+        SWIFT_EMIT_LOC_STRINGS: true
+    scheme:
+      testTargets:
+        - RedactorTests
+      gatherCoverageData: false
+
+  RedactorTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - ClinicalAnon/Tests
+    dependencies:
+      - target: Redactor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.3bigthings.RedactorTests
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
