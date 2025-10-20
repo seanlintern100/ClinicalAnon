@@ -25,8 +25,10 @@ class OllamaService: OllamaServiceProtocol {
     // MARK: - Properties
 
     private let baseURL = "http://localhost:11434"
-    private let defaultModel = "llama3.1:8b"
     private let timeout: TimeInterval = 30.0
+
+    /// The model to use for requests (configurable)
+    var modelName: String = "mistral:latest"
 
     /// Toggle mock mode for testing without Ollama
     var isMockMode: Bool = false
@@ -126,7 +128,7 @@ class OllamaService: OllamaServiceProtocol {
 
         // Build request body
         let requestBody = OllamaRequest(
-            model: defaultModel,
+            model: modelName,
             prompt: fullPrompt,
             stream: false,
             options: OllamaRequest.OllamaOptions(

@@ -38,6 +38,9 @@ struct SetupView: View {
                 case .needsModel:
                     NeedsModelView(setupManager: setupManager)
 
+                case .selectingModel:
+                    ModelSelectionView(setupManager: setupManager)
+
                 case .downloadingModel(let progress):
                     DownloadingModelView(
                         progress: progress,
@@ -253,6 +256,127 @@ struct NeedsOllamaView: View {
     }
 }
 
+// MARK: - Model Selection View
+
+struct ModelSelectionView: View {
+    @ObservedObject var setupManager: SetupManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
+            // Header
+            VStack(spacing: DesignSystem.Spacing.small) {
+                Text("🤖")
+                    .font(.system(size: 48))
+
+                Text("Select AI Model")
+                    .font(DesignSystem.Typography.title)
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                Text("Choose which model to use for anonymization. You can download additional models or use one you already have.")
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer()
+                .frame(height: DesignSystem.Spacing.medium)
+
+            // Model list
+            ScrollView {
+                VStack(spacing: DesignSystem.Spacing.small) {
+                    let installedModels = setupManager.getInstalledModels()
+
+                    ForEach(setupManager.availableModels) { model in
+                        ModelRow(
+                            model: model,
+                            isInstalled: installedModels.contains(model.name),
+                            isSelected: setupManager.selectedModel == model.name,
+                            onSelect: {
+                                setupManager.selectedModel = model.name
+                            },
+                            onDownload: {
+                                Task {
+                                    try? await setupManager.downloadModel(modelName: model.name)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Continue button
+            Button("Continue with \(setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Selected Model")") {
+                Task { await setupManager.checkSetup() }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!setupManager.getInstalledModels().contains(setupManager.selectedModel))
+        }
+    }
+}
+
+struct ModelRow: View {
+    let model: ModelInfo
+    let isInstalled: Bool
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onDownload: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
+            // Selection radio
+            Button(action: isInstalled ? onSelect : {}) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+                    .font(.system(size: 24))
+            }
+            .buttonStyle(.plain)
+            .disabled(!isInstalled)
+
+            // Model info
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                HStack {
+                    Text(model.displayName)
+                        .font(DesignSystem.Typography.subheading)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                    if isInstalled {
+                        Text("INSTALLED")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.success)
+                            .padding(.horizontal, DesignSystem.Spacing.xs)
+                            .padding(.vertical, 2)
+                            .background(DesignSystem.Colors.success.opacity(0.1))
+                            .cornerRadius(4)
+                    }
+                }
+
+                Text(model.description)
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Text("Size: \(model.size)")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+
+            Spacer()
+
+            // Download button
+            if !isInstalled {
+                Button("Download") {
+                    onDownload()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+        .padding(DesignSystem.Spacing.medium)
+        .cardStyle()
+    }
+}
+
 // MARK: - Needs Model View
 
 struct NeedsModelView: View {
@@ -269,7 +393,7 @@ struct NeedsModelView: View {
                     .font(DesignSystem.Typography.title)
                     .foregroundColor(DesignSystem.Colors.primaryTeal)
 
-                Text("One-time download of the Llama 3.1 model (~4.7 GB). This works completely offline afterwards.")
+                Text("One-time download of the selected model. This works completely offline afterwards.")
                     .font(DesignSystem.Typography.body)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -300,17 +424,24 @@ struct NeedsModelView: View {
             Spacer()
 
             VStack(spacing: DesignSystem.Spacing.small) {
-                Text("💡 This download happens once. The model stays on your Mac and never contacts the internet again.")
+                Text("💡 Current model: \(setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? setupManager.selectedModel)")
                     .font(DesignSystem.Typography.caption)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
 
-                Button("Start Download") {
-                    Task {
-                        try? await setupManager.downloadModel()
+                HStack(spacing: DesignSystem.Spacing.medium) {
+                    Button("Choose Different Model") {
+                        setupManager.state = .selectingModel
                     }
+                    .buttonStyle(SecondaryButtonStyle())
+
+                    Button("Download \(setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model")") {
+                        Task {
+                            try? await setupManager.downloadModel()
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
                 }
-                .buttonStyle(PrimaryButtonStyle())
             }
         }
     }

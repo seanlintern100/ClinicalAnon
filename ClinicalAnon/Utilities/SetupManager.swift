@@ -10,6 +10,16 @@ import Foundation
 import Combine
 import AppKit
 
+// MARK: - Model Info
+
+struct ModelInfo: Identifiable {
+    let id = UUID()
+    let name: String           // e.g., "mistral:latest"
+    let displayName: String    // e.g., "Mistral 7B"
+    let size: String           // e.g., "4.1 GB"
+    let description: String    // User-friendly description
+}
+
 // MARK: - Setup States
 
 enum SetupState: Equatable {
@@ -18,6 +28,7 @@ enum SetupState: Equatable {
     case needsHomebrew
     case needsOllama
     case needsModel
+    case selectingModel
     case downloadingModel(progress: Double)
     case startingOllama
     case error(String)
@@ -37,7 +48,15 @@ class SetupManager: ObservableObject {
     // MARK: - Private Properties
 
     private var pollTimer: Timer?
-    private let modelName = "llama3.1:8b"
+    @Published var selectedModel: String = "mistral:latest"
+
+    // Available models for clinical anonymization
+    let availableModels: [ModelInfo] = [
+        ModelInfo(name: "mistral:latest", displayName: "Mistral 7B", size: "4.1 GB", description: "Fast and accurate, great for structured output"),
+        ModelInfo(name: "llama3.1:8b", displayName: "Llama 3.1 8B", size: "4.7 GB", description: "Excellent instruction following, very accurate"),
+        ModelInfo(name: "llama3.2:3b", displayName: "Llama 3.2 3B", size: "2.0 GB", description: "Fastest option, good for quick processing"),
+        ModelInfo(name: "mixtral:latest", displayName: "Mixtral 47B", size: "26 GB", description: "Most capable, slower but highest quality")
+    ]
 
     // MARK: - Initialization
 
@@ -90,8 +109,8 @@ class SetupManager: ObservableObject {
             }
         }
 
-        // Check if model is downloaded
-        guard isModelDownloaded() else {
+        // Check if selected model is downloaded
+        guard isModelDownloaded(modelName: selectedModel) else {
             state = .needsModel
             return
         }
@@ -235,7 +254,7 @@ class SetupManager: ObservableObject {
     // MARK: - Model Management
 
     func isModelDownloaded(modelName: String? = nil) -> Bool {
-        let model = modelName ?? self.modelName
+        let model = modelName ?? selectedModel
 
         // Find ollama binary
         guard let ollamaPath = findOllamaBinary() else {
@@ -249,7 +268,31 @@ class SetupManager: ObservableObject {
         return output.contains(model)
     }
 
-    func downloadModel() async throws {
+    func getInstalledModels() -> [String] {
+        guard let ollamaPath = findOllamaBinary() else {
+            return []
+        }
+
+        guard let output = executeCommand(ollamaPath, args: ["list"]) else {
+            return []
+        }
+
+        // Parse output to get model names
+        let lines = output.components(separatedBy: "\n")
+        var models: [String] = []
+
+        for line in lines.dropFirst() { // Skip header
+            let components = line.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            if let modelName = components.first {
+                models.append(modelName)
+            }
+        }
+
+        return models
+    }
+
+    func downloadModel(modelName: String? = nil) async throws {
+        let modelToDownload = modelName ?? selectedModel
         state = .downloadingModel(progress: 0.0)
         downloadProgress = 0.0
         downloadStatus = "Starting download..."
@@ -260,36 +303,46 @@ class SetupManager: ObservableObject {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ollamaPath)
-        process.arguments = ["pull", modelName]
+        process.arguments = ["pull", modelToDownload]
 
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
 
-        // Monitor progress in background
-        Task.detached {
-            let handle = pipe.fileHandleForReading
+        let handle = pipe.fileHandleForReading
 
-            while process.isRunning {
-                let data = handle.availableData
-                if data.count > 0, let line = String(data: data, encoding: .utf8) {
-                    await MainActor.run {
-                        self.downloadStatus = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Set up async reading handler
+        handle.readabilityHandler = { [weak self] fileHandle in
+            let data = fileHandle.availableData
+            guard data.count > 0, let line = String(data: data, encoding: .utf8) else { return }
 
-                        // Parse progress from output
-                        if let progress = self.parseProgress(from: line) {
-                            self.downloadProgress = progress
-                            self.state = .downloadingModel(progress: progress)
-                        }
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedLine.isEmpty {
+                    self.downloadStatus = trimmedLine
+
+                    // Parse progress from output
+                    if let progress = self.parseProgress(from: trimmedLine) {
+                        self.downloadProgress = progress
+                        self.state = .downloadingModel(progress: progress)
                     }
                 }
-
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
             }
         }
 
+        // Start the process
         try process.run()
-        process.waitUntilExit()
+
+        // Wait for completion
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            process.terminationHandler = { _ in
+                continuation.resume()
+            }
+        }
+
+        // Clean up
+        handle.readabilityHandler = nil
 
         if process.terminationStatus == 0 {
             // Success - recheck setup
