@@ -41,6 +41,7 @@ enum AppError: LocalizedError {
     case emptyText
     case textTooLong(maxLength: Int)
     case invalidInput(String)
+    case textValidationFailed(String)
 
     // MARK: - System Errors
 
@@ -109,6 +110,9 @@ enum AppError: LocalizedError {
 
         case .invalidInput(let details):
             return "Invalid input: \(details)"
+
+        case .textValidationFailed(let details):
+            return "Text validation failed: \(details)"
 
         // System Errors
         case .clipboardError:
