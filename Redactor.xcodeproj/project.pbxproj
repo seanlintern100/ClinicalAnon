@@ -16,6 +16,7 @@
 		6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47AED6262338D340240F041 /* SetupManager.swift */; };
 		70A057F1F85F780C3CE4AFC1 /* Lora-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B80BE3BA06214218C806D68C /* Lora-Bold.ttf */; };
 		83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD141C928FBD98682F47FE2 /* DesignSystem.swift */; };
+		A1516E189E242931277563CD /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB7055B7C628D5B3DDB2864 /* SetupView.swift */; };
 		AC6A61607E5F74EBA08D532E /* SourceSans3-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */; };
 		BED740E805A7B17E543319AE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */; };
 		C459430DD92E2C888FA69914 /* SourceSans3-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */; };
@@ -44,6 +45,7 @@
 		87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalAnonApp.swift; sourceTree = "<group>"; };
 		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
 		A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Regular.ttf"; sourceTree = "<group>"; };
+		ABB7055B7C628D5B3DDB2864 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		B47AED6262338D340240F041 /* SetupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupManager.swift; sourceTree = "<group>"; };
 		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
 		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
@@ -52,6 +54,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		0CE8AA0C7DB56BB3E295B657 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				ABB7055B7C628D5B3DDB2864 /* SetupView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 		0D3931A15A139DBB9296A130 = {
 			isa = PBXGroup;
 			children = (
@@ -79,6 +89,7 @@
 				97CF78AE383016203A6D8C0B /* Resources */,
 				AE88B234EE8EDF8826B3D08E /* Services */,
 				3711797DC48290385ADAE44E /* Utilities */,
+				0CE8AA0C7DB56BB3E295B657 /* Views */,
 			);
 			path = ClinicalAnon;
 			sourceTree = "<group>";
@@ -137,13 +148,6 @@
 			);
 			name = Tests;
 			path = ClinicalAnon/Tests;
-			sourceTree = "<group>";
-		};
-		"TEMP_F74E5DDD-6F12-4850-A793-E24D0AD73904" /* Views */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -247,6 +251,7 @@
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
 				47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */,
 				6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */,
+				A1516E189E242931277563CD /* SetupView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
