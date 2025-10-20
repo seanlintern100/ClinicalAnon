@@ -17,11 +17,13 @@ struct AnonymizationView: View {
     // MARK: - Properties
 
     @StateObject private var viewModel: AnonymizationViewModel
+    private let setupManager: SetupManager
 
     // MARK: - Initialization
 
     init(ollamaService: OllamaServiceProtocol, setupManager: SetupManager) {
         let engine = AnonymizationEngine(ollamaService: ollamaService)
+        self.setupManager = setupManager
         _viewModel = StateObject(wrappedValue: AnonymizationViewModel(engine: engine, setupManager: setupManager))
     }
 
@@ -30,7 +32,7 @@ struct AnonymizationView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HeaderView()
+            HeaderView(setupManager: setupManager)
 
             Divider()
 
@@ -138,6 +140,8 @@ struct AnonymizationView: View {
 // MARK: - Header View
 
 struct HeaderView: View {
+    let setupManager: SetupManager
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -153,7 +157,7 @@ struct HeaderView: View {
             Spacer()
 
             // Session info badge
-            SessionInfoBadge()
+            SessionInfoBadge(setupManager: setupManager)
         }
         .padding(DesignSystem.Spacing.medium)
         .background(DesignSystem.Colors.background)
@@ -161,20 +165,42 @@ struct HeaderView: View {
 }
 
 struct SessionInfoBadge: View {
-    var body: some View {
-        HStack(spacing: DesignSystem.Spacing.xs) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(DesignSystem.Colors.success)
-                .font(.system(size: 12))
+    @ObservedObject var setupManager: SetupManager
 
-            Text("Ready")
-                .font(DesignSystem.Typography.caption)
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+    private var modelDisplayName: String {
+        setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
+    }
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.small) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(DesignSystem.Colors.success)
+                    .font(.system(size: 12))
+
+                Text("Ollama Ready")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.small)
+            .padding(.vertical, 4)
+            .background(DesignSystem.Colors.surface)
+            .cornerRadius(DesignSystem.CornerRadius.small)
+
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Image(systemName: "cpu")
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                    .font(.system(size: 12))
+
+                Text(modelDisplayName)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.small)
+            .padding(.vertical, 4)
+            .background(DesignSystem.Colors.surface)
+            .cornerRadius(DesignSystem.CornerRadius.small)
         }
-        .padding(.horizontal, DesignSystem.Spacing.small)
-        .padding(.vertical, 4)
-        .background(DesignSystem.Colors.surface)
-        .cornerRadius(DesignSystem.CornerRadius.small)
     }
 }
 
@@ -221,10 +247,10 @@ class AnonymizationViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var successMessage: String?
 
-    // MARK: - Private Properties
+    // MARK: - Properties (accessible for UI)
 
-    private let engine: AnonymizationEngine
-    private let setupManager: SetupManager
+    let engine: AnonymizationEngine
+    let setupManager: SetupManager
 
     // MARK: - Initialization
 
