@@ -166,17 +166,11 @@ struct HeaderView: View {
 
 struct SessionInfoBadge: View {
     @ObservedObject var setupManager: SetupManager
-
-    private var modelDisplayName: String {
-        setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
-    }
-
-    private var installedModels: [ModelInfo] {
-        let installed = setupManager.getInstalledModels()
-        return setupManager.availableModels.filter { installed.contains($0.name) }
-    }
+    @State private var cachedInstalledModels: [ModelInfo] = []
 
     var body: some View {
+        let modelDisplayName = setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
+
         HStack(spacing: DesignSystem.Spacing.small) {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: "checkmark.circle.fill")
@@ -194,7 +188,7 @@ struct SessionInfoBadge: View {
 
             // Model picker
             Menu {
-                ForEach(installedModels) { model in
+                ForEach(cachedInstalledModels) { model in
                     Button(action: {
                         setupManager.selectedModel = model.name
                     }) {
@@ -233,6 +227,11 @@ struct SessionInfoBadge: View {
                 .cornerRadius(DesignSystem.CornerRadius.small)
             }
             .menuStyle(.borderlessButton)
+        }
+        .onAppear {
+            // Cache installed models on appear to avoid repeated command execution
+            let installed = setupManager.getInstalledModels()
+            cachedInstalledModels = setupManager.availableModels.filter { installed.contains($0.name) }
         }
     }
 }
