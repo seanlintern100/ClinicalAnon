@@ -13,6 +13,7 @@
 		217744CD6A72F04212DC21A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8096B7BFDB5397D700CDA6FD /* Assets.xcassets */; };
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1401B2AB259CD0721DA60054 /* OllamaService.swift */; };
+		4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */; };
 		4BBC10F04E49A942B0975790 /* Lora-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */; };
 		588D406FDB7E90C52FA32AA2 /* Lora-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */; };
 		6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47AED6262338D340240F041 /* SetupManager.swift */; };
@@ -54,6 +55,7 @@
 		B47AED6262338D340240F041 /* SetupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupManager.swift; sourceTree = "<group>"; };
 		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
 		C0FAD264CF63B5F813E89B8B /* Entity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entity.swift; sourceTree = "<group>"; };
+		C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationResult.swift; sourceTree = "<group>"; };
 		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
 		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
 		EFD141C928FBD98682F47FE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 		66DE2D0F8BC65C98DAD87417 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */,
 				C0FAD264CF63B5F813E89B8B /* Entity.swift */,
 				A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */,
 				01915D69A51DDDEA81FD955A /* EntityType.swift */,
@@ -263,6 +266,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */,
 				23714A7B62571A38F2E6397C /* AppError.swift in Sources */,
 				D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
