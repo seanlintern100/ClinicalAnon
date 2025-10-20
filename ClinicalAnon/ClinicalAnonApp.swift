@@ -111,14 +111,6 @@ struct StatusRow: View {
     }
 }
 
-// MARK: - Temporary SetupManager Stub (Phase 1)
-
-/// Temporary stub - will be fully implemented in Phase 2
-@MainActor
-class SetupManager: ObservableObject {
-    @Published var isReady: Bool = false
-}
-
 // MARK: - Preview
 
 #if DEBUG
