@@ -12,7 +12,7 @@ import SwiftUI
 
 struct SetupView: View {
 
-    @StateObject private var setupManager = SetupManager()
+    @EnvironmentObject var setupManager: SetupManager
 
     var body: some View {
         ZStack {
