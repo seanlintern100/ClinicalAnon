@@ -18,10 +18,12 @@
 		4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */; };
 		4BBC10F04E49A942B0975790 /* Lora-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */; };
 		51E1B452410FB4281532D60C /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */; };
+		534A7B988D2B0102C9515806 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD4A3288CEF816ED9D3925CC /* ActionBar.swift */; };
 		588D406FDB7E90C52FA32AA2 /* Lora-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */; };
 		6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47AED6262338D340240F041 /* SetupManager.swift */; };
 		70A057F1F85F780C3CE4AFC1 /* Lora-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B80BE3BA06214218C806D68C /* Lora-Bold.ttf */; };
 		7BD00CACD935BCBBCFF9FC97 /* Entity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FAD264CF63B5F813E89B8B /* Entity.swift */; };
+		7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06463A5E2CDA5C7A80638837 /* StatusBar.swift */; };
 		83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD141C928FBD98682F47FE2 /* DesignSystem.swift */; };
 		913A43814EBACCC657047706 /* TextEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */; };
 		A1516E189E242931277563CD /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB7055B7C628D5B3DDB2864 /* SetupView.swift */; };
@@ -46,6 +48,7 @@
 
 /* Begin PBXFileReference section */
 		01915D69A51DDDEA81FD955A /* EntityType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityType.swift; sourceTree = "<group>"; };
+		06463A5E2CDA5C7A80638837 /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
 		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
 		1401B2AB259CD0721DA60054 /* OllamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaService.swift; sourceTree = "<group>"; };
 		212E6C017812F7CA53B24F18 /* Redactor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Redactor.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -62,6 +65,7 @@
 		A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMapping.swift; sourceTree = "<group>"; };
 		A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Regular.ttf"; sourceTree = "<group>"; };
 		ABB7055B7C628D5B3DDB2864 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		AD4A3288CEF816ED9D3925CC /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		B47AED6262338D340240F041 /* SetupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupManager.swift; sourceTree = "<group>"; };
 		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
 		B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
@@ -184,8 +188,10 @@
 		F73F9C4D26018A4728868190 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				AD4A3288CEF816ED9D3925CC /* ActionBar.swift */,
 				7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */,
 				86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */,
+				06463A5E2CDA5C7A80638837 /* StatusBar.swift */,
 				D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */,
 			);
 			path = Components;
@@ -295,6 +301,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				534A7B988D2B0102C9515806 /* ActionBar.swift in Sources */,
 				2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */,
 				4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */,
 				23714A7B62571A38F2E6397C /* AppError.swift in Sources */,
@@ -310,6 +317,7 @@
 				51E1B452410FB4281532D60C /* PromptBuilder.swift in Sources */,
 				6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */,
 				A1516E189E242931277563CD /* SetupView.swift in Sources */,
+				7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */,
 				913A43814EBACCC657047706 /* TextEditorView.swift in Sources */,
 				F016C58CAD8F7A8D664FA3E4 /* TextReplacer.swift in Sources */,
 			);
