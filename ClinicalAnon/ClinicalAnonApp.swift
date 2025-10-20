@@ -24,8 +24,16 @@ struct ClinicalAnonApp: App {
             ZStack {
                 // Show setup wizard until ready
                 if setupManager.state == .ready {
-                    ContentView()
-                        .frame(minWidth: 900, minHeight: 600)
+                    // Main anonymization view
+                    AnonymizationView(
+                        ollamaService: {
+                            let service = OllamaService(mockMode: false)
+                            service.modelName = setupManager.selectedModel
+                            return service
+                        }(),
+                        setupManager: setupManager
+                    )
+                    .frame(minWidth: 900, minHeight: 600)
                 } else {
                     SetupView()
                         .frame(minWidth: 900, minHeight: 600)

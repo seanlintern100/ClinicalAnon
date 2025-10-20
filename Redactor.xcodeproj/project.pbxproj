@@ -14,6 +14,7 @@
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */; };
 		2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */; };
+		4035D0CC83F920E213197D5E /* AnonymizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */; };
 		47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1401B2AB259CD0721DA60054 /* OllamaService.swift */; };
 		4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */; };
 		4BBC10F04E49A942B0975790 /* Lora-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */; };
@@ -75,6 +76,7 @@
 		D283D54D8952DB9D71D72D79 /* EntityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityDetector.swift; sourceTree = "<group>"; };
 		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
 		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
+		E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationView.swift; sourceTree = "<group>"; };
 		EFD141C928FBD98682F47FE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		F110215B1181B8B98076418E /* TextReplacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReplacer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -83,6 +85,7 @@
 		0CE8AA0C7DB56BB3E295B657 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */,
 				ABB7055B7C628D5B3DDB2864 /* SetupView.swift */,
 				F73F9C4D26018A4728868190 /* Components */,
 			);
@@ -304,6 +307,7 @@
 				534A7B988D2B0102C9515806 /* ActionBar.swift in Sources */,
 				2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */,
 				4A05EC1C4498E9D192A8D34C /* AnonymizationResult.swift in Sources */,
+				4035D0CC83F920E213197D5E /* AnonymizationView.swift in Sources */,
 				23714A7B62571A38F2E6397C /* AppError.swift in Sources */,
 				D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
