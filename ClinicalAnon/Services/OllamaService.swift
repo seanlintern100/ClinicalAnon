@@ -25,7 +25,7 @@ class OllamaService: OllamaServiceProtocol {
     // MARK: - Properties
 
     private let baseURL = "http://localhost:11434"
-    private let timeout: TimeInterval = 30.0
+    private let timeout: TimeInterval = 120.0  // 2 minutes for long prompts
 
     /// The model to use for requests (configurable)
     var modelName: String = "mistral:latest"
