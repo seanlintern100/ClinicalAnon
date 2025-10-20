@@ -257,15 +257,13 @@ class AnonymizationViewModel: ObservableObject {
     init(engine: AnonymizationEngine, setupManager: SetupManager) {
         self.engine = engine
         self.setupManager = setupManager
+    }
 
-        // Subscribe to engine's published properties
-        Task {
-            for await _ in engine.$isProcessing.values {
-                self.isProcessing = engine.isProcessing
-                self.progress = engine.progress
-                self.statusMessage = engine.statusMessage
-            }
-        }
+    // Update UI from engine properties
+    private func updateFromEngine() {
+        isProcessing = engine.isProcessing
+        progress = engine.progress
+        statusMessage = engine.statusMessage
     }
 
     // MARK: - Actions
@@ -277,8 +275,25 @@ class AnonymizationViewModel: ObservableObject {
         errorMessage = nil
         successMessage = nil
 
+        // Set initial state
+        isProcessing = true
+        progress = 0.0
+        statusMessage = "Starting..."
+
         do {
+            // Poll for updates during processing
+            let updateTask = Task {
+                while isProcessing {
+                    updateFromEngine()
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                }
+            }
+
             result = try await engine.anonymize(inputText)
+
+            updateTask.cancel()
+            updateFromEngine()
+
             successMessage = "Anonymization complete! Found \(result?.entityCount ?? 0) entities."
 
             // Auto-dismiss success after 3 seconds
@@ -287,6 +302,10 @@ class AnonymizationViewModel: ObservableObject {
                 successMessage = nil
             }
         } catch {
+            isProcessing = false
+            progress = 0.0
+            statusMessage = ""
+
             if let appError = error as? AppError {
                 errorMessage = appError.errorDescription ?? "An error occurred"
             } else {
