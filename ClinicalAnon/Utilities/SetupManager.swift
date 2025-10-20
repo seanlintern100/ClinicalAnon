@@ -103,6 +103,19 @@ class SetupManager: ObservableObject {
     // MARK: - Homebrew Detection
 
     func isHomebrewInstalled() -> Bool {
+        // Check common Homebrew installation paths
+        let possiblePaths = [
+            "/opt/homebrew/bin/brew",  // Apple Silicon
+            "/usr/local/bin/brew"       // Intel Mac
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return true
+            }
+        }
+
+        // Fallback: try which command
         return executeCommand("/bin/bash", args: ["-c", "which brew"]) != nil
     }
 
@@ -114,6 +127,20 @@ class SetupManager: ObservableObject {
     // MARK: - Ollama Installation
 
     func isOllamaInstalled() -> Bool {
+        // Check common Ollama installation paths
+        let possiblePaths = [
+            "/opt/homebrew/bin/ollama",
+            "/usr/local/bin/ollama",
+            "/usr/bin/ollama"
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return true
+            }
+        }
+
+        // Fallback: try which command
         return executeCommand("/usr/bin/which", args: ["ollama"]) != nil
     }
 
