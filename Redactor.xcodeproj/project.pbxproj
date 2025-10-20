@@ -10,6 +10,7 @@
 		047A4256A36B91FEE8806193 /* SourceSans3-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */; };
 		217744CD6A72F04212DC21A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8096B7BFDB5397D700CDA6FD /* Assets.xcassets */; };
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
+		47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1401B2AB259CD0721DA60054 /* OllamaService.swift */; };
 		4BBC10F04E49A942B0975790 /* Lora-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */; };
 		588D406FDB7E90C52FA32AA2 /* Lora-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */; };
 		6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47AED6262338D340240F041 /* SetupManager.swift */; };
@@ -33,6 +34,7 @@
 
 /* Begin PBXFileReference section */
 		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
+		1401B2AB259CD0721DA60054 /* OllamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaService.swift; sourceTree = "<group>"; };
 		212E6C017812F7CA53B24F18 /* Redactor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Redactor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		304B514DF56B1A7F70285358 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4F7B43C6A99E8D91F07BFFD4 /* RedactorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RedactorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -75,6 +77,7 @@
 				87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */,
 				41804DF526EA1635A7B40032 /* Preview Content */,
 				97CF78AE383016203A6D8C0B /* Resources */,
+				AE88B234EE8EDF8826B3D08E /* Services */,
 				3711797DC48290385ADAE44E /* Utilities */,
 			);
 			path = ClinicalAnon;
@@ -120,6 +123,14 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		AE88B234EE8EDF8826B3D08E /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				1401B2AB259CD0721DA60054 /* OllamaService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 		FCEE095B0C3DEE685B005279 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -128,7 +139,7 @@
 			path = ClinicalAnon/Tests;
 			sourceTree = "<group>";
 		};
-		"TEMP_D6F239EE-2478-4A51-A0A9-685415B2231B" /* Views */ = {
+		"TEMP_F74E5DDD-6F12-4850-A793-E24D0AD73904" /* Views */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -234,6 +245,7 @@
 				23714A7B62571A38F2E6397C /* AppError.swift in Sources */,
 				D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
+				47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */,
 				6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
