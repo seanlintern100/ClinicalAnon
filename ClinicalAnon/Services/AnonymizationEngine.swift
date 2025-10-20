@@ -143,6 +143,14 @@ class AnonymizationEngine: ObservableObject {
         entityMapping.clearAll()
     }
 
+    /// Update the model name for the Ollama service
+    /// - Parameter modelName: The new model name to use
+    func updateModelName(_ modelName: String) {
+        if let service = ollamaService as? OllamaService {
+            service.modelName = modelName
+        }
+    }
+
     // MARK: - Private Methods
 
     /// Apply entity mapping to ensure consistency

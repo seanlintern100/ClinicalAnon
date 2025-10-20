@@ -304,6 +304,9 @@ class AnonymizationViewModel: ObservableObject {
     func analyze() async {
         guard !inputText.isEmpty else { return }
 
+        // Update model name from setup manager before processing
+        engine.updateModelName(setupManager.selectedModel)
+
         // Dismiss previous messages
         errorMessage = nil
         successMessage = nil
