@@ -171,6 +171,11 @@ struct SessionInfoBadge: View {
         setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
     }
 
+    private var installedModels: [ModelInfo] {
+        let installed = setupManager.getInstalledModels()
+        return setupManager.availableModels.filter { installed.contains($0.name) }
+    }
+
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.small) {
             HStack(spacing: DesignSystem.Spacing.xs) {
@@ -187,19 +192,47 @@ struct SessionInfoBadge: View {
             .background(DesignSystem.Colors.surface)
             .cornerRadius(DesignSystem.CornerRadius.small)
 
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: "cpu")
-                    .foregroundColor(DesignSystem.Colors.primaryTeal)
-                    .font(.system(size: 12))
+            // Model picker
+            Menu {
+                ForEach(installedModels) { model in
+                    Button(action: {
+                        setupManager.selectedModel = model.name
+                    }) {
+                        HStack {
+                            Text(model.displayName)
+                            if setupManager.selectedModel == model.name {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
 
-                Text(modelDisplayName)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                Divider()
+
+                Button("Manage Models...") {
+                    // Open setup view to download more models
+                    setupManager.state = .selectingModel
+                }
+            } label: {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "cpu")
+                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+                        .font(.system(size: 12))
+
+                    Text(modelDisplayName)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                    Image(systemName: "chevron.down")
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(.system(size: 10))
+                }
+                .padding(.horizontal, DesignSystem.Spacing.small)
+                .padding(.vertical, 4)
+                .background(DesignSystem.Colors.surface)
+                .cornerRadius(DesignSystem.CornerRadius.small)
             }
-            .padding(.horizontal, DesignSystem.Spacing.small)
-            .padding(.vertical, 4)
-            .background(DesignSystem.Colors.surface)
-            .cornerRadius(DesignSystem.CornerRadius.small)
+            .menuStyle(.borderlessButton)
         }
     }
 }
