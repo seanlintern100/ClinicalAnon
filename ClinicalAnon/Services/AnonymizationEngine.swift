@@ -147,7 +147,11 @@ class AnonymizationEngine: ObservableObject {
     /// - Parameter modelName: The new model name to use
     func updateModelName(_ modelName: String) {
         if let service = ollamaService as? OllamaService {
+            print("🟢 AnonymizationEngine: Updating model from '\(service.modelName)' to '\(modelName)'")
             service.modelName = modelName
+            print("🟢 AnonymizationEngine: Model updated. Current value: '\(service.modelName)'")
+        } else {
+            print("🔴 AnonymizationEngine: Failed to cast ollamaService to OllamaService")
         }
     }
 

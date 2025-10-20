@@ -24,7 +24,7 @@ class OllamaService: OllamaServiceProtocol {
 
     // MARK: - Properties
 
-    private let baseURL = "http://localhost:11434"
+    private let baseURL = "http://127.0.0.1:11434"  // Use IPv4 explicitly to avoid IPv6 connection issues
     private let timeout: TimeInterval = 120.0  // 2 minutes for long prompts
 
     /// The model to use for requests (configurable)
@@ -47,21 +47,34 @@ class OllamaService: OllamaServiceProtocol {
             return try await generateMockResponse(for: text)
         }
 
+        print("🔵 OllamaService: Sending request with model: \(modelName)")
+
         // Build the request
         let request = try buildRequest(text: text, systemPrompt: systemPrompt)
 
         // Send with timeout
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            print("🔴 OllamaService: Network request failed: \(error.localizedDescription)")
+            throw error
+        }
 
         // Validate response
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("🔴 OllamaService: Invalid response type")
             throw AppError.invalidResponse
         }
 
+        print("🔵 OllamaService: Received HTTP \(httpResponse.statusCode)")
+
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 404 {
+                print("🔴 OllamaService: Ollama not running (404)")
                 throw AppError.ollamaNotRunning
             }
+            print("🔴 OllamaService: HTTP error \(httpResponse.statusCode)")
             throw AppError.networkError(NSError(
                 domain: "OllamaService",
                 code: httpResponse.statusCode,
