@@ -112,7 +112,7 @@ struct AnonymizationView: View {
             if viewModel.isProcessing {
                 StatusBar(
                     isProcessing: viewModel.isProcessing,
-                    progress: viewModel.progress,
+                    estimatedSeconds: viewModel.estimatedSeconds,
                     statusMessage: viewModel.statusMessage
                 )
             }
@@ -287,7 +287,7 @@ class AnonymizationViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var result: AnonymizationResult?
     @Published var isProcessing: Bool = false
-    @Published var progress: Double = 0.0
+    @Published var estimatedSeconds: Int = 0
     @Published var statusMessage: String = ""
     @Published var errorMessage: String?
     @Published var successMessage: String?
@@ -307,7 +307,7 @@ class AnonymizationViewModel: ObservableObject {
     // Update UI from engine properties
     private func updateFromEngine() {
         isProcessing = engine.isProcessing
-        progress = engine.progress
+        estimatedSeconds = engine.estimatedSeconds
         statusMessage = engine.statusMessage
     }
 
@@ -325,7 +325,7 @@ class AnonymizationViewModel: ObservableObject {
 
         // Set initial state
         isProcessing = true
-        progress = 0.0
+        estimatedSeconds = 0
         statusMessage = "Starting..."
 
         do {
@@ -351,7 +351,7 @@ class AnonymizationViewModel: ObservableObject {
             }
         } catch {
             isProcessing = false
-            progress = 0.0
+            estimatedSeconds = 0
             statusMessage = ""
 
             if let appError = error as? AppError {

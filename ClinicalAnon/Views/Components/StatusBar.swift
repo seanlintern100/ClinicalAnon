@@ -10,13 +10,13 @@ import SwiftUI
 
 // MARK: - Status Bar
 
-/// Status bar showing processing status and progress
+/// Status bar showing processing status and estimated time
 struct StatusBar: View {
 
     // MARK: - Properties
 
     let isProcessing: Bool
-    let progress: Double
+    let estimatedSeconds: Int
     let statusMessage: String
 
     // MARK: - Body
@@ -24,16 +24,10 @@ struct StatusBar: View {
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
             if isProcessing {
-                // Progress indicator
-                ProgressView(value: progress, total: 1.0)
-                    .progressViewStyle(.linear)
-                    .frame(width: 200)
-
-                // Progress percentage
-                Text("\(Int(progress * 100))%")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .frame(width: 40, alignment: .trailing)
+                // Spinning indicator
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(0.8)
 
                 // Status message
                 if !statusMessage.isEmpty {
@@ -41,6 +35,11 @@ struct StatusBar: View {
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
+
+                // Estimated time
+                Text("Estimated: ~\(estimatedSeconds)s")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
 
                 Spacer()
             } else {
@@ -196,8 +195,8 @@ struct StatusBar_Previews: PreviewProvider {
             // Processing
             StatusBar(
                 isProcessing: true,
-                progress: 0.65,
-                statusMessage: "Processing response..."
+                estimatedSeconds: 45,
+                statusMessage: "Analyzing text with AI..."
             )
             .frame(width: 600)
             .previewDisplayName("Processing")

@@ -25,8 +25,8 @@ class AnonymizationEngine: ObservableObject {
     /// Published processing state
     @Published private(set) var isProcessing: Bool = false
 
-    /// Published progress (0.0 to 1.0)
-    @Published private(set) var progress: Double = 0.0
+    /// Published estimated processing time in seconds
+    @Published private(set) var estimatedSeconds: Int = 0
 
     /// Published status message
     @Published private(set) var statusMessage: String = ""
@@ -53,25 +53,26 @@ class AnonymizationEngine: ObservableObject {
             throw AppError.emptyText
         }
 
+        // Calculate estimated time based on word count
+        let wordCount = originalText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+        estimatedSeconds = estimateProcessingTime(wordCount: wordCount)
+
         // Start processing
         isProcessing = true
-        progress = 0.0
         statusMessage = "Preparing request..."
         defer {
             isProcessing = false
-            progress = 0.0
+            estimatedSeconds = 0
             statusMessage = ""
         }
 
         let startTime = Date()
 
         // Step 1: Build prompt
-        progress = 0.1
         statusMessage = "Building prompt..."
         let systemPrompt = PromptBuilder.buildAnonymizationPrompt()
 
         // Step 2: Send to LLM
-        progress = 0.2
         statusMessage = "Analyzing text with AI..."
 
         let llmResponse: String
@@ -85,25 +86,21 @@ class AnonymizationEngine: ObservableObject {
         }
 
         // Step 3: Parse response to get entities
-        progress = 0.6
         statusMessage = "Processing response..."
 
         let rawEntities = try EntityDetector.parseResponse(llmResponse)
 
         // Step 4: Apply entity mapping for consistency
-        progress = 0.7
         statusMessage = "Applying entity mapping..."
 
         let mappedEntities = applyEntityMapping(to: rawEntities)
 
         // Step 5: Generate anonymized text locally using TextReplacer
-        progress = 0.8
         statusMessage = "Anonymizing text..."
 
         let anonymizedText = try TextReplacer.replaceEntities(in: originalText, with: mappedEntities)
 
         // Step 6: Validate positions
-        progress = 0.9
         statusMessage = "Validating results..."
 
         let validationIssues = EntityDetector.validatePositions(
@@ -115,7 +112,6 @@ class AnonymizationEngine: ObservableObject {
         // The LLM may have slightly imprecise position markers but correct replacements
 
         // Step 7: Create result
-        progress = 0.95
         statusMessage = "Finalizing..."
 
         let processingTime = Date().timeIntervalSince(startTime)
@@ -134,7 +130,6 @@ class AnonymizationEngine: ObservableObject {
             metadata: metadata
         )
 
-        progress = 1.0
         statusMessage = "Complete!"
 
         return result
@@ -154,6 +149,20 @@ class AnonymizationEngine: ObservableObject {
     }
 
     // MARK: - Private Methods
+
+    /// Estimate processing time based on word count
+    /// - Parameter wordCount: Number of words in the input text
+    /// - Returns: Estimated seconds (rough approximation based on ~150 words/minute processing)
+    private func estimateProcessingTime(wordCount: Int) -> Int {
+        // Base time: ~30 seconds minimum
+        // Rate: ~3-4 words per second for typical models
+        let baseTime = 30
+        let wordsPerSecond = 3.5
+        let estimatedTime = baseTime + Int(Double(wordCount) / wordsPerSecond)
+        return max(estimatedTime, 15) // Minimum 15 seconds
+    }
+
+    // MARK: - Private Helper Methods
 
     /// Apply entity mapping to ensure consistency
     private func applyEntityMapping(to entities: [Entity]) -> [Entity] {
@@ -206,7 +215,6 @@ extension AnonymizationEngine {
 
         for (index, text) in texts.enumerated() {
             statusMessage = "Processing text \(index + 1) of \(texts.count)..."
-            progress = Double(index) / Double(texts.count)
 
             let result = try await anonymize(text)
             results.append(result)

@@ -144,19 +144,19 @@ class EntityDetector {
         let normalized = typeString.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
         switch normalized {
-        case "person_client", "client", "patient":
+        case "person_client", "client_name", "client", "patient":
             return .personClient
-        case "person_provider", "provider", "doctor", "therapist":
+        case "person_provider", "provider_name", "provider", "doctor", "therapist":
             return .personProvider
-        case "person_other", "person", "other_person":
+        case "person_other", "other_name", "person", "other_person":
             return .personOther
-        case "date":
+        case "date", "specific_date":
             return .date
         case "location", "place", "address":
             return .location
         case "organization", "org", "company":
             return .organization
-        case "identifier", "id", "number":
+        case "identifier", "id_number", "id", "number":
             return .identifier
         case "contact", "email", "phone":
             return .contact
