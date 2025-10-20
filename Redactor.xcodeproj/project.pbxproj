@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		047A4256A36B91FEE8806193 /* SourceSans3-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */; };
+		16183A6417260B823C8E2805 /* EntityType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01915D69A51DDDEA81FD955A /* EntityType.swift */; };
 		217744CD6A72F04212DC21A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8096B7BFDB5397D700CDA6FD /* Assets.xcassets */; };
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1401B2AB259CD0721DA60054 /* OllamaService.swift */; };
@@ -34,6 +35,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		01915D69A51DDDEA81FD955A /* EntityType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityType.swift; sourceTree = "<group>"; };
 		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
 		1401B2AB259CD0721DA60054 /* OllamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaService.swift; sourceTree = "<group>"; };
 		212E6C017812F7CA53B24F18 /* Redactor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Redactor.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -85,6 +87,7 @@
 			isa = PBXGroup;
 			children = (
 				87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */,
+				66DE2D0F8BC65C98DAD87417 /* Models */,
 				41804DF526EA1635A7B40032 /* Preview Content */,
 				97CF78AE383016203A6D8C0B /* Resources */,
 				AE88B234EE8EDF8826B3D08E /* Services */,
@@ -100,6 +103,14 @@
 				50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */,
 			);
 			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		66DE2D0F8BC65C98DAD87417 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				01915D69A51DDDEA81FD955A /* EntityType.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		6B04B03B5ED1D07A8284B4AA /* Products */ = {
@@ -249,6 +260,7 @@
 				23714A7B62571A38F2E6397C /* AppError.swift in Sources */,
 				D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
+				16183A6417260B823C8E2805 /* EntityType.swift in Sources */,
 				47C27DCAFCED8AF1BF8FA60C /* OllamaService.swift in Sources */,
 				6DEB4F2D947C15F8A49800B2 /* SetupManager.swift in Sources */,
 				A1516E189E242931277563CD /* SetupView.swift in Sources */,
