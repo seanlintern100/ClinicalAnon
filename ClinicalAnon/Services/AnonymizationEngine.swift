@@ -8,6 +8,28 @@
 
 import Foundation
 
+// MARK: - Detection Mode
+
+/// Detection method for entity recognition
+enum DetectionMode: String, CaseIterable, Identifiable {
+    case aiModel = "AI Model"
+    case patterns = "Pattern Detection (Fast)"
+    case hybrid = "Hybrid (AI + Patterns)"
+
+    var id: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .aiModel:
+            return "Use AI model for context-aware detection"
+        case .patterns:
+            return "Fast pattern-based detection (offline)"
+        case .hybrid:
+            return "Combine AI and patterns for best accuracy"
+        }
+    }
+}
+
 // MARK: - Anonymization Engine
 
 /// Main engine that orchestrates the anonymization process
@@ -19,8 +41,14 @@ class AnonymizationEngine: ObservableObject {
     /// The Ollama service for LLM communication
     private let ollamaService: OllamaServiceProtocol
 
+    /// Swift NER service for pattern-based detection
+    private let swiftNERService: SwiftNERService
+
     /// Entity mapping for consistent replacements within session
     let entityMapping: EntityMapping
+
+    /// Current detection mode
+    @Published var detectionMode: DetectionMode = .aiModel
 
     /// Published processing state
     @Published private(set) var isProcessing: Bool = false
@@ -38,6 +66,7 @@ class AnonymizationEngine: ObservableObject {
         entityMapping: EntityMapping? = nil
     ) {
         self.ollamaService = ollamaService
+        self.swiftNERService = SwiftNERService()
         self.entityMapping = entityMapping ?? EntityMapping()
     }
 
@@ -68,27 +97,28 @@ class AnonymizationEngine: ObservableObject {
 
         let startTime = Date()
 
-        // Step 1: Build prompt
-        statusMessage = "Building prompt..."
-        let systemPrompt = PromptBuilder.buildAnonymizationPrompt()
+        // Detect entities using selected method
+        let rawEntities: [Entity]
 
-        // Step 2: Send to LLM
-        statusMessage = "Analyzing text with AI..."
+        switch detectionMode {
+        case .aiModel:
+            // AI-only detection
+            rawEntities = try await detectWithAI(originalText)
 
-        let llmResponse: String
-        do {
-            llmResponse = try await ollamaService.sendRequest(
-                text: originalText,
-                systemPrompt: systemPrompt
-            )
-        } catch {
-            throw AppError.networkError(error)
+        case .patterns:
+            // Pattern-only detection (fast)
+            rawEntities = try await swiftNERService.detectEntities(in: originalText)
+
+        case .hybrid:
+            // Run both AI and patterns, merge results
+            statusMessage = "Running hybrid detection..."
+
+            async let aiEntities = detectWithAI(originalText)
+            async let patternEntities = swiftNERService.detectEntities(in: originalText)
+
+            let merged = try await mergeEntities(aiEntities, patternEntities)
+            rawEntities = merged
         }
-
-        // Step 3: Parse response to get entities
-        statusMessage = "Processing response..."
-
-        let rawEntities = try EntityDetector.parseResponse(llmResponse)
 
         // Step 4: Apply entity mapping for consistency
         statusMessage = "Applying entity mapping..."
@@ -150,19 +180,97 @@ class AnonymizationEngine: ObservableObject {
 
     // MARK: - Private Methods
 
-    /// Estimate processing time based on word count
+    /// Estimate processing time based on word count and detection mode
     /// - Parameter wordCount: Number of words in the input text
-    /// - Returns: Estimated seconds (rough approximation based on ~150 words/minute processing)
+    /// - Returns: Estimated seconds
     private func estimateProcessingTime(wordCount: Int) -> Int {
-        // Base time: ~30 seconds minimum
-        // Rate: ~3-4 words per second for typical models
-        let baseTime = 30
-        let wordsPerSecond = 3.5
-        let estimatedTime = baseTime + Int(Double(wordCount) / wordsPerSecond)
-        return max(estimatedTime, 15) // Minimum 15 seconds
+        switch detectionMode {
+        case .patterns:
+            // Pattern detection is very fast (<1 second for most texts)
+            return 1
+
+        case .aiModel:
+            // AI model: ~30 seconds base + processing time
+            // Rate: ~3-4 words per second for typical models
+            let baseTime = 30
+            let wordsPerSecond = 3.5
+            let estimatedTime = baseTime + Int(Double(wordCount) / wordsPerSecond)
+            return max(estimatedTime, 15)
+
+        case .hybrid:
+            // Hybrid: mainly limited by AI processing time
+            // Patterns run in parallel so add minimal overhead
+            let baseTime = 30
+            let wordsPerSecond = 3.5
+            let estimatedTime = baseTime + Int(Double(wordCount) / wordsPerSecond) + 5 // +5s for merging
+            return max(estimatedTime, 20)
+        }
     }
 
     // MARK: - Private Helper Methods
+
+    /// Detect entities using AI model
+    private func detectWithAI(_ originalText: String) async throws -> [Entity] {
+        // Step 1: Build prompt
+        statusMessage = "Building prompt..."
+        let systemPrompt = PromptBuilder.buildAnonymizationPrompt()
+
+        // Step 2: Send to LLM
+        statusMessage = "Analyzing text with AI..."
+
+        let llmResponse: String
+        do {
+            llmResponse = try await ollamaService.sendRequest(
+                text: originalText,
+                systemPrompt: systemPrompt
+            )
+        } catch {
+            throw AppError.networkError(error)
+        }
+
+        // Step 3: Parse response to get entities
+        statusMessage = "Processing AI response..."
+
+        let entities = try EntityDetector.parseResponse(llmResponse)
+
+        return entities
+    }
+
+    /// Merge entities from AI and pattern detection
+    /// Prefers entities with higher confidence, combines results
+    private func mergeEntities(_ aiEntities: [Entity], _ patternEntities: [Entity]) -> [Entity] {
+        statusMessage = "Merging AI and pattern results..."
+
+        var entityMap: [String: Entity] = [:]
+
+        // Add AI entities first
+        for entity in aiEntities {
+            let key = entity.originalText.lowercased()
+            entityMap[key] = entity
+        }
+
+        // Add pattern entities, keeping higher confidence
+        for entity in patternEntities {
+            let key = entity.originalText.lowercased()
+
+            if let existing = entityMap[key] {
+                // Keep entity with higher confidence
+                let newConfidence = entity.confidence ?? 0.0
+                let existingConfidence = existing.confidence ?? 0.0
+
+                if newConfidence > existingConfidence {
+                    entityMap[key] = entity
+                }
+            } else {
+                // New entity from patterns
+                entityMap[key] = entity
+            }
+        }
+
+        print("📊 Merged results: \(aiEntities.count) AI + \(patternEntities.count) patterns = \(entityMap.count) unique")
+
+        return Array(entityMap.values)
+    }
 
     /// Apply entity mapping to ensure consistency
     private func applyEntityMapping(to entities: [Entity]) -> [Entity] {

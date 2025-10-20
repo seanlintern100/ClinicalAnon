@@ -135,12 +135,14 @@ class OllamaService: OllamaServiceProtocol {
         """
 
         // Calculate appropriate max tokens based on input length
-        // Need ~same length for anonymized text + overhead for entities JSON
-        // Estimate: 4 chars per token, then allow 1.5x for safety
+        // We only generate entities JSON (not full text), so less output needed
+        // Each entity in JSON = ~50 tokens (including formatting, positions, etc)
+        // Assume 1 entity per 30 chars of input as rough estimate
         let estimatedInputTokens = (text.count + systemPrompt.count) / 4
-        let maxOutputTokens = max(600, min(2000, Int(Double(text.count) / 4.0 * 1.5) + 300))
+        let estimatedEntityCount = max(10, text.count / 30)
+        let maxOutputTokens = max(2000, min(6000, estimatedEntityCount * 50))
 
-        print("🧮 Estimated input tokens: \(estimatedInputTokens), Max output tokens: \(maxOutputTokens)")
+        print("🧮 Estimated input tokens: \(estimatedInputTokens), Est. entities: \(estimatedEntityCount), Max output tokens: \(maxOutputTokens)")
 
         // Build request body
         let requestBody = OllamaRequest(

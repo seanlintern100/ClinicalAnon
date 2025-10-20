@@ -32,7 +32,7 @@ struct AnonymizationView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HeaderView(setupManager: setupManager)
+            HeaderView(setupManager: setupManager, viewModel: viewModel)
 
             Divider()
 
@@ -141,6 +141,7 @@ struct AnonymizationView: View {
 
 struct HeaderView: View {
     let setupManager: SetupManager
+    @ObservedObject var viewModel: AnonymizationViewModel
 
     var body: some View {
         HStack {
@@ -156,7 +157,10 @@ struct HeaderView: View {
 
             Spacer()
 
-            // Session info badge
+            // Detection mode picker
+            DetectionModePicker(engine: viewModel.engine)
+
+            // Session info badges
             SessionInfoBadge(setupManager: setupManager)
         }
         .padding(DesignSystem.Spacing.medium)
@@ -297,6 +301,12 @@ class AnonymizationViewModel: ObservableObject {
     let engine: AnonymizationEngine
     let setupManager: SetupManager
 
+    // Detection mode from engine (forwarding)
+    var detectionMode: DetectionMode {
+        get { engine.detectionMode }
+        set { engine.detectionMode = newValue }
+    }
+
     // MARK: - Initialization
 
     init(engine: AnonymizationEngine, setupManager: SetupManager) {
@@ -407,6 +417,65 @@ class AnonymizationViewModel: ObservableObject {
         Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             successMessage = nil
+        }
+    }
+}
+
+// MARK: - Detection Mode Picker
+
+struct DetectionModePicker: View {
+    @ObservedObject var engine: AnonymizationEngine
+
+    var body: some View {
+        Menu {
+            ForEach(DetectionMode.allCases) { mode in
+                Button(action: {
+                    engine.detectionMode = mode
+                }) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(mode.rawValue)
+                                .font(DesignSystem.Typography.caption)
+                            Text(mode.description)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        if engine.detectionMode == mode {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Image(systemName: modeIcon(engine.detectionMode))
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                    .font(.system(size: 12))
+
+                Text(engine.detectionMode.rawValue)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Image(systemName: "chevron.down")
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(.system(size: 10))
+            }
+            .padding(.horizontal, DesignSystem.Spacing.small)
+            .padding(.vertical, 4)
+            .background(DesignSystem.Colors.surface)
+            .cornerRadius(DesignSystem.CornerRadius.small)
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private func modeIcon(_ mode: DetectionMode) -> String {
+        switch mode {
+        case .aiModel:
+            return "brain"
+        case .patterns:
+            return "bolt.fill"
+        case .hybrid:
+            return "star.fill"
         }
     }
 }
