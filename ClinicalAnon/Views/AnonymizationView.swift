@@ -36,9 +36,17 @@ struct AnonymizationView: View {
 
             Divider()
 
-            // Main three-pane content
+            // Main content with sidebar
             HSplitView {
-                // LEFT PANE: Original Text
+                // Entity Management Sidebar (only show after analysis)
+                if viewModel.result != nil {
+                    EntityManagementSidebar(viewModel: viewModel)
+                        .frame(minWidth: 250, idealWidth: 300, maxWidth: 400)
+                }
+
+                // Three-pane content area
+                HSplitView {
+                    // LEFT PANE: Original Text
                 VStack(spacing: 0) {
                     // Title bar with Analyze button
                     HStack {
@@ -262,12 +270,7 @@ struct AnonymizationView: View {
                 }
                 .background(DesignSystem.Colors.surface)
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            // Entity Management Panel (only show after analysis)
-            if viewModel.result != nil {
-                Divider()
-                EntityManagementPanel(viewModel: viewModel)
+                }
             }
 
             Divider()
@@ -854,7 +857,148 @@ class AnonymizationViewModel: ObservableObject {
     }
 }
 
-// MARK: - Entity Management Panel
+// MARK: - Entity Management Sidebar
+
+struct EntityManagementSidebar: View {
+    @ObservedObject var viewModel: AnonymizationViewModel
+    @State private var isCollapsed = false
+    @State private var showingAddCustom = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Sidebar header
+            HStack(spacing: DesignSystem.Spacing.small) {
+                Button(action: { withAnimation { isCollapsed.toggle() } }) {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.left")
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+                .help(isCollapsed ? "Expand sidebar" : "Collapse sidebar")
+
+                if !isCollapsed {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Entities")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        Text("\(viewModel.allEntities.count) detected")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Button(action: { showingAddCustom = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add custom redaction")
+                }
+            }
+            .padding(DesignSystem.Spacing.medium)
+            .background(DesignSystem.Colors.surface)
+
+            if !isCollapsed {
+                Divider()
+
+                // Entity list
+                if viewModel.allEntities.isEmpty {
+                    VStack(spacing: DesignSystem.Spacing.medium) {
+                        Spacer()
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 32))
+                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
+                        Text("No entities detected")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.xs) {
+                            ForEach(viewModel.allEntities) { entity in
+                                EntitySidebarRow(
+                                    entity: entity,
+                                    isActive: !viewModel.excludedEntityIds.contains(entity.id),
+                                    onToggle: { viewModel.toggleEntity(entity) }
+                                )
+                            }
+                        }
+                        .padding(DesignSystem.Spacing.medium)
+                    }
+                }
+            }
+        }
+        .background(DesignSystem.Colors.background)
+        .sheet(isPresented: $showingAddCustom) {
+            AddCustomEntityView(viewModel: viewModel, isPresented: $showingAddCustom)
+        }
+    }
+}
+
+struct EntitySidebarRow: View {
+    let entity: Entity
+    let isActive: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            HStack(spacing: DesignSystem.Spacing.small) {
+                Toggle("", isOn: Binding(
+                    get: { isActive },
+                    set: { _ in onToggle() }
+                ))
+                .labelsHidden()
+                .toggleStyle(.checkbox)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entity.originalText)
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .lineLimit(2)
+
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Text(entity.replacementCode)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(isActive ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+
+                        if !isActive {
+                            Text("•")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                            Text("RESTORED")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.warning)
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+
+            // Type badge
+            HStack {
+                Spacer()
+                Text(entity.type.displayName)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .padding(.horizontal, DesignSystem.Spacing.small)
+                    .padding(.vertical, 2)
+                    .background(entity.type.highlightColor.opacity(0.3))
+                    .cornerRadius(DesignSystem.CornerRadius.small)
+            }
+        }
+        .padding(DesignSystem.Spacing.small)
+        .background(isActive ? Color.clear : DesignSystem.Colors.surface.opacity(0.5))
+        .cornerRadius(DesignSystem.CornerRadius.small)
+    }
+}
+
+// MARK: - Entity Management Panel (Legacy - kept for reference)
 
 struct EntityManagementPanel: View {
     @ObservedObject var viewModel: AnonymizationViewModel
