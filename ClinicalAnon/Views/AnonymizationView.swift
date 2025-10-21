@@ -98,7 +98,7 @@ struct AnonymizationView: View {
                                 .padding(DesignSystem.Spacing.medium)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("original-highlighted-\(result.id)")
+                        .id("original-highlighted-\(result.id)-\(viewModel.excludedEntityIds.count)-\(viewModel.customEntities.count)")
                     } else {
                         // Show editable TextEditor when no results
                         ZStack(alignment: .topLeading) {
@@ -388,19 +388,27 @@ struct AnonymizationView: View {
         attributedString.font = NSFont.systemFont(ofSize: 14)
         attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
 
-        // Highlight original entities with type-specific colors
-        for entity in result.entities {
+        // Highlight original entities with type-specific colors (or gray if excluded)
+        for entity in viewModel.allEntities {
             let originalText = entity.originalText
             var searchStart = attributedString.startIndex
+
+            // Check if entity is excluded (restored)
+            let isExcluded = viewModel.excludedEntityIds.contains(entity.id)
 
             while searchStart < attributedString.endIndex {
                 let searchRange = searchStart..<attributedString.endIndex
 
                 // Find the original entity text (case-insensitive)
                 if let range = attributedString[searchRange].range(of: originalText, options: [.caseInsensitive]) {
-                    // Apply type-specific highlighting
-                    attributedString[range].backgroundColor = NSColor(entity.type.highlightColor)
-                    attributedString[range].foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+                    // Apply gray highlighting if excluded, type-specific color if active
+                    if isExcluded {
+                        attributedString[range].backgroundColor = NSColor.gray.withAlphaComponent(0.3)
+                        attributedString[range].foregroundColor = NSColor(DesignSystem.Colors.textSecondary)
+                    } else {
+                        attributedString[range].backgroundColor = NSColor(entity.type.highlightColor)
+                        attributedString[range].foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+                    }
 
                     searchStart = range.upperBound
                 } else {
@@ -1145,7 +1153,17 @@ struct AddCustomEntityView: View {
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
                 Picker("Type", selection: $selectedType) {
-                    ForEach(EntityType.allCases) { type in
+                    // Recommended option first
+                    HStack {
+                        Image(systemName: EntityType.personOther.iconName)
+                        Text("Other (Generic)")
+                    }
+                    .tag(EntityType.personOther)
+
+                    Divider()
+
+                    // All other types
+                    ForEach(EntityType.allCases.filter { $0 != .personOther }) { type in
                         HStack {
                             Image(systemName: type.iconName)
                             Text(type.displayName)
@@ -1155,6 +1173,10 @@ struct AddCustomEntityView: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
+
+                Text("Tip: Use 'Other' for general sensitive information")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
             }
 
             Spacer()
@@ -1175,7 +1197,7 @@ struct AddCustomEntityView: View {
             }
         }
         .padding(DesignSystem.Spacing.xlarge)
-        .frame(width: 500, height: 350)
+        .frame(width: 500, height: 380)
     }
 }
 
