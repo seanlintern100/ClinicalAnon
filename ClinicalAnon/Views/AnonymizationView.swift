@@ -151,13 +151,13 @@ struct AnonymizationView: View {
                     // Redacted text display - fills all available space
                     if let result = viewModel.result {
                         ScrollView {
-                            Text(attributedRedactedText(result))
+                            Text(attributedRedactedText())
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(DesignSystem.Spacing.medium)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("redacted-\(result.id)")
+                        .id("redacted-\(result.id)-\(viewModel.excludedEntityIds.count)-\(viewModel.customEntities.count)")
                     } else {
                         VStack(spacing: DesignSystem.Spacing.medium) {
                             Spacer()
@@ -264,6 +264,12 @@ struct AnonymizationView: View {
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
             }
 
+            // Entity Management Panel (only show after analysis)
+            if viewModel.result != nil {
+                Divider()
+                EntityManagementPanel(viewModel: viewModel)
+            }
+
             Divider()
 
             // Bottom status bar
@@ -335,15 +341,16 @@ struct AnonymizationView: View {
     }
 
     // Helper to create attributed text with highlights for redacted text
-    private func attributedRedactedText(_ result: AnonymizationResult) -> AttributedString {
-        var attributedString = AttributedString(result.anonymizedText)
+    private func attributedRedactedText() -> AttributedString {
+        // Use dynamically generated redacted text based on active entities
+        var attributedString = AttributedString(viewModel.displayedRedactedText)
 
         // Apply default font - smaller size for consistency
         attributedString.font = NSFont.systemFont(ofSize: 14)
         attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
 
-        // Highlight redacted entities with type-specific colors
-        for entity in result.entities {
+        // Highlight active (non-excluded) entities with type-specific colors
+        for entity in viewModel.activeEntities {
             // Find all occurrences of the replacement code in the attributed string
             let code = entity.replacementCode
             var searchStart = attributedString.startIndex
@@ -540,6 +547,10 @@ class AnonymizationViewModel: ObservableObject {
     @Published var aiImprovedText: String = ""
     @Published var restoredText: String = ""
 
+    // Entity management
+    @Published var excludedEntityIds: Set<UUID> = []
+    @Published var customEntities: [Entity] = []
+
     // MARK: - Properties (accessible for UI)
 
     let engine: AnonymizationEngine
@@ -556,6 +567,44 @@ class AnonymizationViewModel: ObservableObject {
     init(engine: AnonymizationEngine, setupManager: SetupManager) {
         self.engine = engine
         self.setupManager = setupManager
+    }
+
+    // MARK: - Entity Management Computed Properties
+
+    /// All entities (detected + custom)
+    var allEntities: [Entity] {
+        guard let result = result else { return customEntities }
+        return result.entities + customEntities
+    }
+
+    /// Only active entities (not excluded)
+    var activeEntities: [Entity] {
+        allEntities.filter { !excludedEntityIds.contains($0.id) }
+    }
+
+    /// Dynamically generated redacted text based on active entities
+    var displayedRedactedText: String {
+        guard let result = result else { return "" }
+
+        // Start with original text
+        var text = result.originalText
+
+        // Sort entities by position (last to first to preserve indices)
+        let sorted = activeEntities.sorted {
+            ($0.positions.first?[0] ?? 0) > ($1.positions.first?[0] ?? 0)
+        }
+
+        // Replace each active entity
+        for entity in sorted {
+            for position in entity.positions.reversed() {
+                guard position.count >= 2 else { continue }
+                let start = text.index(text.startIndex, offsetBy: position[0])
+                let end = text.index(text.startIndex, offsetBy: position[1])
+                text.replaceSubrange(start..<end, with: entity.replacementCode)
+            }
+        }
+
+        return text
     }
 
     // Update UI from engine properties
@@ -621,6 +670,8 @@ class AnonymizationViewModel: ObservableObject {
         result = nil
         aiImprovedText = ""
         restoredText = ""
+        excludedEntityIds.removeAll()
+        customEntities.removeAll()
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -637,7 +688,8 @@ class AnonymizationViewModel: ObservableObject {
     }
 
     func copyAnonymizedText() {
-        guard let text = result?.anonymizedText else { return }
+        guard result != nil else { return }
+        let text = displayedRedactedText
         copyToClipboard(text)
         successMessage = "Anonymized text copied to clipboard"
         autoHideSuccess()
@@ -681,7 +733,79 @@ class AnonymizationViewModel: ObservableObject {
         successMessage = nil
     }
 
+    // MARK: - Entity Management Actions
+
+    /// Toggle an entity on/off (excluded entities are restored in redacted text)
+    func toggleEntity(_ entity: Entity) {
+        if excludedEntityIds.contains(entity.id) {
+            excludedEntityIds.remove(entity.id)
+        } else {
+            excludedEntityIds.insert(entity.id)
+        }
+    }
+
+    /// Add a custom redaction for text that wasn't automatically detected
+    func addCustomEntity(text: String, type: EntityType) {
+        guard let result = result else {
+            errorMessage = "Please analyze text first"
+            return
+        }
+
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            errorMessage = "Please enter text to redact"
+            return
+        }
+
+        // Find all occurrences in original text
+        let positions = findAllOccurrences(of: trimmedText, in: result.originalText)
+        guard !positions.isEmpty else {
+            errorMessage = "Text '\(trimmedText)' not found in original document"
+            return
+        }
+
+        // Get next code for this type (considering both detected and custom entities)
+        let existingCount = allEntities.filter { $0.type == type }.count
+        let code = type.replacementCode(for: existingCount)
+
+        // Create entity
+        let entity = Entity(
+            originalText: trimmedText,
+            replacementCode: code,
+            type: type,
+            positions: positions,
+            confidence: 1.0
+        )
+
+        customEntities.append(entity)
+
+        // Add to mapping
+        _ = engine.entityMapping.getReplacementCode(for: trimmedText, type: type)
+
+        successMessage = "Added custom redaction: \(code) (\(positions.count) occurrences)"
+        autoHideSuccess()
+    }
+
     // MARK: - Private Methods
+
+    /// Find all occurrences of text in a string (case-insensitive)
+    private func findAllOccurrences(of searchText: String, in text: String) -> [[Int]] {
+        var positions: [[Int]] = []
+        var searchStartIndex = text.startIndex
+
+        while searchStartIndex < text.endIndex {
+            if let range = text.range(of: searchText, options: .caseInsensitive, range: searchStartIndex..<text.endIndex) {
+                let start = text.distance(from: text.startIndex, to: range.lowerBound)
+                let end = text.distance(from: text.startIndex, to: range.upperBound)
+                positions.append([start, end])
+                searchStartIndex = range.upperBound
+            } else {
+                break
+            }
+        }
+
+        return positions
+    }
 
     private func copyToClipboard(_ text: String) {
         let pasteboard = NSPasteboard.general
@@ -694,6 +818,187 @@ class AnonymizationViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             successMessage = nil
         }
+    }
+}
+
+// MARK: - Entity Management Panel
+
+struct EntityManagementPanel: View {
+    @ObservedObject var viewModel: AnonymizationViewModel
+    @State private var isExpanded = true
+    @State private var showingAddCustom = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button(action: { withAnimation { isExpanded.toggle() } }) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+
+                Text("Detected Entities (\(viewModel.allEntities.count))")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+
+                if viewModel.result != nil {
+                    Button("+ Add Custom") {
+                        showingAddCustom = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+            .frame(height: 44)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .background(DesignSystem.Colors.surface)
+
+            if isExpanded && !viewModel.allEntities.isEmpty {
+                Divider()
+
+                ScrollView {
+                    LazyVStack(spacing: DesignSystem.Spacing.xs) {
+                        ForEach(viewModel.allEntities) { entity in
+                            EntityManagementRow(
+                                entity: entity,
+                                isActive: !viewModel.excludedEntityIds.contains(entity.id),
+                                onToggle: { viewModel.toggleEntity(entity) }
+                            )
+                        }
+                    }
+                    .padding(DesignSystem.Spacing.medium)
+                }
+                .frame(maxHeight: 200)
+                .background(DesignSystem.Colors.background)
+            }
+        }
+        .sheet(isPresented: $showingAddCustom) {
+            AddCustomEntityView(viewModel: viewModel, isPresented: $showingAddCustom)
+        }
+    }
+}
+
+struct EntityManagementRow: View {
+    let entity: Entity
+    let isActive: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            Toggle("", isOn: Binding(
+                get: { isActive },
+                set: { _ in onToggle() }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+
+            Text(entity.originalText)
+                .font(DesignSystem.Typography.body)
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .frame(minWidth: 150, alignment: .leading)
+
+            Image(systemName: "arrow.right")
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(.system(size: 10))
+
+            Text(entity.replacementCode)
+                .font(DesignSystem.Typography.bodyBold)
+                .foregroundColor(isActive ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+
+            Spacer()
+
+            Text(entity.type.displayName)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .padding(.horizontal, DesignSystem.Spacing.small)
+                .padding(.vertical, 2)
+                .background(entity.type.highlightColor.opacity(0.3))
+                .cornerRadius(DesignSystem.CornerRadius.small)
+
+            if !isActive {
+                Text("RESTORED")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.warning)
+                    .padding(.horizontal, DesignSystem.Spacing.small)
+                    .padding(.vertical, 2)
+                    .background(DesignSystem.Colors.warning.opacity(0.1))
+                    .cornerRadius(DesignSystem.CornerRadius.small)
+            }
+        }
+        .padding(DesignSystem.Spacing.small)
+        .background(isActive ? Color.clear : DesignSystem.Colors.surface)
+        .cornerRadius(DesignSystem.CornerRadius.small)
+    }
+}
+
+// MARK: - Add Custom Entity View
+
+struct AddCustomEntityView: View {
+    @ObservedObject var viewModel: AnonymizationViewModel
+    @Binding var isPresented: Bool
+    @State private var searchText: String = ""
+    @State private var selectedType: EntityType = .personOther
+
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.large) {
+            // Header
+            Text("Add Custom Redaction")
+                .font(DesignSystem.Typography.heading)
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                Text("Text to Redact")
+                    .font(DesignSystem.Typography.bodyBold)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                TextField("Enter text (case-insensitive search)", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(DesignSystem.Typography.body)
+
+                Text("This will find and redact all occurrences of this text")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                Text("Entity Type")
+                    .font(DesignSystem.Typography.bodyBold)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Picker("Type", selection: $selectedType) {
+                    ForEach(EntityType.allCases) { type in
+                        HStack {
+                            Image(systemName: type.iconName)
+                            Text(type.displayName)
+                        }
+                        .tag(type)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            Spacer()
+
+            // Actions
+            HStack(spacing: DesignSystem.Spacing.medium) {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Button("Add Redaction") {
+                    viewModel.addCustomEntity(text: searchText, type: selectedType)
+                    isPresented = false
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(DesignSystem.Spacing.xlarge)
+        .frame(width: 500, height: 350)
     }
 }
 
