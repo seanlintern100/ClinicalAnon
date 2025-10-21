@@ -222,26 +222,23 @@ class SwiftNERService {
             guard key.count > 1 else { continue }
 
             if let existing = entityMap[key] {
-                // Keep entity with higher confidence
+                // ALWAYS merge positions from both entities
                 let newConfidence = entity.confidence ?? 0.0
                 let existingConfidence = existing.confidence ?? 0.0
 
-                if newConfidence > existingConfidence {
-                    // Replace with higher confidence entity
-                    entityMap[key] = entity
-                } else if newConfidence == existingConfidence {
-                    // Same confidence - merge positions by creating new entity
-                    let mergedPositions = existing.positions + entity.positions
-                    let merged = Entity(
-                        id: existing.id,
-                        originalText: existing.originalText,
-                        replacementCode: existing.replacementCode,
-                        type: existing.type,
-                        positions: mergedPositions,
-                        confidence: existing.confidence
-                    )
-                    entityMap[key] = merged
-                }
+                // Merge all positions
+                let mergedPositions = existing.positions + entity.positions
+
+                // Use the entity with higher confidence as the base, but keep all positions
+                let merged = Entity(
+                    id: existing.id,
+                    originalText: existing.originalText,
+                    replacementCode: existing.replacementCode,
+                    type: existing.type,
+                    positions: mergedPositions,
+                    confidence: max(newConfidence, existingConfidence)
+                )
+                entityMap[key] = merged
             } else {
                 // First time seeing this entity
                 entityMap[key] = entity
