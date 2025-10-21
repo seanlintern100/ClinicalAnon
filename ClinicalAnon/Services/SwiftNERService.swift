@@ -64,15 +64,105 @@ class SwiftNERService {
 
         print("📊 Total entities found (before dedup): \(allEntities.count)")
 
-        // Deduplicate overlapping entities
-        let deduplicated = deduplicateEntities(allEntities)
+        // DEBUG: Print all detected entities
+        print("📋 All detected entities:")
+        for (index, entity) in allEntities.enumerated() {
+            print("  [\(index)] '\(entity.originalText)' type=\(entity.type) conf=\(entity.confidence ?? 0) pos=\(entity.positions.first ?? [0,0])")
+        }
 
+        // Remove overlaps FIRST (keeps longer, higher-confidence entities)
+        let noOverlaps = removeOverlaps(allEntities)
+        print("📊 After removing overlaps: \(noOverlaps.count)")
+
+        // DEBUG: Print entities after overlap removal
+        print("📋 After overlap removal:")
+        for (index, entity) in noOverlaps.enumerated() {
+            print("  [\(index)] '\(entity.originalText)' type=\(entity.type) conf=\(entity.confidence ?? 0)")
+        }
+
+        // Then deduplicate exact matches
+        let deduplicated = deduplicateEntities(noOverlaps)
         print("📊 Unique entities after deduplication: \(deduplicated.count)")
 
         let elapsed = Date().timeIntervalSince(startTime)
         print("✅ SwiftNER: Completed in \(String(format: "%.2f", elapsed))s")
 
         return deduplicated
+    }
+
+    // MARK: - Overlap Removal
+
+    /// Remove overlapping entities, keeping the best one
+    /// Prioritizes: 1) Higher confidence, 2) Longer text
+    private func removeOverlaps(_ entities: [Entity]) -> [Entity] {
+        var sorted = entities.sorted { e1, e2 in
+            guard let p1 = e1.positions.first, let p2 = e2.positions.first else {
+                return false
+            }
+            return p1[0] < p2[0]
+        }
+
+        var result: [Entity] = []
+        var i = 0
+
+        while i < sorted.count {
+            var keep = sorted[i]
+            var j = i + 1
+
+            // Check for overlaps with subsequent entities
+            while j < sorted.count {
+                let other = sorted[j]
+
+                // Check if they overlap
+                if entitiesOverlap(keep, other) {
+                    // Keep the better entity
+                    if shouldReplace(current: keep, with: other) {
+                        keep = other
+                    }
+                    // Skip the overlapping entity
+                    sorted.remove(at: j)
+                } else {
+                    j += 1
+                }
+            }
+
+            result.append(keep)
+            i += 1
+        }
+
+        return result
+    }
+
+    /// Check if two entities overlap in their text positions
+    private func entitiesOverlap(_ e1: Entity, _ e2: Entity) -> Bool {
+        guard let p1 = e1.positions.first, let p2 = e2.positions.first else {
+            return false
+        }
+
+        let start1 = p1[0], end1 = p1[1]
+        let start2 = p2[0], end2 = p2[1]
+
+        // Check if ranges overlap
+        return !(end1 <= start2 || end2 <= start1)
+    }
+
+    /// Determine if we should replace current entity with new one
+    /// Prioritizes higher confidence, then longer text
+    private func shouldReplace(current: Entity, with new: Entity) -> Bool {
+        let currentConf = current.confidence ?? 0.0
+        let newConf = new.confidence ?? 0.0
+
+        // Prefer higher confidence
+        if newConf > currentConf {
+            return true
+        }
+
+        // If same confidence, prefer longer text
+        if newConf == currentConf {
+            return new.originalText.count > current.originalText.count
+        }
+
+        return false
     }
 
     // MARK: - Deduplication

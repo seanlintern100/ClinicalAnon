@@ -37,11 +37,10 @@ class DateRecognizer: PatternRecognizer {
 
             // Short month format: DD Mon YYYY
             // "15 Mar 2024", "03 Jun 2023"
-            ("\\b\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{4}\\b", .date, 0.9),
+            ("\\b\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{4}\\b", .date, 0.9)
 
-            // Year only (lower confidence - might be other numbers)
-            // "2020", "2023"
-            ("\\b(?:19|20)\\d{2}\\b", .date, 0.5)
+            // Removed: Year-only pattern - too many false positives
+            // Standalone years like "2024" are not redacted unless part of full date
         ]
 
         super.init(patterns: patterns)

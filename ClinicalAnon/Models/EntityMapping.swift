@@ -19,7 +19,8 @@ class EntityMapping: ObservableObject {
 
     /// Dictionary mapping original text to replacement code
     /// Key: lowercase original text, Value: replacement code
-    @Published private(set) var mappings: [String: String] = [:]
+    /// Stores both normalized key and original cased text
+    @Published private(set) var mappings: [String: (original: String, replacement: String)] = [:]
 
     /// Counter for each entity type to generate sequential codes (A, B, C, etc.)
     private var counters: [EntityType: Int] = [:]
@@ -36,15 +37,15 @@ class EntityMapping: ObservableObject {
 
         // Return existing mapping if available
         if let existing = mappings[key] {
-            return existing
+            return existing.replacement
         }
 
         // Create new mapping
         let counter = counters[type] ?? 0
         let code = type.replacementCode(for: counter)
 
-        // Store mapping
-        mappings[key] = code
+        // Store mapping with BOTH normalized key and original cased text
+        mappings[key] = (original: originalText, replacement: code)
         counters[type] = counter + 1
 
         return code
@@ -59,7 +60,7 @@ class EntityMapping: ObservableObject {
     /// Get the replacement code for text if it exists
     func existingMapping(for originalText: String) -> String? {
         let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        return mappings[key]
+        return mappings[key]?.replacement
     }
 
     /// Clear all mappings (start fresh session)
@@ -69,8 +70,9 @@ class EntityMapping: ObservableObject {
     }
 
     /// Get all mappings as a sorted array
+    /// Returns the ORIGINAL CASED text, not the normalized key
     var allMappings: [(original: String, replacement: String)] {
-        return mappings.map { (original: $0.key, replacement: $0.value) }
+        return mappings.map { (original: $0.value.original, replacement: $0.value.replacement) }
             .sorted { $0.original < $1.original }
     }
 
@@ -86,7 +88,7 @@ class EntityMapping: ObservableObject {
 
     /// Get all replacement codes for a specific type
     func replacements(for type: EntityType) -> [String] {
-        return mappings.values.filter { code in
+        return mappings.values.map { $0.replacement }.filter { code in
             code.contains(type.replacementPrefix)
         }.sorted()
     }
@@ -96,7 +98,7 @@ class EntityMapping: ObservableObject {
     /// Add a custom mapping (for manual overrides)
     func addMapping(originalText: String, replacementCode: String) {
         let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        mappings[key] = replacementCode
+        mappings[key] = (original: originalText, replacement: replacementCode)
     }
 
     /// Remove a specific mapping
@@ -109,13 +111,13 @@ class EntityMapping: ObservableObject {
     func updateMapping(originalText: String, newReplacementCode: String) {
         let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if mappings[key] != nil {
-            mappings[key] = newReplacementCode
+            mappings[key] = (original: originalText, replacement: newReplacementCode)
         }
     }
 
     /// Export mappings as JSON string
     func exportAsJSON() -> String? {
-        let mappingArray = mappings.map { ["original": $0.key, "replacement": $0.value] }
+        let mappingArray = mappings.map { ["original": $0.value.original, "replacement": $0.value.replacement] }
 
         guard let data = try? JSONSerialization.data(withJSONObject: mappingArray, options: .prettyPrinted),
               let json = String(data: data, encoding: .utf8) else {
@@ -139,7 +141,8 @@ class EntityMapping: ObservableObject {
                   let replacement = mapping["replacement"] else {
                 continue
             }
-            mappings[original] = replacement
+            let key = original.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            mappings[key] = (original: original, replacement: replacement)
         }
     }
 

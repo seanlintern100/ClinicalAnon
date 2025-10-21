@@ -47,8 +47,13 @@ class AnonymizationEngine: ObservableObject {
     /// Entity mapping for consistent replacements within session
     let entityMapping: EntityMapping
 
-    /// Current detection mode
-    @Published var detectionMode: DetectionMode = .aiModel
+    /// Current detection mode - persists across app launches
+    @Published var detectionMode: DetectionMode = .aiModel {
+        didSet {
+            // Save to UserDefaults
+            UserDefaults.standard.set(detectionMode.rawValue, forKey: "detectionMode")
+        }
+    }
 
     /// Published processing state
     @Published private(set) var isProcessing: Bool = false
@@ -68,6 +73,12 @@ class AnonymizationEngine: ObservableObject {
         self.ollamaService = ollamaService
         self.swiftNERService = SwiftNERService()
         self.entityMapping = entityMapping ?? EntityMapping()
+
+        // Load saved detection mode from UserDefaults
+        if let savedMode = UserDefaults.standard.string(forKey: "detectionMode"),
+           let mode = DetectionMode(rawValue: savedMode) {
+            self.detectionMode = mode
+        }
     }
 
     // MARK: - Main Anonymization Method

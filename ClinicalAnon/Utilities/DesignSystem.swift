@@ -85,9 +85,27 @@ struct DesignSystem {
         /// Processing/info state - teal
         static let info = primaryTeal
 
-        // MARK: Highlight Colors
+        // MARK: Highlight Colors (Entity Types)
 
-        /// Yellow highlight for entities (30% opacity)
+        /// Person/Name highlight - Light blue
+        static let highlightPerson = Color(red: 173/255, green: 216/255, blue: 230/255, opacity: 0.5)  // Light blue
+
+        /// Organization highlight - Light purple/lavender
+        static let highlightOrganization = Color(red: 221/255, green: 160/255, blue: 221/255, opacity: 0.5)  // Plum
+
+        /// Date highlight - Light green
+        static let highlightDate = Color(red: 144/255, green: 238/255, blue: 144/255, opacity: 0.5)  // Light green
+
+        /// Location highlight - Light orange/peach
+        static let highlightLocation = Color(red: 255/255, green: 218/255, blue: 185/255, opacity: 0.5)  // Peach
+
+        /// Contact (email/phone) highlight - Light pink
+        static let highlightContact = Color(red: 255/255, green: 182/255, blue: 193/255, opacity: 0.5)  // Light pink
+
+        /// Identifier (IDs) highlight - Light gray
+        static let highlightIdentifier = Color(red: 211/255, green: 211/255, blue: 211/255, opacity: 0.5)  // Light gray
+
+        /// Yellow highlight for entities (30% opacity) - deprecated, use type-specific colors
         static let highlightYellow = Color.yellow.opacity(0.3)
 
         /// Teal highlight for read-only state

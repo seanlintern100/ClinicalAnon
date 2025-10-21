@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - Entity Type
 
@@ -138,6 +139,24 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
             return "number.circle.fill"
         case .contact:
             return "phone.fill"
+        }
+    }
+
+    /// Highlight color for this entity type
+    var highlightColor: Color {
+        switch self {
+        case .personClient, .personProvider, .personOther:
+            return DesignSystem.Colors.highlightPerson
+        case .organization:
+            return DesignSystem.Colors.highlightOrganization
+        case .date:
+            return DesignSystem.Colors.highlightDate
+        case .location:
+            return DesignSystem.Colors.highlightLocation
+        case .contact:
+            return DesignSystem.Colors.highlightContact
+        case .identifier:
+            return DesignSystem.Colors.highlightIdentifier
         }
     }
 
