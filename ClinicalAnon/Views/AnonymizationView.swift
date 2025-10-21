@@ -586,25 +586,58 @@ class AnonymizationViewModel: ObservableObject {
     var displayedRedactedText: String {
         guard let result = result else { return "" }
 
-        // Start with original text
-        var text = result.originalText
+        do {
+            // Start with original text
+            var text = result.originalText
 
-        // Sort entities by position (last to first to preserve indices)
-        let sorted = activeEntities.sorted {
-            ($0.positions.first?[0] ?? 0) > ($1.positions.first?[0] ?? 0)
-        }
+            // Flatten all positions from all entities into a single list
+            // Each item is (start, end, replacementCode)
+            var allReplacements: [(start: Int, end: Int, code: String)] = []
 
-        // Replace each active entity
-        for entity in sorted {
-            for position in entity.positions.reversed() {
-                guard position.count >= 2 else { continue }
-                let start = text.index(text.startIndex, offsetBy: position[0])
-                let end = text.index(text.startIndex, offsetBy: position[1])
-                text.replaceSubrange(start..<end, with: entity.replacementCode)
+            for entity in activeEntities {
+                for position in entity.positions {
+                    guard position.count >= 2 else { continue }
+                    let start = position[0]
+                    let end = position[1]
+
+                    // Validate positions are within bounds
+                    guard start >= 0 && end <= text.count && start < end else {
+                        print("⚠️ Invalid position [\(start), \(end)] for text length \(text.count)")
+                        continue
+                    }
+
+                    allReplacements.append((start: start, end: end, code: entity.replacementCode))
+                }
             }
-        }
 
-        return text
+            // Sort all replacements by position (descending - last to first)
+            // This preserves string indices as we replace from end to start
+            allReplacements.sort { $0.start > $1.start }
+
+            // Replace each position from last to first
+            for replacement in allReplacements {
+                guard replacement.start < text.count && replacement.end <= text.count else {
+                    print("⚠️ Skipping out-of-bounds replacement at [\(replacement.start), \(replacement.end)]")
+                    continue
+                }
+
+                let start = text.index(text.startIndex, offsetBy: replacement.start)
+                let end = text.index(text.startIndex, offsetBy: replacement.end)
+
+                // Validate string indices before replacement
+                guard start < text.endIndex && end <= text.endIndex && start < end else {
+                    print("⚠️ Invalid string indices for replacement")
+                    continue
+                }
+
+                text.replaceSubrange(start..<end, with: replacement.code)
+            }
+
+            return text
+        } catch {
+            print("❌ Error generating redacted text: \(error)")
+            return result.anonymizedText // Fallback to original result
+        }
     }
 
     // Update UI from engine properties

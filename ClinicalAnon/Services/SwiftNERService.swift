@@ -84,10 +84,52 @@ class SwiftNERService {
         let deduplicated = deduplicateEntities(noOverlaps)
         print("📊 Unique entities after deduplication: \(deduplicated.count)")
 
+        // Validate all entity positions are within bounds
+        let validated = validateEntityPositions(deduplicated, textLength: text.count)
+        if validated.count < deduplicated.count {
+            print("⚠️ Filtered out \(deduplicated.count - validated.count) entities with invalid positions")
+        }
+
         let elapsed = Date().timeIntervalSince(startTime)
         print("✅ SwiftNER: Completed in \(String(format: "%.2f", elapsed))s")
 
-        return deduplicated
+        return validated
+    }
+
+    // MARK: - Position Validation
+
+    /// Validate that all entity positions are within text bounds
+    private func validateEntityPositions(_ entities: [Entity], textLength: Int) -> [Entity] {
+        return entities.compactMap { entity in
+            // Filter out invalid positions
+            let validPositions = entity.positions.filter { position in
+                guard position.count >= 2 else { return false }
+                let start = position[0]
+                let end = position[1]
+                return start >= 0 && end <= textLength && start < end
+            }
+
+            // If no valid positions remain, skip this entity
+            guard !validPositions.isEmpty else {
+                print("⚠️ Skipping entity '\(entity.originalText)' - no valid positions")
+                return nil
+            }
+
+            // If some positions were invalid, create new entity with only valid positions
+            if validPositions.count < entity.positions.count {
+                print("⚠️ Entity '\(entity.originalText)' had \(entity.positions.count - validPositions.count) invalid positions")
+                return Entity(
+                    id: entity.id,
+                    originalText: entity.originalText,
+                    replacementCode: entity.replacementCode,
+                    type: entity.type,
+                    positions: validPositions,
+                    confidence: entity.confidence
+                )
+            }
+
+            return entity
+        }
     }
 
     // MARK: - Overlap Removal
