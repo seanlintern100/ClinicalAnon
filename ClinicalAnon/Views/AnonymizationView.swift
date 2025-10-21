@@ -947,9 +947,9 @@ struct EntityManagementSidebar: View {
         }
         .background(DesignSystem.Colors.background)
         .frame(
-            minWidth: isCollapsed ? 40 : 220,
-            idealWidth: isCollapsed ? 40 : 240,
-            maxWidth: isCollapsed ? 40 : 400
+            minWidth: isCollapsed ? 40 : 165,
+            idealWidth: isCollapsed ? 40 : 180,
+            maxWidth: isCollapsed ? 40 : 300
         )
         .sheet(isPresented: $viewModel.showingAddCustom) {
             AddCustomEntityView(viewModel: viewModel, isPresented: $viewModel.showingAddCustom, initialText: viewModel.prefilledText)
