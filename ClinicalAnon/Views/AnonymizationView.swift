@@ -937,8 +937,8 @@ struct EntityManagementSidebar: View {
         }
         .background(DesignSystem.Colors.background)
         .frame(
-            minWidth: isCollapsed ? 40 : 250,
-            idealWidth: isCollapsed ? 40 : 300,
+            minWidth: isCollapsed ? 40 : 220,
+            idealWidth: isCollapsed ? 40 : 240,
             maxWidth: isCollapsed ? 40 : 400
         )
         .sheet(isPresented: $showingAddCustom) {
@@ -953,7 +953,8 @@ struct EntitySidebarRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        HStack(spacing: DesignSystem.Spacing.small) {
+        HStack(spacing: 4) {
+            // Checkbox column
             Toggle("", isOn: Binding(
                 get: { isActive },
                 set: { _ in onToggle() }
@@ -961,21 +962,24 @@ struct EntitySidebarRow: View {
             .labelsHidden()
             .toggleStyle(.checkbox)
 
-            // Single line: "original --- [CODE]"
+            // Original text column (flexible width)
             Text(entity.originalText)
                 .font(.system(size: 12))
                 .foregroundColor(isActive ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("---")
-                .font(.system(size: 11))
+            // Arrow column (fixed width, centered)
+            Image(systemName: "arrow.right")
+                .font(.system(size: 9))
                 .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.5))
+                .frame(width: 20)
 
+            // Replacement code column (fixed width, left aligned)
             Text(entity.replacementCode)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(isActive ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
-
-            Spacer()
+                .frame(width: 90, alignment: .leading)
         }
         .padding(.vertical, DesignSystem.Spacing.xs)
         .padding(.horizontal, DesignSystem.Spacing.small)
