@@ -41,7 +41,6 @@ struct AnonymizationView: View {
                 // Entity Management Sidebar (only show after analysis)
                 if viewModel.result != nil {
                     EntityManagementSidebar(viewModel: viewModel)
-                        .frame(minWidth: 250, idealWidth: 300, maxWidth: 400)
                 }
 
                 // Three-pane content area
@@ -885,20 +884,15 @@ struct EntityManagementSidebar: View {
                 .help(isCollapsed ? "Expand sidebar" : "Collapse sidebar")
 
                 if !isCollapsed {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Entities")
-                            .font(DesignSystem.Typography.subheading)
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                        Text("\(viewModel.allEntities.count) detected")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
+                    Text("Entities (\(viewModel.allEntities.count))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
 
                     Spacer()
 
                     Button(action: { showingAddCustom = true }) {
                         Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20))
                             .foregroundColor(DesignSystem.Colors.primaryTeal)
                     }
                     .buttonStyle(.plain)
@@ -913,20 +907,20 @@ struct EntityManagementSidebar: View {
 
                 // Entity list
                 if viewModel.allEntities.isEmpty {
-                    VStack(spacing: DesignSystem.Spacing.medium) {
+                    VStack(spacing: DesignSystem.Spacing.small) {
                         Spacer()
                         Image(systemName: "doc.text.magnifyingglass")
-                            .font(.system(size: 32))
+                            .font(.system(size: 28))
                             .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
                         Text("No entities detected")
-                            .font(DesignSystem.Typography.body)
+                            .font(.system(size: 12))
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: DesignSystem.Spacing.xs) {
+                        LazyVStack(spacing: 2) {
                             ForEach(viewModel.allEntities) { entity in
                                 EntitySidebarRow(
                                     entity: entity,
@@ -935,12 +929,18 @@ struct EntityManagementSidebar: View {
                                 )
                             }
                         }
-                        .padding(DesignSystem.Spacing.medium)
+                        .padding(.horizontal, DesignSystem.Spacing.small)
+                        .padding(.vertical, DesignSystem.Spacing.xs)
                     }
                 }
             }
         }
         .background(DesignSystem.Colors.background)
+        .frame(
+            minWidth: isCollapsed ? 40 : 250,
+            idealWidth: isCollapsed ? 40 : 300,
+            maxWidth: isCollapsed ? 40 : 400
+        )
         .sheet(isPresented: $showingAddCustom) {
             AddCustomEntityView(viewModel: viewModel, isPresented: $showingAddCustom)
         }
@@ -953,54 +953,32 @@ struct EntitySidebarRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            HStack(spacing: DesignSystem.Spacing.small) {
-                Toggle("", isOn: Binding(
-                    get: { isActive },
-                    set: { _ in onToggle() }
-                ))
-                .labelsHidden()
-                .toggleStyle(.checkbox)
+        HStack(spacing: DesignSystem.Spacing.small) {
+            Toggle("", isOn: Binding(
+                get: { isActive },
+                set: { _ in onToggle() }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entity.originalText)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                        .lineLimit(2)
+            // Single line: "original --- [CODE]"
+            Text(entity.originalText)
+                .font(.system(size: 12))
+                .foregroundColor(isActive ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                .lineLimit(1)
 
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        Text(entity.replacementCode)
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(isActive ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+            Text("---")
+                .font(.system(size: 11))
+                .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.5))
 
-                        if !isActive {
-                            Text("•")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+            Text(entity.replacementCode)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(isActive ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
 
-                            Text("RESTORED")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.warning)
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-
-            // Type badge
-            HStack {
-                Spacer()
-                Text(entity.type.displayName)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                    .padding(.horizontal, DesignSystem.Spacing.small)
-                    .padding(.vertical, 2)
-                    .background(entity.type.highlightColor.opacity(0.3))
-                    .cornerRadius(DesignSystem.CornerRadius.small)
-            }
+            Spacer()
         }
-        .padding(DesignSystem.Spacing.small)
+        .padding(.vertical, DesignSystem.Spacing.xs)
+        .padding(.horizontal, DesignSystem.Spacing.small)
         .background(isActive ? Color.clear : DesignSystem.Colors.surface.opacity(0.5))
         .cornerRadius(DesignSystem.CornerRadius.small)
     }
