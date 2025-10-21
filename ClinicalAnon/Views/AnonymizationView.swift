@@ -89,13 +89,13 @@ struct AnonymizationView: View {
 
                     // Text editor or highlighted text - fills all available space
                     if let result = viewModel.result {
-                        // Show highlighted version when we have results
-                        ScrollView {
-                            Text(attributedOriginalText(viewModel.inputText, result: result))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DesignSystem.Spacing.medium)
-                        }
+                        // Show highlighted version with double-click support when we have results
+                        InteractiveTextView(
+                            attributedText: attributedOriginalText(viewModel.inputText, result: result),
+                            onDoubleClick: { word in
+                                viewModel.openAddCustomEntity(withText: word)
+                            }
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .id("original-highlighted-\(result.id)-\(viewModel.excludedEntityIds.count)-\(viewModel.customEntities.count)")
                     } else {
@@ -561,6 +561,10 @@ class AnonymizationViewModel: ObservableObject {
     @Published var excludedEntityIds: Set<UUID> = []
     @Published var customEntities: [Entity] = []
 
+    // Add custom entity dialog state
+    @Published var showingAddCustom: Bool = false
+    @Published var prefilledText: String? = nil
+
     // MARK: - Properties (accessible for UI)
 
     let engine: AnonymizationEngine
@@ -788,6 +792,12 @@ class AnonymizationViewModel: ObservableObject {
     }
 
     /// Add a custom redaction for text that wasn't automatically detected
+    /// Open the Add Custom Entity dialog with optional pre-filled text
+    func openAddCustomEntity(withText text: String? = nil) {
+        prefilledText = text
+        showingAddCustom = true
+    }
+
     func addCustomEntity(text: String, type: EntityType) {
         guard let result = result else {
             errorMessage = "Please analyze text first"
@@ -869,7 +879,6 @@ class AnonymizationViewModel: ObservableObject {
 struct EntityManagementSidebar: View {
     @ObservedObject var viewModel: AnonymizationViewModel
     @State private var isCollapsed = false
-    @State private var showingAddCustom = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -890,7 +899,7 @@ struct EntityManagementSidebar: View {
 
                     Spacer()
 
-                    Button(action: { showingAddCustom = true }) {
+                    Button(action: { viewModel.openAddCustomEntity() }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 20))
                             .foregroundColor(DesignSystem.Colors.primaryTeal)
@@ -941,8 +950,8 @@ struct EntityManagementSidebar: View {
             idealWidth: isCollapsed ? 40 : 240,
             maxWidth: isCollapsed ? 40 : 400
         )
-        .sheet(isPresented: $showingAddCustom) {
-            AddCustomEntityView(viewModel: viewModel, isPresented: $showingAddCustom)
+        .sheet(isPresented: $viewModel.showingAddCustom) {
+            AddCustomEntityView(viewModel: viewModel, isPresented: $viewModel.showingAddCustom, initialText: viewModel.prefilledText)
         }
     }
 }
@@ -1041,8 +1050,8 @@ struct EntityManagementPanel: View {
                 .background(DesignSystem.Colors.background)
             }
         }
-        .sheet(isPresented: $showingAddCustom) {
-            AddCustomEntityView(viewModel: viewModel, isPresented: $showingAddCustom)
+        .sheet(isPresented: $viewModel.showingAddCustom) {
+            AddCustomEntityView(viewModel: viewModel, isPresented: $viewModel.showingAddCustom, initialText: viewModel.prefilledText)
         }
     }
 }
@@ -1105,8 +1114,17 @@ struct EntityManagementRow: View {
 struct AddCustomEntityView: View {
     @ObservedObject var viewModel: AnonymizationViewModel
     @Binding var isPresented: Bool
+    let initialText: String?
     @State private var searchText: String = ""
     @State private var selectedType: EntityType = .personOther
+
+    init(viewModel: AnonymizationViewModel, isPresented: Binding<Bool>, initialText: String? = nil) {
+        self.viewModel = viewModel
+        self._isPresented = isPresented
+        self.initialText = initialText
+        // Pre-fill search text if provided
+        self._searchText = State(initialValue: initialText ?? "")
+    }
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.large) {
@@ -1277,6 +1295,97 @@ struct DetectionModePicker: View {
             return "bolt.fill"
         case .hybrid:
             return "star.fill"
+        }
+    }
+}
+
+// MARK: - Interactive Text View
+
+/// NSTextView wrapper that supports double-click word selection
+struct InteractiveTextView: NSViewRepresentable {
+    let attributedText: AttributedString
+    let onDoubleClick: (String) -> Void
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        let textView = NSTextView()
+
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.allowsUndo = false
+        textView.backgroundColor = .clear
+        textView.textContainerInset = NSSize(width: 16, height: 16)
+
+        // Set the attributed text
+        textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
+
+        // Set up delegate for double-click detection
+        textView.delegate = context.coordinator
+
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+
+        // Configure text container for wrapping
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: .greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+
+        // Update the attributed text
+        textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
+
+        // Update the coordinator's callback
+        context.coordinator.onDoubleClick = onDoubleClick
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onDoubleClick: onDoubleClick)
+    }
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var onDoubleClick: (String) -> Void
+
+        init(onDoubleClick: @escaping (String) -> Void) {
+            self.onDoubleClick = onDoubleClick
+        }
+
+        // Detect when user double-clicks to select a word
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            // Since isEditable is false, this won't be called
+            return false
+        }
+
+        // Alternative: detect selection changes after double-click
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+
+            // Get the selected text
+            let selectedRange = textView.selectedRange()
+
+            // Only proceed if there's a selection
+            guard selectedRange.length > 0 else { return }
+
+            // Extract the selected word
+            if let selectedText = textView.textStorage?.attributedSubstring(from: selectedRange).string {
+                // Trim whitespace and newlines
+                let word = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                // Only trigger if it's a meaningful word (not just spaces)
+                if !word.isEmpty {
+                    // Trigger the callback with a slight delay to ensure it's a double-click
+                    // Check if this is a double-click by monitoring click count
+                    if let event = NSApp.currentEvent, event.clickCount == 2 {
+                        onDoubleClick(word)
+                    }
+                }
+            }
         }
     }
 }
