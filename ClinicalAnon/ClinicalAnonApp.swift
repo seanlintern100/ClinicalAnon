@@ -21,28 +21,23 @@ struct ClinicalAnonApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                // Show setup wizard until ready
-                if setupManager.state == .ready {
-                    // Main anonymization view
-                    AnonymizationView(
-                        ollamaService: {
-                            let service = OllamaService(mockMode: false)
-                            service.modelName = setupManager.selectedModel
-                            return service
-                        }(),
-                        setupManager: setupManager
-                    )
-                    .frame(minWidth: 900, minHeight: 600)
-                } else {
-                    SetupView()
-                        .frame(minWidth: 900, minHeight: 600)
-                        .environmentObject(setupManager)
-                }
+            // Show setup wizard until ready
+            if setupManager.state == .ready {
+                // Main anonymization view
+                AnonymizationView(
+                    ollamaService: {
+                        let service = OllamaService(mockMode: false)
+                        service.modelName = setupManager.selectedModel
+                        return service
+                    }(),
+                    setupManager: setupManager
+                )
+            } else {
+                SetupView()
+                    .environmentObject(setupManager)
             }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
         .defaultSize(width: 1200, height: 700)
     }
 }
