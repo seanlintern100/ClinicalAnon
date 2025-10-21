@@ -271,6 +271,7 @@ struct AnonymizationView: View {
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider()
 
