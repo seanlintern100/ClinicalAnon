@@ -21,11 +21,19 @@ struct AnonymizationView: View {
 
     // MARK: - Initialization
 
+    #if ENABLE_AI_FEATURES
     init(ollamaService: OllamaServiceProtocol, setupManager: SetupManager) {
         let engine = AnonymizationEngine(ollamaService: ollamaService)
         self.setupManager = setupManager
         _viewModel = StateObject(wrappedValue: AnonymizationViewModel(engine: engine, setupManager: setupManager))
     }
+    #else
+    init(setupManager: SetupManager) {
+        let engine = AnonymizationEngine()
+        self.setupManager = setupManager
+        _viewModel = StateObject(wrappedValue: AnonymizationViewModel(engine: engine, setupManager: setupManager))
+    }
+    #endif
 
     // MARK: - Body
 
@@ -139,14 +147,15 @@ struct AnonymizationView: View {
 
                             Button(action: { viewModel.copyAnonymizedText() }) {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
-                                    Image(systemName: "doc.on.doc")
+                                    Image(systemName: viewModel.justCopiedAnonymized ? "checkmark" : "doc.on.doc")
                                         .frame(width: 14, height: 14)
-                                    Text("Copy")
+                                    Text(viewModel.justCopiedAnonymized ? "Copied!" : "Copy")
                                         .frame(minWidth: 70)
                                 }
                                 .font(DesignSystem.Typography.caption)
                             }
                             .buttonStyle(SecondaryButtonStyle())
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.justCopiedAnonymized)
                         }
                     }
                     .frame(height: 52)
@@ -199,14 +208,15 @@ struct AnonymizationView: View {
                         if !viewModel.restoredText.isEmpty {
                             Button(action: { viewModel.copyRestoredText() }) {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
-                                    Image(systemName: "doc.on.doc")
+                                    Image(systemName: viewModel.justCopiedRestored ? "checkmark" : "doc.on.doc")
                                         .frame(width: 14, height: 14)
-                                    Text("Copy")
+                                    Text(viewModel.justCopiedRestored ? "Copied!" : "Copy")
                                         .frame(minWidth: 70)
                                 }
                                 .font(DesignSystem.Typography.caption)
                             }
                             .buttonStyle(SecondaryButtonStyle())
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.justCopiedRestored)
                         } else if !viewModel.aiImprovedText.isEmpty {
                             Button(action: { viewModel.restoreNames() }) {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -467,11 +477,13 @@ struct CompactHeaderView: View {
 
             Spacer()
 
+            #if ENABLE_AI_FEATURES
             // Detection mode picker
             DetectionModePicker(engine: viewModel.engine)
 
             // Model info
             ModelBadge(setupManager: setupManager)
+            #endif
         }
         .padding(.horizontal, DesignSystem.Spacing.medium)
         .padding(.vertical, DesignSystem.Spacing.small)
@@ -481,6 +493,7 @@ struct CompactHeaderView: View {
 
 // MARK: - Model Picker
 
+#if ENABLE_AI_FEATURES
 struct ModelBadge: View {
     @ObservedObject var setupManager: SetupManager
 
@@ -537,6 +550,7 @@ struct ModelBadge: View {
         setupManager.availableModels.first(where: { $0.name == setupManager.selectedModel })?.displayName ?? "Model"
     }
 }
+#endif
 
 
 // MARK: - View Model
@@ -565,6 +579,11 @@ class AnonymizationViewModel: ObservableObject {
     // Add custom entity dialog state
     @Published var showingAddCustom: Bool = false
     @Published var prefilledText: String? = nil
+
+    // Copy button feedback
+    @Published var justCopiedAnonymized: Bool = false
+    @Published var justCopiedOriginal: Bool = false
+    @Published var justCopiedRestored: Bool = false
 
     // MARK: - Properties (accessible for UI)
 
@@ -731,16 +750,26 @@ class AnonymizationViewModel: ObservableObject {
 
     func copyInputText() {
         copyToClipboard(inputText)
-        successMessage = "Original text copied to clipboard"
-        autoHideSuccess()
+
+        // Visual feedback on button
+        justCopiedOriginal = true
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            justCopiedOriginal = false
+        }
     }
 
     func copyAnonymizedText() {
         guard result != nil else { return }
         let text = displayedRedactedText
         copyToClipboard(text)
-        successMessage = "Anonymized text copied to clipboard"
-        autoHideSuccess()
+
+        // Visual feedback on button
+        justCopiedAnonymized = true
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            justCopiedAnonymized = false
+        }
     }
 
     func restoreNames() {
@@ -760,17 +789,19 @@ class AnonymizationViewModel: ObservableObject {
         let reidentifier = TextReidentifier()
         restoredText = reidentifier.restore(text: aiImprovedText, using: engine.entityMapping)
 
-        successMessage = "Names restored successfully!"
-        autoHideSuccess()
-
         print("✅ Restoration complete")
     }
 
     func copyRestoredText() {
         guard !restoredText.isEmpty else { return }
         copyToClipboard(restoredText)
-        successMessage = "Restored text copied to clipboard"
-        autoHideSuccess()
+
+        // Visual feedback on button
+        justCopiedRestored = true
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            justCopiedRestored = false
+        }
     }
 
     func dismissError() {
@@ -946,11 +977,8 @@ struct EntityManagementSidebar: View {
             }
         }
         .background(DesignSystem.Colors.background)
-        .frame(
-            minWidth: isCollapsed ? 40 : 165,
-            idealWidth: isCollapsed ? 40 : 180,
-            maxWidth: isCollapsed ? 40 : 300
-        )
+        .frame(maxHeight: .infinity)
+        .frame(width: isCollapsed ? 40 : 180)
         .sheet(isPresented: $viewModel.showingAddCustom) {
             AddCustomEntityView(viewModel: viewModel, isPresented: $viewModel.showingAddCustom, initialText: viewModel.prefilledText)
         }
@@ -1243,6 +1271,7 @@ class TextReidentifier {
 
 // MARK: - Detection Mode Picker
 
+#if ENABLE_AI_FEATURES
 struct DetectionModePicker: View {
     @ObservedObject var engine: AnonymizationEngine
 
@@ -1299,6 +1328,7 @@ struct DetectionModePicker: View {
         }
     }
 }
+#endif
 
 // MARK: - Interactive Text View
 
@@ -1396,11 +1426,18 @@ struct InteractiveTextView: NSViewRepresentable {
 #if DEBUG
 struct AnonymizationView_Previews: PreviewProvider {
     static var previews: some View {
+        #if ENABLE_AI_FEATURES
         AnonymizationView(
             ollamaService: OllamaService(mockMode: true),
             setupManager: SetupManager.preview
         )
         .frame(width: 1200, height: 700)
+        #else
+        AnonymizationView(
+            setupManager: SetupManager.preview
+        )
+        .frame(width: 1200, height: 700)
+        #endif
     }
 }
 #endif

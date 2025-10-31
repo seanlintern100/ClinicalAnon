@@ -12,20 +12,28 @@ import Foundation
 
 /// Detection method for entity recognition
 enum DetectionMode: String, CaseIterable, Identifiable {
+    #if ENABLE_AI_FEATURES
     case aiModel = "AI Model"
+    #endif
     case patterns = "Pattern Detection (Fast)"
+    #if ENABLE_AI_FEATURES
     case hybrid = "Hybrid (AI + Patterns)"
+    #endif
 
     var id: String { rawValue }
 
     var description: String {
         switch self {
+        #if ENABLE_AI_FEATURES
         case .aiModel:
             return "Use AI model for context-aware detection"
+        #endif
         case .patterns:
             return "Fast pattern-based detection (offline)"
+        #if ENABLE_AI_FEATURES
         case .hybrid:
             return "Combine AI and patterns for best accuracy"
+        #endif
         }
     }
 }
@@ -38,8 +46,10 @@ class AnonymizationEngine: ObservableObject {
 
     // MARK: - Properties
 
+    #if ENABLE_AI_FEATURES
     /// The Ollama service for LLM communication
     private let ollamaService: OllamaServiceProtocol
+    #endif
 
     /// Swift NER service for pattern-based detection
     private let swiftNERService: SwiftNERService
@@ -48,12 +58,21 @@ class AnonymizationEngine: ObservableObject {
     let entityMapping: EntityMapping
 
     /// Current detection mode - persists across app launches
+    #if ENABLE_AI_FEATURES
     @Published var detectionMode: DetectionMode = .aiModel {
         didSet {
             // Save to UserDefaults
             UserDefaults.standard.set(detectionMode.rawValue, forKey: "detectionMode")
         }
     }
+    #else
+    @Published var detectionMode: DetectionMode = .patterns {
+        didSet {
+            // Save to UserDefaults
+            UserDefaults.standard.set(detectionMode.rawValue, forKey: "detectionMode")
+        }
+    }
+    #endif
 
     /// Published processing state
     @Published private(set) var isProcessing: Bool = false
@@ -66,10 +85,8 @@ class AnonymizationEngine: ObservableObject {
 
     // MARK: - Initialization
 
-    init(
-        ollamaService: OllamaServiceProtocol,
-        entityMapping: EntityMapping? = nil
-    ) {
+    #if ENABLE_AI_FEATURES
+    init(ollamaService: OllamaServiceProtocol, entityMapping: EntityMapping? = nil) {
         self.ollamaService = ollamaService
         self.swiftNERService = SwiftNERService()
         self.entityMapping = entityMapping ?? EntityMapping()
@@ -80,6 +97,14 @@ class AnonymizationEngine: ObservableObject {
             self.detectionMode = mode
         }
     }
+    #else
+    init(entityMapping: EntityMapping? = nil) {
+        self.swiftNERService = SwiftNERService()
+        self.entityMapping = entityMapping ?? EntityMapping()
+        // Always use patterns when AI is disabled
+        self.detectionMode = .patterns
+    }
+    #endif
 
     // MARK: - Main Anonymization Method
 
@@ -112,14 +137,17 @@ class AnonymizationEngine: ObservableObject {
         let rawEntities: [Entity]
 
         switch detectionMode {
+        #if ENABLE_AI_FEATURES
         case .aiModel:
             // AI-only detection
             rawEntities = try await detectWithAI(originalText)
+        #endif
 
         case .patterns:
             // Pattern-only detection (fast)
             rawEntities = try await swiftNERService.detectEntities(in: originalText)
 
+        #if ENABLE_AI_FEATURES
         case .hybrid:
             // Run both AI and patterns, merge results
             statusMessage = "Running hybrid detection..."
@@ -129,6 +157,7 @@ class AnonymizationEngine: ObservableObject {
 
             let merged = try await mergeEntities(aiEntities, patternEntities)
             rawEntities = merged
+        #endif
         }
 
         // Step 4: Apply entity mapping for consistency
@@ -158,7 +187,13 @@ class AnonymizationEngine: ObservableObject {
         let processingTime = Date().timeIntervalSince(startTime)
 
         let metadata = AnonymizationMetadata(
-            modelUsed: (ollamaService as? OllamaService)?.modelName,
+            modelUsed: {
+                #if ENABLE_AI_FEATURES
+                return (ollamaService as? OllamaService)?.modelName
+                #else
+                return nil
+                #endif
+            }(),
             processingTime: processingTime,
             averageConfidence: calculateAverageConfidence(mappedEntities),
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -184,9 +219,11 @@ class AnonymizationEngine: ObservableObject {
     /// Update the model name for the Ollama service
     /// - Parameter modelName: The new model name to use
     func updateModelName(_ modelName: String) {
+        #if ENABLE_AI_FEATURES
         if let service = ollamaService as? OllamaService {
             service.modelName = modelName
         }
+        #endif
     }
 
     // MARK: - Private Methods
@@ -200,6 +237,7 @@ class AnonymizationEngine: ObservableObject {
             // Pattern detection is very fast (<1 second for most texts)
             return 1
 
+        #if ENABLE_AI_FEATURES
         case .aiModel:
             // AI model: ~30 seconds base + processing time
             // Rate: ~3-4 words per second for typical models
@@ -215,11 +253,13 @@ class AnonymizationEngine: ObservableObject {
             let wordsPerSecond = 3.5
             let estimatedTime = baseTime + Int(Double(wordCount) / wordsPerSecond) + 5 // +5s for merging
             return max(estimatedTime, 20)
+        #endif
         }
     }
 
     // MARK: - Private Helper Methods
 
+    #if ENABLE_AI_FEATURES
     /// Detect entities using AI model
     private func detectWithAI(_ originalText: String) async throws -> [Entity] {
         // Step 1: Build prompt
@@ -282,6 +322,7 @@ class AnonymizationEngine: ObservableObject {
 
         return Array(entityMap.values)
     }
+    #endif
 
     /// Apply entity mapping to ensure consistency
     private func applyEntityMapping(to entities: [Entity]) -> [Entity] {
@@ -370,6 +411,7 @@ extension AnonymizationEngine {
 
 #if DEBUG
 extension AnonymizationEngine {
+    #if ENABLE_AI_FEATURES
     /// Engine with mock service for previews
     static var preview: AnonymizationEngine {
         let mockService = MockOllamaService.success
@@ -387,6 +429,22 @@ extension AnonymizationEngine {
         let mockService = OllamaService(mockMode: true)
         return AnonymizationEngine(ollamaService: mockService)
     }
+    #else
+    /// Engine with pattern detection only (AI disabled)
+    static var preview: AnonymizationEngine {
+        return AnonymizationEngine()
+    }
+
+    /// Engine with pattern detection only (AI disabled)
+    static var real: AnonymizationEngine {
+        return AnonymizationEngine()
+    }
+
+    /// Engine with pattern detection only (AI disabled)
+    static var mock: AnonymizationEngine {
+        return AnonymizationEngine()
+    }
+    #endif
 
     /// Test anonymization with sample data
     func testAnonymize() async throws -> AnonymizationResult {

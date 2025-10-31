@@ -24,6 +24,7 @@ struct ClinicalAnonApp: App {
             // Show setup wizard until ready
             if setupManager.state == .ready {
                 // Main anonymization view
+                #if ENABLE_AI_FEATURES
                 AnonymizationView(
                     ollamaService: {
                         let service = OllamaService(mockMode: false)
@@ -32,6 +33,11 @@ struct ClinicalAnonApp: App {
                     }(),
                     setupManager: setupManager
                 )
+                #else
+                AnonymizationView(
+                    setupManager: setupManager
+                )
+                #endif
             } else {
                 SetupView()
                     .environmentObject(setupManager)
