@@ -940,7 +940,9 @@ struct EntityManagementSidebar: View {
                     .help("Add custom redaction")
                 }
             }
-            .padding(DesignSystem.Spacing.medium)
+            .frame(height: 52)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, DesignSystem.Spacing.xs)
             .background(DesignSystem.Colors.surface)
 
             if !isCollapsed {
@@ -989,6 +991,7 @@ struct EntitySidebarRow: View {
     let entity: Entity
     let isActive: Bool
     let onToggle: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -1019,10 +1022,21 @@ struct EntitySidebarRow: View {
                 .foregroundColor(isActive ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
                 .frame(width: 90, alignment: .leading)
         }
-        .padding(.vertical, DesignSystem.Spacing.xs)
-        .padding(.horizontal, DesignSystem.Spacing.small)
-        .background(isActive ? Color.clear : DesignSystem.Colors.surface.opacity(0.5))
-        .cornerRadius(DesignSystem.CornerRadius.small)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                .fill(
+                    isHovered
+                        ? DesignSystem.Colors.primaryTeal.opacity(0.08)
+                        : (isActive ? Color.clear : DesignSystem.Colors.surface.opacity(0.5))
+                )
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }
 
