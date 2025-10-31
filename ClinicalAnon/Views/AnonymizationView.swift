@@ -126,7 +126,7 @@ struct AnonymizationView: View {
                         .id("original-editor")
                     }
                 }
-                .background(DesignSystem.Colors.surface)
+                .recessedElevation()
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
                 // MIDDLE PANE: Redacted Text
@@ -192,7 +192,7 @@ struct AnonymizationView: View {
                         .id("redacted-placeholder")
                     }
                 }
-                .background(DesignSystem.Colors.surface)
+                .liftedElevation()
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
                 // RIGHT PANE: Restored Text
@@ -277,7 +277,7 @@ struct AnonymizationView: View {
                         .id("restored-highlighted-\(viewModel.restoredText.hashValue)")
                     }
                 }
-                .background(DesignSystem.Colors.surface)
+                .baseElevation()
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
