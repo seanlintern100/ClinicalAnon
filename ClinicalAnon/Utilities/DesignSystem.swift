@@ -202,10 +202,16 @@ struct DesignSystem {
     // MARK: - Corner Radius
 
     struct CornerRadius {
-        static let small: CGFloat = 4
-        static let medium: CGFloat = 8
-        static let large: CGFloat = 12
-        static let xlarge: CGFloat = 16
+        /// Small radius - for compact elements (6px)
+        static let small: CGFloat = 6       // Updated from 4px for modern macOS Sequoia style
+        /// Medium radius - for buttons and cards (10px)
+        static let medium: CGFloat = 10     // Updated from 8px for softer appearance
+        /// Large radius - for primary buttons (14px)
+        static let large: CGFloat = 14      // Updated from 12px for more rounded feel
+        /// Extra large radius - for panels (20px)
+        static let xlarge: CGFloat = 20     // Updated from 16px for major UI elements
+        /// Extra extra large radius - for modals (24px)
+        static let xxlarge: CGFloat = 24    // New value for maximum roundness
     }
 
     // MARK: - Shadows
@@ -241,6 +247,49 @@ struct DesignSystem {
             let radius: CGFloat
             let x: CGFloat
             let y: CGFloat
+        }
+    }
+
+    // MARK: - Elevation (Visual Hierarchy)
+
+    struct Elevation {
+        /// Recessed - for input/editable areas (slight inset appearance)
+        static let recessed = ElevationStyle(
+            backgroundOverlay: Color.black.opacity(0.02),
+            shadowColor: Color.black.opacity(0.08),
+            shadowRadius: 3,
+            shadowX: 0,
+            shadowY: 1,
+            isInner: true
+        )
+
+        /// Base - for standard surfaces (no shadow)
+        static let base = ElevationStyle(
+            backgroundOverlay: Color.clear,
+            shadowColor: Color.clear,
+            shadowRadius: 0,
+            shadowX: 0,
+            shadowY: 0,
+            isInner: false
+        )
+
+        /// Lifted - for result/output areas (subtle drop shadow)
+        static let lifted = ElevationStyle(
+            backgroundOverlay: Color.white.opacity(0.01),
+            shadowColor: Color.black.opacity(0.06),
+            shadowRadius: 8,
+            shadowX: 0,
+            shadowY: 2,
+            isInner: false
+        )
+
+        struct ElevationStyle {
+            let backgroundOverlay: Color
+            let shadowColor: Color
+            let shadowRadius: CGFloat
+            let shadowX: CGFloat
+            let shadowY: CGFloat
+            let isInner: Bool
         }
     }
 
@@ -327,6 +376,41 @@ extension View {
             .background(DesignSystem.Colors.surface)
             .cornerRadius(DesignSystem.CornerRadius.medium)
             .mediumShadow()
+    }
+
+    /// Apply recessed elevation (for input areas)
+    func recessedElevation() -> some View {
+        let elevation = DesignSystem.Elevation.recessed
+        return self
+            .background(
+                DesignSystem.Colors.surface
+                    .overlay(elevation.backgroundOverlay)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 0)
+                    .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
+            )
+    }
+
+    /// Apply lifted elevation (for output/result areas)
+    func liftedElevation() -> some View {
+        let elevation = DesignSystem.Elevation.lifted
+        return self
+            .background(
+                DesignSystem.Colors.surface
+                    .overlay(elevation.backgroundOverlay)
+            )
+            .shadow(
+                color: elevation.shadowColor,
+                radius: elevation.shadowRadius,
+                x: elevation.shadowX,
+                y: elevation.shadowY
+            )
+    }
+
+    /// Apply base elevation (no shadow, standard surface)
+    func baseElevation() -> some View {
+        self.background(DesignSystem.Colors.surface)
     }
 }
 
