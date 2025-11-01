@@ -43,7 +43,7 @@ struct AnonymizationView: View {
             CompactHeaderView(setupManager: setupManager, viewModel: viewModel)
 
             // Main content with sidebar
-            HSplitView {
+            HStack(spacing: 0) {
                 // Entity Management Sidebar (only show after analysis)
                 if viewModel.result != nil {
                     EntityManagementSidebar(viewModel: viewModel)
@@ -1023,7 +1023,7 @@ struct EntityManagementSidebar: View {
                 }
             }
         }
-        .background(DesignSystem.Colors.background)
+        .background(DesignSystem.Colors.surface)
         .frame(maxHeight: .infinity)
         .frame(width: isCollapsed ? 40 : 180)
         .sheet(isPresented: $viewModel.showingAddCustom) {
