@@ -92,11 +92,6 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
                     .padding(.vertical, DesignSystem.Spacing.xs)
-                    .background(
-                        viewModel.result != nil
-                            ? Color.clear
-                            : DesignSystem.Colors.background.opacity(0.5)
-                    )
 
                     // Text editor or highlighted text - fills all available space
                     if let result = viewModel.result {
@@ -175,11 +170,6 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
                     .padding(.vertical, DesignSystem.Spacing.xs)
-                    .background(
-                        viewModel.hasCopiedRedacted
-                            ? Color.clear
-                            : DesignSystem.Colors.background.opacity(0.5)
-                    )
 
                     // Redacted text display - fills all available space
                     if let result = viewModel.result {
@@ -266,11 +256,6 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
                     .padding(.vertical, DesignSystem.Spacing.xs)
-                    .background(
-                        viewModel.hasRestoredText
-                            ? Color.clear
-                            : DesignSystem.Colors.background.opacity(0.5)
-                    )
 
                     // AI-improved text input OR restored result
                     if viewModel.restoredText.isEmpty {
