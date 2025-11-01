@@ -1398,12 +1398,16 @@ struct InteractiveTextView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
+        scrollView.backgroundColor = .clear
+        scrollView.drawsBackground = false
+
         let textView = NSTextView()
 
         textView.isEditable = false
         textView.isSelectable = true
         textView.allowsUndo = false
         textView.backgroundColor = .clear
+        textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 16, height: 16)
 
         // Set the attributed text
