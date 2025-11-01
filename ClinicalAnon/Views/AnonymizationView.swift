@@ -1016,15 +1016,10 @@ struct EntityManagementSidebar: View {
                     .help("Add custom redaction")
                 }
             }
-            .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.vertical, DesignSystem.Spacing.xs)
-            .background(DesignSystem.Colors.background.opacity(0.5))
+            .padding(.vertical, DesignSystem.Spacing.medium)
 
             if !isCollapsed {
-                Divider()
-                    .opacity(0.3)
-
                 // Entity list
                 if viewModel.allEntities.isEmpty {
                     VStack(spacing: DesignSystem.Spacing.small) {
