@@ -42,8 +42,6 @@ struct AnonymizationView: View {
             // Compact Header
             CompactHeaderView(setupManager: setupManager, viewModel: viewModel)
 
-            Divider()
-
             // Main content with sidebar
             HSplitView {
                 // Entity Management Sidebar (only show after analysis)
@@ -309,8 +307,6 @@ struct AnonymizationView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(DesignSystem.Colors.background)
-
-            Divider()
 
             // Bottom status bar
             HStack(spacing: DesignSystem.Spacing.medium) {
