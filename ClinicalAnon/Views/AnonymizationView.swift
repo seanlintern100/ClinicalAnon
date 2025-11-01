@@ -53,7 +53,7 @@ struct AnonymizationView: View {
 
                 // Three-pane content area
                 HSplitView {
-                    // LEFT PANE: Original Text
+                    // LEFT PANE: Original Text (Card)
                 VStack(spacing: 0) {
                     // Title bar with Analyze button
                     HStack {
@@ -126,7 +126,20 @@ struct AnonymizationView: View {
                         .id("original-editor")
                     }
                 }
-                .recessedElevation()
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                        .fill(
+                            viewModel.result != nil
+                                ? DesignSystem.Colors.success.opacity(0.05)
+                                : DesignSystem.Colors.surface
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 0)
+                                .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
+                        )
+                )
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+                .padding(6)
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
                 // MIDDLE PANE: Redacted Text
@@ -192,7 +205,22 @@ struct AnonymizationView: View {
                         .id("redacted-placeholder")
                     }
                 }
-                .liftedElevation()
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                        .fill(
+                            viewModel.hasCopiedRedacted
+                                ? DesignSystem.Colors.success.opacity(0.05)
+                                : DesignSystem.Colors.surface
+                        )
+                        .shadow(
+                            color: DesignSystem.Elevation.lifted.shadowColor,
+                            radius: DesignSystem.Elevation.lifted.shadowRadius,
+                            x: DesignSystem.Elevation.lifted.shadowX,
+                            y: DesignSystem.Elevation.lifted.shadowY
+                        )
+                )
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+                .padding(6)
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
 
                 // RIGHT PANE: Restored Text
@@ -277,7 +305,16 @@ struct AnonymizationView: View {
                         .id("restored-highlighted-\(viewModel.restoredText.hashValue)")
                     }
                 }
-                .baseElevation()
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                        .fill(
+                            viewModel.hasRestoredText
+                                ? DesignSystem.Colors.success.opacity(0.05)
+                                : DesignSystem.Colors.surface
+                        )
+                )
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+                .padding(6)
                 .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -585,6 +622,10 @@ class AnonymizationViewModel: ObservableObject {
     @Published var justCopiedOriginal: Bool = false
     @Published var justCopiedRestored: Bool = false
 
+    // Completion state for card color changes
+    @Published var hasCopiedRedacted: Bool = false
+    @Published var hasRestoredText: Bool = false
+
     // MARK: - Properties (accessible for UI)
 
     let engine: AnonymizationEngine
@@ -693,6 +734,10 @@ class AnonymizationViewModel: ObservableObject {
         errorMessage = nil
         successMessage = nil
 
+        // Reset completion states for new analysis
+        hasCopiedRedacted = false
+        hasRestoredText = false
+
         // Set initial state
         isProcessing = true
         estimatedSeconds = 0
@@ -770,6 +815,9 @@ class AnonymizationViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             justCopiedAnonymized = false
         }
+
+        // Mark card as complete
+        hasCopiedRedacted = true
     }
 
     func restoreNames() {
@@ -788,6 +836,9 @@ class AnonymizationViewModel: ObservableObject {
         // Use TextReidentifier to restore original names
         let reidentifier = TextReidentifier()
         restoredText = reidentifier.restore(text: aiImprovedText, using: engine.entityMapping)
+
+        // Mark card as complete
+        hasRestoredText = true
 
         print("✅ Restoration complete")
     }
