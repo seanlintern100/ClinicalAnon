@@ -90,6 +90,9 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
 
+                    Divider()
+                        .opacity(0.15)
+
                     // Text editor or highlighted text - fills all available space
                     if let result = viewModel.result {
                         // Show highlighted version with double-click support when we have results
@@ -122,7 +125,6 @@ struct AnonymizationView: View {
                         .id("original-editor")
                     }
                 }
-                .background(Color.clear)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
                         .fill(
@@ -166,6 +168,9 @@ struct AnonymizationView: View {
                     }
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
+
+                    Divider()
+                        .opacity(0.15)
 
                     // Redacted text display - fills all available space
                     if let result = viewModel.result {
@@ -251,6 +256,9 @@ struct AnonymizationView: View {
                     }
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
+
+                    Divider()
+                        .opacity(0.15)
 
                     // AI-improved text input OR restored result
                     if viewModel.restoredText.isEmpty {
