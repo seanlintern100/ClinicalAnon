@@ -157,8 +157,8 @@ struct AnonymizationView: View {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
                                     Image(systemName: viewModel.justCopiedAnonymized ? "checkmark" : "doc.on.doc")
                                         .frame(width: 14, height: 14)
-                                    Text(viewModel.justCopiedAnonymized ? "Copied!" : "Copy")
-                                        .frame(minWidth: 70)
+                                    Text(viewModel.justCopiedAnonymized ? "Copied!" : "Copy to AI")
+                                        .frame(minWidth: 85)
                                 }
                                 .font(DesignSystem.Typography.caption)
                             }
@@ -499,6 +499,7 @@ struct AnonymizationView: View {
 struct CompactHeaderView: View {
     let setupManager: SetupManager
     @ObservedObject var viewModel: AnonymizationViewModel
+    @State private var showingHelp = false
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
@@ -515,10 +516,22 @@ struct CompactHeaderView: View {
             // Model info
             ModelBadge(setupManager: setupManager)
             #endif
+
+            // Help button
+            Button(action: { showingHelp = true }) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+            }
+            .buttonStyle(.plain)
+            .help("How to use Redactor")
         }
         .padding(.horizontal, DesignSystem.Spacing.medium)
         .padding(.vertical, DesignSystem.Spacing.small)
         .background(DesignSystem.Colors.background)
+        .sheet(isPresented: $showingHelp) {
+            HelpModalView(isPresented: $showingHelp)
+        }
     }
 }
 
@@ -1503,4 +1516,266 @@ struct AnonymizationView_Previews: PreviewProvider {
         #endif
     }
 }
+
+// MARK: - Help Modal View
+
+struct HelpModalView: View {
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("How to Use Redactor")
+                    .font(DesignSystem.Typography.heading)
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                Spacer()
+
+                Button(action: { isPresented = false }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+            }
+            .padding(DesignSystem.Spacing.large)
+            .background(DesignSystem.Colors.surface)
+
+            Divider()
+
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
+
+                    // Why use this app?
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                        Text("Why use this app?")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        Text("AI tools like Claude can help you write clearer, more structured clinical notes. But you can't paste client information directly into AI tools - it's not safe or ethical.")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        Text("Redactor lets you safely use AI to improve your clinical writing. It removes identifying information, you get AI help, then it puts the details back.")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                    }
+
+                    Divider()
+                        .opacity(0.3)
+
+                    // The 5-Step Process
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                        Text("The 5-Step Process")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        // Step 1
+                        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                            Text("①")
+                                .font(.system(size: 20))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                .frame(width: 30)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Paste your text")
+                                    .font(DesignSystem.Typography.bodyBold)
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                                Text("Write or paste your clinical notes into the left column (Original Text).")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+
+                        // Step 2
+                        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                            Text("②")
+                                .font(.system(size: 20))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                .frame(width: 30)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Click \"Analyze\"")
+                                    .font(DesignSystem.Typography.bodyBold)
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                                Text("Redactor detects names, dates, locations, and other identifying information. Check the sidebar to see what was found.")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+
+                        // Step 3
+                        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                            Text("③")
+                                .font(.system(size: 20))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                .frame(width: 30)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Copy the redacted version")
+                                    .font(DesignSystem.Typography.bodyBold)
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                                Text("Click \"Copy to AI\" in the middle column. The text now has placeholders like [PERSON_A] instead of real names.")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+
+                        // Step 4
+                        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                            Text("④")
+                                .font(.system(size: 20))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                .frame(width: 30)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Get AI help")
+                                    .font(DesignSystem.Typography.bodyBold)
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                                Text("Open Claude or ChatGPT. Paste the redacted text. Ask the AI to improve clarity, structure, or grammar. Copy the AI's response.")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+
+                        // Step 5
+                        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                            Text("⑤")
+                                .font(.system(size: 20))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                .frame(width: 30)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Paste back and restore")
+                                    .font(DesignSystem.Typography.bodyBold)
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                                Text("Paste the AI-improved text into the right column (Restored Text). Click \"Restore Names\" and Redactor automatically puts all the real information back.")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+
+                        // Done
+                        Text("Done. You now have a better note with all client details intact.")
+                            .font(DesignSystem.Typography.bodyBold)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+                            .padding(.leading, 38)
+                    }
+
+                    Divider()
+                        .opacity(0.3)
+
+                    // Managing Entities
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                        Text("Managing Entities")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        Text("The sidebar shows everything Redactor detected. You can:")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Toggle entities on/off - uncheck items you want to keep")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Add custom entities - click the + button for anything Redactor missed")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Review before copying - always double-check what's been redacted")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+                        .padding(.leading, DesignSystem.Spacing.small)
+
+                        Text("Not everything gets caught automatically. Always review the sidebar before copying.")
+                            .font(DesignSystem.Typography.bodyBold)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .padding(.top, 4)
+                    }
+
+                    Divider()
+                        .opacity(0.3)
+
+                    // Need to Start Fresh?
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                        Text("Need to Start Fresh?")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        Text("Click \"Clear All\" at the bottom to wipe everything and start a new note.")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                    }
+
+                    Divider()
+                        .opacity(0.3)
+
+                    // Tips
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                        Text("Tips")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Redactor works completely offline - nothing leaves your Mac")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Text isn't saved anywhere - it's cleared when you close the app")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Use it for reports, assessments, and session notes")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+                        .padding(.leading, DesignSystem.Spacing.small)
+                    }
+                }
+                .padding(DesignSystem.Spacing.large)
+            }
+            .background(DesignSystem.Colors.background)
+        }
+        .frame(width: 600, height: 700)
+        .background(DesignSystem.Colors.surface)
+        .cornerRadius(DesignSystem.CornerRadius.large)
+        .shadow(color: Color.black.opacity(0.3), radius: 30, x: 0, y: 10)
+    }
+}
+
 #endif
