@@ -52,7 +52,7 @@ struct AnonymizationView: View {
                 }
 
                 // Three-pane content area
-                HSplitView {
+                HStack(spacing: 0) {
                     // LEFT PANE: Original Text (Card)
                 VStack(spacing: 0) {
                     // Title bar with Analyze button
@@ -129,9 +129,11 @@ struct AnonymizationView: View {
                                 .padding(DesignSystem.Spacing.medium)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.clear)
                         .id("original-editor")
                     }
                 }
+                .background(Color.clear)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
                         .fill(
