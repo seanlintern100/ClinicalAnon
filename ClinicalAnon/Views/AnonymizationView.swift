@@ -141,10 +141,6 @@ struct AnonymizationView: View {
                                 ? DesignSystem.Colors.success.opacity(0.05)
                                 : DesignSystem.Colors.surface
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 0)
-                                .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
-                        )
                 )
                 .cornerRadius(DesignSystem.CornerRadius.medium)
                 .padding(6)
