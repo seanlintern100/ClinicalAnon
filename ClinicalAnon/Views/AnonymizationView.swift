@@ -92,7 +92,11 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
                     .padding(.vertical, DesignSystem.Spacing.xs)
-                    .background(DesignSystem.Colors.background.opacity(0.5))
+                    .background(
+                        viewModel.result != nil
+                            ? Color.clear
+                            : DesignSystem.Colors.background.opacity(0.5)
+                    )
 
                     Divider()
                         .opacity(0.3)
@@ -176,7 +180,11 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
                     .padding(.vertical, DesignSystem.Spacing.xs)
-                    .background(DesignSystem.Colors.background.opacity(0.5))
+                    .background(
+                        viewModel.hasCopiedRedacted
+                            ? Color.clear
+                            : DesignSystem.Colors.background.opacity(0.5)
+                    )
 
                     Divider()
                         .opacity(0.3)
@@ -266,7 +274,11 @@ struct AnonymizationView: View {
                     .frame(height: 52)
                     .padding(.horizontal, DesignSystem.Spacing.medium)
                     .padding(.vertical, DesignSystem.Spacing.xs)
-                    .background(DesignSystem.Colors.background.opacity(0.5))
+                    .background(
+                        viewModel.hasRestoredText
+                            ? Color.clear
+                            : DesignSystem.Colors.background.opacity(0.5)
+                    )
 
                     Divider()
                         .opacity(0.3)
@@ -794,6 +806,10 @@ class AnonymizationViewModel: ObservableObject {
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
+
+        // Reset completion states
+        hasCopiedRedacted = false
+        hasRestoredText = false
     }
 
     func clearInputText() {
@@ -1001,10 +1017,11 @@ struct EntityManagementSidebar: View {
             .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)
             .padding(.vertical, DesignSystem.Spacing.xs)
-            .background(DesignSystem.Colors.surface)
+            .background(DesignSystem.Colors.background.opacity(0.5))
 
             if !isCollapsed {
                 Divider()
+                    .opacity(0.3)
 
                 // Entity list
                 if viewModel.allEntities.isEmpty {
