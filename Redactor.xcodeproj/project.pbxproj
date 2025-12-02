@@ -32,6 +32,7 @@
 		7BD00CACD935BCBBCFF9FC97 /* Entity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FAD264CF63B5F813E89B8B /* Entity.swift */; };
 		7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06463A5E2CDA5C7A80638837 /* StatusBar.swift */; };
 		83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD141C928FBD98682F47FE2 /* DesignSystem.swift */; };
+		MDPARSER002C28FBD98682F5 /* MarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDPARSER001C28FBD98682F4 /* MarkdownParser.swift */; };
 		913A43814EBACCC657047706 /* TextEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */; };
 		9B7B2BA26EF227BFA7EDE1AD /* NZPhoneRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */; };
 		A1516E189E242931277563CD /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB7055B7C628D5B3DDB2864 /* SetupView.swift */; };
@@ -97,6 +98,7 @@
 		E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationView.swift; sourceTree = "<group>"; };
 		EFD141C928FBD98682F47FE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		F110215B1181B8B98076418E /* TextReplacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReplacer.swift; sourceTree = "<group>"; };
+		MDPARSER001C28FBD98682F4 /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -124,6 +126,7 @@
 			children = (
 				846F1B468F8E9926702E98A0 /* AppError.swift */,
 				EFD141C928FBD98682F47FE2 /* DesignSystem.swift */,
+				MDPARSER001C28FBD98682F4 /* MarkdownParser.swift */,
 				B47AED6262338D340240F041 /* SetupManager.swift */,
 			);
 			path = Utilities;
@@ -356,6 +359,7 @@
 				16183A6417260B823C8E2805 /* EntityType.swift in Sources */,
 				E9A164691AF75A7CB57A7283 /* HighlightedTextView.swift in Sources */,
 				2FA4EBE090F118C6234E6905 /* MaoriNameRecognizer.swift in Sources */,
+				MDPARSER002C28FBD98682F5 /* MarkdownParser.swift in Sources */,
 				C7A88A1CE629870F858269F7 /* NZAddressRecognizer.swift in Sources */,
 				0703EA34A5DE292DBF3FF3D5 /* NZMedicalIDRecognizer.swift in Sources */,
 				9B7B2BA26EF227BFA7EDE1AD /* NZPhoneRecognizer.swift in Sources */,

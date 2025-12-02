@@ -288,8 +288,7 @@ struct AnonymizationView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(DesignSystem.Spacing.medium)
                             } else {
-                                Text(viewModel.restoredText)
-                                    .font(.system(size: 14))
+                                Text(MarkdownParser.parseToAttributedString(viewModel.restoredText, baseFont: .systemFont(ofSize: 14)))
                                     .foregroundColor(DesignSystem.Colors.textPrimary)
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -463,10 +462,10 @@ struct AnonymizationView: View {
 
     // Helper to create attributed text with highlights for restored text
     private func attributedRestoredText(_ restoredText: String, result: AnonymizationResult) -> AttributedString {
-        var attributedString = AttributedString(restoredText)
+        // Parse Markdown formatting first
+        var attributedString = MarkdownParser.parseToAttributedString(restoredText, baseFont: .systemFont(ofSize: 14))
 
-        // Apply default font
-        attributedString.font = NSFont.systemFont(ofSize: 14)
+        // Apply default text color
         attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
 
         // Highlight restored entities with type-specific colors
@@ -856,7 +855,7 @@ class AnonymizationViewModel: ObservableObject {
 
     func copyRestoredText() {
         guard !restoredText.isEmpty else { return }
-        copyToClipboard(restoredText)
+        copyFormattedToClipboard(restoredText)
 
         // Visual feedback on button
         justCopiedRestored = true
@@ -960,6 +959,18 @@ class AnonymizationViewModel: ObservableObject {
         pasteboard.setString(text, forType: .string)
     }
 
+    private func copyFormattedToClipboard(_ markdown: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+
+        // Copy as RTF for Word compatibility, with plain text fallback
+        if let rtfData = MarkdownParser.parseToRTFData(markdown) {
+            pasteboard.setData(rtfData, forType: .rtf)
+        }
+        // Also include plain text as fallback for apps that don't support RTF
+        pasteboard.setString(markdown, forType: .string)
+    }
+
     private func autoHideSuccess() {
         Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -973,8 +984,32 @@ class AnonymizationViewModel: ObservableObject {
 struct EntityManagementSidebar: View {
     @ObservedObject var viewModel: AnonymizationViewModel
     @State private var isCollapsed = false
+    @State private var sidebarWidth: CGFloat = 270
 
     var body: some View {
+        HStack(spacing: 0) {
+            // Resize handle
+            if !isCollapsed {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 6)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        if hovering {
+                            NSCursor.resizeLeftRight.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                let newWidth = sidebarWidth - value.translation.width
+                                sidebarWidth = min(max(newWidth, 200), 400)
+                            }
+                    )
+            }
+
         VStack(spacing: 0) {
             // Sidebar header
             HStack(spacing: DesignSystem.Spacing.small) {
@@ -1038,7 +1073,8 @@ struct EntityManagementSidebar: View {
         }
         .background(DesignSystem.Colors.surface)
         .frame(maxHeight: .infinity)
-        .frame(width: isCollapsed ? 40 : 180)
+        .frame(width: isCollapsed ? 40 : sidebarWidth)
+        }
         .sheet(isPresented: $viewModel.showingAddCustom) {
             AddCustomEntityView(viewModel: viewModel, isPresented: $viewModel.showingAddCustom, initialText: viewModel.prefilledText)
         }
