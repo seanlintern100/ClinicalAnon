@@ -121,4 +121,47 @@ extension EntityRecognizer {
 
         return commonWords.contains(word.lowercased())
     }
+
+    /// Check if a word is a clinical abbreviation or term to exclude
+    /// These are common in psychology/mental health notes and cause false positives
+    func isClinicalTerm(_ word: String) -> Bool {
+        let clinicalTerms: Set<String> = [
+            // Common clinical abbreviations
+            "GP", "MDT", "AOD", "A&D", "ACC", "DHB", "ED", "ICU", "OT", "PT",
+            "CBT", "DBT", "ACT", "EMDR", "MI", "MH", "MHA", "MOH", "DOH",
+            "CAMHS", "CATT", "CAT", "CRISIS", "EAP", "EPS", "ECT",
+            // Mental health conditions
+            "ADHD", "ADD", "ASD", "OCD", "PTSD", "GAD", "MDD", "BPD", "NPD",
+            // Assessment tools
+            "BAI", "BDI", "PHQ", "GAD7", "K10", "DASS", "WAIS", "WISC",
+            // Medical abbreviations
+            "DSM", "ICD", "Dx", "Rx", "Tx", "Hx", "Sx", "PRN", "QID", "TDS", "BD",
+            // Injury/condition abbreviations
+            "TBI", "CVA", "MS", "CP", "LD", "ID", "ABI",
+            // NZ Government/org abbreviations
+            "NGO", "MOE", "MSD", "WINZ", "CYF", "SENCO",
+            // Support groups
+            "AA", "NA", "CA", "GA", "SAA", "SLAA",
+            // AOD specific
+            "AODS", "CADS", "DAPAANZ",
+            // Business abbreviations
+            "FTE", "PTE", "CEO", "GM", "HR",
+            // Country/region codes
+            "NZ", "USA", "UK", "AU", "NSW", "VIC", "QLD",
+            // Common abbreviations
+            "TD", "TT", "TBC", "TBA", "ASAP", "FYI", "NB", "PS", "RE",
+            // Medications that get flagged as names
+            "Methadone", "Suboxone", "Ritalin", "Dexamphetamine",
+            "Antidepressant", "Antipsychotic", "Anxiolytic", "Benzodiazepine",
+            "Turps", "Cannabis", "Methamphetamine", "Amphetamine",
+            // Clinical roles/terms
+            "Specialist", "Registrar", "Consultant", "Clinician",
+            "Timeline", "Formulation", "Assessment", "Intervention",
+            // Section headers that get flagged
+            "Current", "Background", "History", "Plan", "Goals", "Progress",
+            "Summary", "Recommendations", "Actions", "Notes", "Comments"
+        ]
+
+        return clinicalTerms.contains(word) || clinicalTerms.contains(word.uppercased())
+    }
 }

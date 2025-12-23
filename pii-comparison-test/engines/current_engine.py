@@ -49,6 +49,34 @@ class CurrentEngine:
             print("WARNING: en_core_web_lg not found. Run: python -m spacy download en_core_web_lg")
             self.nlp = None
 
+        # Clinical abbreviations to exclude (psychology/mental health context)
+        self.clinical_exclusions: Set[str] = {
+            # Common clinical abbreviations
+            "GP", "MDT", "AOD", "A&D", "ACC", "DHB", "ED", "ICU", "OT", "PT",
+            "CBT", "DBT", "ACT", "EMDR", "MI", "MH", "MHA", "MOH", "DOH",
+            "CAMHS", "CATT", "CAT", "CRISIS", "EAP", "EPS", "ECT",
+            "ADHD", "ADD", "ASD", "OCD", "PTSD", "GAD", "MDD", "BPD", "NPD",
+            "BAI", "BDI", "PHQ", "GAD7", "K10", "DASS", "WAIS", "WISC",
+            "DSM", "ICD", "Dx", "Rx", "Tx", "Hx", "Sx", "PRN", "QID", "TDS", "BD",
+            "TBI", "CVA", "MS", "CP", "LD", "ID", "ABI",
+            "NGO", "MOE", "MSD", "WINZ", "CYF", "OT", "SENCO",
+            "AA", "NA", "CA", "GA", "SAA", "SLAA",
+            "AOD", "AODS", "CADS", "DAPAANZ",
+            "FTE", "PTE", "CEO", "GM", "HR", "EAP",
+            "NZ", "USA", "UK", "AU", "NSW", "VIC", "QLD",
+            "TD", "TT", "TBC", "TBA", "ASAP", "FYI", "NB", "PS", "RE",
+            # Common medical/clinical terms that get flagged
+            "Methadone", "Suboxone", "Ritalin", "Dexamphetamine",
+            "Antidepressant", "Antipsychotic", "Anxiolytic", "Benzodiazepine",
+            "Turps", "Cannabis", "Methamphetamine", "Amphetamine",
+            "Specialist", "Registrar", "Consultant", "Clinician",
+            "Timeline", "Formulation", "Assessment", "Intervention",
+            "OT Works", "TBI Health", "Emerge", "Pathways",
+            # Section headers that get flagged
+            "Current", "Background", "History", "Plan", "Goals", "Progress",
+            "Summary", "Recommendations", "Actions", "Notes", "Comments",
+        }
+
         # Common words to exclude (from Swift isCommonWord)
         self.common_words: Set[str] = {
             # Articles
@@ -157,6 +185,10 @@ class CurrentEngine:
             if ent.text.lower() in self.common_words:
                 continue
 
+            # Skip clinical abbreviations and terms
+            if ent.text in self.clinical_exclusions or ent.text.upper() in self.clinical_exclusions:
+                continue
+
             # Map spaCy labels to our types
             if ent.label_ == "PERSON":
                 entity_type = EntityType.PERSON_OTHER
@@ -204,25 +236,7 @@ class CurrentEngine:
                     ))
             current_pos = text.find(word, current_pos) + len(word)
 
-        # Phonetic pattern matching
-        maori_pattern = r"\b[A-Z][a-z]*(?:wh|ng)[a-z]+|\b[A-Z][aeiouAEIOU]{2,}[a-z]*\b"
-        for match in re.finditer(maori_pattern, text):
-            word = match.group()
-            # Skip false positives
-            if word in self.maori_false_positives:
-                continue
-            # Skip if already in dictionary
-            if word in self.maori_first_names or word in self.maori_last_names:
-                continue
-
-            entities.append(DetectedEntity(
-                text=word,
-                entity_type=EntityType.PERSON_OTHER,
-                start=match.start(),
-                end=match.end(),
-                confidence=0.6,
-                source="current_maori_phonetic"
-            ))
+        # Phonetic pattern matching REMOVED - too many false positives
 
         return entities
 

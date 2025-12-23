@@ -15,33 +15,23 @@ struct ClinicalAnonApp: App {
 
     // MARK: - Properties
 
+    #if ENABLE_AI_FEATURES
     @StateObject private var setupManager = SetupManager()
+    #endif
 
     // MARK: - Scene Configuration
 
     var body: some Scene {
         WindowGroup {
-            // Show setup wizard until ready
-            if setupManager.state == .ready {
-                // Main anonymization view
-                #if ENABLE_AI_FEATURES
-                AnonymizationView(
-                    ollamaService: {
-                        let service = OllamaService(mockMode: false)
-                        service.modelName = setupManager.selectedModel
-                        return service
-                    }(),
-                    setupManager: setupManager
-                )
-                #else
-                AnonymizationView(
-                    setupManager: setupManager
-                )
-                #endif
-            } else {
-                SetupView()
-                    .environmentObject(setupManager)
-            }
+            // Go straight to app - no setup blocking
+            #if ENABLE_AI_FEATURES
+            AnonymizationView(
+                ollamaService: OllamaService(mockMode: false),
+                setupManager: setupManager
+            )
+            #else
+            AnonymizationView()
+            #endif
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 700)

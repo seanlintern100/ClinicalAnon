@@ -17,7 +17,9 @@ struct AnonymizationView: View {
     // MARK: - Properties
 
     @StateObject private var viewModel: AnonymizationViewModel
+    #if ENABLE_AI_FEATURES
     private let setupManager: SetupManager
+    #endif
 
     // MARK: - Initialization
 
@@ -28,10 +30,9 @@ struct AnonymizationView: View {
         _viewModel = StateObject(wrappedValue: AnonymizationViewModel(engine: engine, setupManager: setupManager))
     }
     #else
-    init(setupManager: SetupManager) {
+    init() {
         let engine = AnonymizationEngine()
-        self.setupManager = setupManager
-        _viewModel = StateObject(wrappedValue: AnonymizationViewModel(engine: engine, setupManager: setupManager))
+        _viewModel = StateObject(wrappedValue: AnonymizationViewModel(engine: engine))
     }
     #endif
 
@@ -40,7 +41,11 @@ struct AnonymizationView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Compact Header
+            #if ENABLE_AI_FEATURES
             CompactHeaderView(setupManager: setupManager, viewModel: viewModel)
+            #else
+            CompactHeaderView(viewModel: viewModel)
+            #endif
 
             // Main content with sidebar
             HStack(spacing: 0) {
@@ -496,9 +501,22 @@ struct AnonymizationView: View {
 // MARK: - Compact Header View
 
 struct CompactHeaderView: View {
+    #if ENABLE_AI_FEATURES
     let setupManager: SetupManager
+    #endif
     @ObservedObject var viewModel: AnonymizationViewModel
     @State private var showingHelp = false
+
+    #if ENABLE_AI_FEATURES
+    init(setupManager: SetupManager, viewModel: AnonymizationViewModel) {
+        self.setupManager = setupManager
+        self.viewModel = viewModel
+    }
+    #else
+    init(viewModel: AnonymizationViewModel) {
+        self.viewModel = viewModel
+    }
+    #endif
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
@@ -635,7 +653,9 @@ class AnonymizationViewModel: ObservableObject {
     // MARK: - Properties (accessible for UI)
 
     let engine: AnonymizationEngine
+    #if ENABLE_AI_FEATURES
     let setupManager: SetupManager
+    #endif
 
     // Detection mode from engine (forwarding)
     var detectionMode: DetectionMode {
@@ -645,10 +665,16 @@ class AnonymizationViewModel: ObservableObject {
 
     // MARK: - Initialization
 
+    #if ENABLE_AI_FEATURES
     init(engine: AnonymizationEngine, setupManager: SetupManager) {
         self.engine = engine
         self.setupManager = setupManager
     }
+    #else
+    init(engine: AnonymizationEngine) {
+        self.engine = engine
+    }
+    #endif
 
     // MARK: - Entity Management Computed Properties
 
@@ -733,8 +759,10 @@ class AnonymizationViewModel: ObservableObject {
     func analyze() async {
         guard !inputText.isEmpty else { return }
 
+        #if ENABLE_AI_FEATURES
         // Update model name from setup manager before processing
         engine.updateModelName(setupManager.selectedModel)
+        #endif
 
         // Dismiss previous messages
         errorMessage = nil
@@ -1545,9 +1573,7 @@ struct AnonymizationView_Previews: PreviewProvider {
         )
         .frame(width: 1200, height: 700)
         #else
-        AnonymizationView(
-            setupManager: SetupManager.preview
-        )
+        AnonymizationView()
         .frame(width: 1200, height: 700)
         #endif
     }

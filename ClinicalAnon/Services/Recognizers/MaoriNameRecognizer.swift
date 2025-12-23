@@ -10,9 +10,8 @@ import Foundation
 
 // MARK: - Māori Name Recognizer
 
-/// Recognizes Māori names through:
-/// 1. Dictionary lookup (high confidence)
-/// 2. Phonetic pattern matching (lower confidence)
+/// Recognizes Māori names through dictionary lookup only
+/// Note: Phonetic pattern matching removed due to too many false positives
 class MaoriNameRecognizer: EntityRecognizer {
 
     // MARK: - Properties
@@ -37,24 +36,11 @@ class MaoriNameRecognizer: EntityRecognizer {
         "Parata", "Ngati", "Whaanga", "Eruera"
     ]
 
-    /// Pattern for Māori phonetic features:
-    /// - Words with 'wh' or 'ng' clusters
-    /// - High vowel density
-    /// - Capitaliz words (proper nouns)
-    private let maoriPhoneticPattern = "\\b[A-Z][a-z]*(?:wh|ng)[a-z]+|\\b[A-Z][aeiouAEIOU]{2,}[a-z]*\\b"
-
     // MARK: - Entity Recognition
 
     func recognize(in text: String) -> [Entity] {
-        var entities: [Entity] = []
-
-        // 1. Dictionary lookup (high confidence)
-        entities.append(contentsOf: recognizeKnownNames(in: text))
-
-        // 2. Phonetic pattern matching (lower confidence)
-        entities.append(contentsOf: recognizePhoneticPatterns(in: text))
-
-        return entities
+        // Dictionary lookup only (phonetic pattern removed - too many false positives)
+        return recognizeKnownNames(in: text)
     }
 
     // MARK: - Dictionary Lookup
@@ -92,58 +78,6 @@ class MaoriNameRecognizer: EntityRecognizer {
         }
 
         return entities
-    }
-
-    // MARK: - Phonetic Pattern Matching
-
-    /// Recognize potential Māori names by phonetic patterns
-    private func recognizePhoneticPatterns(in text: String) -> [Entity] {
-        guard let regex = try? NSRegularExpression(pattern: maoriPhoneticPattern) else {
-            return []
-        }
-
-        var entities: [Entity] = []
-        let range = NSRange(text.startIndex..., in: text)
-        let matches = regex.matches(in: text, range: range)
-
-        for match in matches {
-            guard let range = Range(match.range, in: text) else { continue }
-
-            let word = String(text[range])
-
-            // Filter out common English words that happen to match pattern
-            guard !isCommonEnglishWord(word) else { continue }
-
-            // Skip if already in our dictionary (will be caught by dictionary lookup)
-            guard !Self.firstNames.contains(word) && !Self.lastNames.contains(word) else {
-                continue
-            }
-
-            let start = text.distance(from: text.startIndex, to: range.lowerBound)
-            let end = text.distance(from: text.startIndex, to: range.upperBound)
-
-            entities.append(Entity(
-                originalText: word,
-                replacementCode: "",
-                type: .personOther,
-                positions: [[start, end]],
-                confidence: 0.6  // Lower confidence for pattern matching
-            ))
-        }
-
-        return entities
-    }
-
-    // MARK: - Helpers
-
-    /// Check if word is a common English word that matches Māori patterns
-    private func isCommonEnglishWord(_ word: String) -> Bool {
-        let falsePositives: Set<String> = [
-            "Where", "When", "What", "Thing", "Something", "Anything",
-            "Whither", "Whether", "Whence"
-        ]
-
-        return falsePositives.contains(word)
     }
 }
 

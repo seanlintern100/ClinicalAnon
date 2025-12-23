@@ -38,6 +38,9 @@ class AppleNERRecognizer: EntityRecognizer {
             // Skip if it's a common word (not actually a name)
             guard !isCommonWord(name) else { return true }
 
+            // Skip clinical abbreviations and terms (cause false positives)
+            guard !isClinicalTerm(name) else { return true }
+
             let start = text.distance(from: text.startIndex, to: range.lowerBound)
             let end = text.distance(from: text.startIndex, to: range.upperBound)
 
