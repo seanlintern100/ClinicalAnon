@@ -33,6 +33,8 @@
 		7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06463A5E2CDA5C7A80638837 /* StatusBar.swift */; };
 		83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD141C928FBD98682F47FE2 /* DesignSystem.swift */; };
 		MDPARSER002C28FBD98682F5 /* MarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDPARSER001C28FBD98682F4 /* MarkdownParser.swift */; };
+		USEREXCL002C28FBD98682F5 /* UserExclusionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = USEREXCL001C28FBD98682F4 /* UserExclusionManager.swift */; };
+		EXCLVIEW002C28FBD98682F5 /* ExclusionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EXCLVIEW001C28FBD98682F4 /* ExclusionSettingsView.swift */; };
 		913A43814EBACCC657047706 /* TextEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */; };
 		9B7B2BA26EF227BFA7EDE1AD /* NZPhoneRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */; };
 		A1516E189E242931277563CD /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB7055B7C628D5B3DDB2864 /* SetupView.swift */; };
@@ -99,6 +101,8 @@
 		EFD141C928FBD98682F47FE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		F110215B1181B8B98076418E /* TextReplacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReplacer.swift; sourceTree = "<group>"; };
 		MDPARSER001C28FBD98682F4 /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
+		USEREXCL001C28FBD98682F4 /* UserExclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserExclusionManager.swift; sourceTree = "<group>"; };
+		EXCLVIEW001C28FBD98682F4 /* ExclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -106,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */,
+				EXCLVIEW001C28FBD98682F4 /* ExclusionSettingsView.swift */,
 				ABB7055B7C628D5B3DDB2864 /* SetupView.swift */,
 				F73F9C4D26018A4728868190 /* Components */,
 			);
@@ -207,6 +212,7 @@
 				B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */,
 				9741FCB21B765FA21672D641 /* SwiftNERService.swift */,
 				F110215B1181B8B98076418E /* TextReplacer.swift */,
+				USEREXCL001C28FBD98682F4 /* UserExclusionManager.swift */,
 				D90BD4EEC63338BFD6F5017D /* Recognizers */,
 			);
 			path = Services;
@@ -372,6 +378,8 @@
 				1018969E6E6D810477650A46 /* SwiftNERService.swift in Sources */,
 				913A43814EBACCC657047706 /* TextEditorView.swift in Sources */,
 				F016C58CAD8F7A8D664FA3E4 /* TextReplacer.swift in Sources */,
+				USEREXCL002C28FBD98682F5 /* UserExclusionManager.swift in Sources */,
+				EXCLVIEW002C28FBD98682F5 /* ExclusionSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

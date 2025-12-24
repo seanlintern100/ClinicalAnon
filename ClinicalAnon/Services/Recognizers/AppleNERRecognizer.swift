@@ -41,6 +41,9 @@ class AppleNERRecognizer: EntityRecognizer {
             // Skip clinical abbreviations and terms (cause false positives)
             guard !isClinicalTerm(name) else { return true }
 
+            // Skip user-excluded words
+            guard !isUserExcluded(name) else { return true }
+
             let start = text.distance(from: text.startIndex, to: range.lowerBound)
             let end = text.distance(from: text.startIndex, to: range.upperBound)
 

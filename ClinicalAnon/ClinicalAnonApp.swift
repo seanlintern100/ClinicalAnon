@@ -35,6 +35,11 @@ struct ClinicalAnonApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 700)
+
+        // Settings window (Cmd+,)
+        Settings {
+            ExclusionSettingsView()
+        }
     }
 }
 

@@ -57,8 +57,8 @@ class MaoriNameRecognizer: EntityRecognizer {
             // Clean punctuation
             let cleanWord = word.trimmingCharacters(in: .punctuationCharacters)
 
-            // Check if it's a known Māori name
-            if Self.firstNames.contains(cleanWord) || Self.lastNames.contains(cleanWord) {
+            // Check if it's a known Māori name (and not user-excluded)
+            if (Self.firstNames.contains(cleanWord) || Self.lastNames.contains(cleanWord)) && !isUserExcluded(cleanWord) {
                 // Find actual position in text
                 if let range = text.range(of: cleanWord, range: text.index(text.startIndex, offsetBy: currentPosition)..<text.endIndex) {
                     let start = text.distance(from: text.startIndex, to: range.lowerBound)

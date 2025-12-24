@@ -74,6 +74,11 @@ class PatternRecognizer: EntityRecognizer {
 // MARK: - Helper Extensions
 
 extension EntityRecognizer {
+    /// Check if a word is in the user's exclusion list
+    func isUserExcluded(_ word: String) -> Bool {
+        return UserExclusionManager.shared.isExcluded(word)
+    }
+
     /// Helper to find all occurrences of a word in text
     func findOccurrences(of word: String, in text: String, caseInsensitive: Bool = false) -> [[Int]] {
         var positions: [[Int]] = []

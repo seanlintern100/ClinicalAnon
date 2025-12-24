@@ -99,16 +99,16 @@ struct AnonymizationView: View {
                         .opacity(0.15)
 
                     // Text editor or highlighted text - fills all available space
-                    if let result = viewModel.result {
+                    if let result = viewModel.result, let cachedOriginal = viewModel.cachedOriginalAttributed {
                         // Show highlighted version with double-click support when we have results
                         InteractiveTextView(
-                            attributedText: attributedOriginalText(viewModel.inputText, result: result),
+                            attributedText: cachedOriginal,
                             onDoubleClick: { word in
                                 viewModel.openAddCustomEntity(withText: word)
                             }
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("original-highlighted-\(result.id)-\(viewModel.excludedEntityIds.count)-\(viewModel.customEntities.count)")
+                        .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
                     } else {
                         // Show editable TextEditor when no results
                         ZStack(alignment: .topLeading) {
@@ -178,15 +178,15 @@ struct AnonymizationView: View {
                         .opacity(0.15)
 
                     // Redacted text display - fills all available space
-                    if let result = viewModel.result {
+                    if let result = viewModel.result, let cachedRedacted = viewModel.cachedRedactedAttributed {
                         ScrollView {
-                            Text(attributedRedactedText())
+                            Text(cachedRedacted)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(DesignSystem.Spacing.medium)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("redacted-\(result.id)-\(viewModel.excludedEntityIds.count)-\(viewModel.customEntities.count)")
+                        .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
                     } else {
                         VStack(spacing: DesignSystem.Spacing.medium) {
                             Spacer()
@@ -287,8 +287,8 @@ struct AnonymizationView: View {
                     } else {
                         // Show restored text with highlighting
                         ScrollView {
-                            if let result = viewModel.result {
-                                Text(attributedRestoredText(viewModel.restoredText, result: result))
+                            if let cachedRestored = viewModel.cachedRestoredAttributed {
+                                Text(cachedRestored)
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(DesignSystem.Spacing.medium)
@@ -637,6 +637,19 @@ class AnonymizationViewModel: ObservableObject {
     @Published var excludedEntityIds: Set<UUID> = []
     @Published var customEntities: [Entity] = []
 
+    // Performance: Cached redacted text to avoid recomputation on every access
+    @Published private(set) var cachedRedactedText: String = ""
+    private var redactedTextNeedsUpdate: Bool = true
+    private var toggleDebounceTask: DispatchWorkItem?
+
+    // Performance: Cached AttributedStrings to avoid recomputing highlights on every toggle
+    @Published private(set) var cachedOriginalAttributed: AttributedString?
+    @Published private(set) var cachedRedactedAttributed: AttributedString?
+    @Published private(set) var cachedRestoredAttributed: AttributedString?
+
+    // Private backing store for excluded IDs - changes don't trigger view re-render
+    private var _excludedIds: Set<UUID> = []
+
     // Add custom entity dialog state
     @Published var showingAddCustom: Bool = false
     @Published var prefilledText: String? = nil
@@ -684,66 +697,230 @@ class AnonymizationViewModel: ObservableObject {
         return result.entities + customEntities
     }
 
-    /// Only active entities (not excluded)
+    /// Only active entities (not excluded) - uses private backing store for performance
     var activeEntities: [Entity] {
-        allEntities.filter { !excludedEntityIds.contains($0.id) }
+        allEntities.filter { !_excludedIds.contains($0.id) }
+    }
+
+    /// Check if an entity is excluded (for UI bindings)
+    func isEntityExcluded(_ entity: Entity) -> Bool {
+        _excludedIds.contains(entity.id)
     }
 
     /// Dynamically generated redacted text based on active entities
+    /// Uses cached version for performance - call updateRedactedTextCache() when entities change
     var displayedRedactedText: String {
-        guard let result = result else { return "" }
+        if redactedTextNeedsUpdate {
+            updateRedactedTextCache()
+        }
+        return cachedRedactedText
+    }
 
-        do {
-            // Start with original text
-            var text = result.originalText
+    /// Update the cached redacted text - called when entities or exclusions change
+    private func updateRedactedTextCache() {
+        guard let result = result else {
+            cachedRedactedText = ""
+            redactedTextNeedsUpdate = false
+            return
+        }
 
-            // Flatten all positions from all entities into a single list
-            // Each item is (start, end, replacementCode)
-            var allReplacements: [(start: Int, end: Int, code: String)] = []
+        // Start with original text
+        var text = result.originalText
 
-            for entity in activeEntities {
-                for position in entity.positions {
-                    guard position.count >= 2 else { continue }
-                    let start = position[0]
-                    let end = position[1]
+        // Flatten all positions from all entities into a single list
+        // Each item is (start, end, replacementCode)
+        var allReplacements: [(start: Int, end: Int, code: String)] = []
 
-                    // Validate positions are within bounds
-                    guard start >= 0 && end <= text.count && start < end else {
-                        print("⚠️ Invalid position [\(start), \(end)] for text length \(text.count)")
-                        continue
-                    }
+        for entity in activeEntities {
+            for position in entity.positions {
+                guard position.count >= 2 else { continue }
+                let start = position[0]
+                let end = position[1]
 
-                    allReplacements.append((start: start, end: end, code: entity.replacementCode))
-                }
-            }
-
-            // Sort all replacements by position (descending - last to first)
-            // This preserves string indices as we replace from end to start
-            allReplacements.sort { $0.start > $1.start }
-
-            // Replace each position from last to first
-            for replacement in allReplacements {
-                guard replacement.start < text.count && replacement.end <= text.count else {
-                    print("⚠️ Skipping out-of-bounds replacement at [\(replacement.start), \(replacement.end)]")
+                // Validate positions are within bounds
+                guard start >= 0 && end <= text.count && start < end else {
                     continue
                 }
 
-                let start = text.index(text.startIndex, offsetBy: replacement.start)
-                let end = text.index(text.startIndex, offsetBy: replacement.end)
+                allReplacements.append((start: start, end: end, code: entity.replacementCode))
+            }
+        }
 
-                // Validate string indices before replacement
-                guard start < text.endIndex && end <= text.endIndex && start < end else {
-                    print("⚠️ Invalid string indices for replacement")
-                    continue
-                }
+        // Sort all replacements by position (descending - last to first)
+        // This preserves string indices as we replace from end to start
+        allReplacements.sort { $0.start > $1.start }
 
-                text.replaceSubrange(start..<end, with: replacement.code)
+        // Replace each position from last to first
+        for replacement in allReplacements {
+            guard replacement.start < text.count && replacement.end <= text.count else {
+                continue
             }
 
-            return text
-        } catch {
-            print("❌ Error generating redacted text: \(error)")
-            return result.anonymizedText // Fallback to original result
+            let start = text.index(text.startIndex, offsetBy: replacement.start)
+            let end = text.index(text.startIndex, offsetBy: replacement.end)
+
+            // Validate string indices before replacement
+            guard start < text.endIndex && end <= text.endIndex && start < end else {
+                continue
+            }
+
+            text.replaceSubrange(start..<end, with: replacement.code)
+        }
+
+        cachedRedactedText = text
+        redactedTextNeedsUpdate = false
+    }
+
+    // MARK: - Cached AttributedString Management
+
+    /// Rebuild all cached AttributedStrings - called after analyze() or when entities change
+    func rebuildAllHighlightCaches() {
+        guard let result = result else {
+            cachedOriginalAttributed = nil
+            cachedRedactedAttributed = nil
+            cachedRestoredAttributed = nil
+            return
+        }
+
+        // Build all three caches using current _excludedIds state
+        cachedOriginalAttributed = buildOriginalAttributed(result.originalText)
+        cachedRedactedAttributed = buildRedactedAttributed()
+        cachedRestoredAttributed = buildRestoredAttributed()
+    }
+
+    /// Build highlighted AttributedString for original text using entity positions
+    private func buildOriginalAttributed(_ text: String) -> AttributedString {
+        var attributedString = AttributedString(text)
+        attributedString.font = NSFont.systemFont(ofSize: 14)
+        attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+
+        // Apply highlights using stored positions (O(n) - no text search!)
+        for entity in allEntities {
+            let isExcluded = _excludedIds.contains(entity.id)
+            let bgColor = isExcluded
+                ? NSColor.gray.withAlphaComponent(0.3)
+                : NSColor(entity.type.highlightColor)
+            let fgColor = isExcluded
+                ? NSColor(DesignSystem.Colors.textSecondary)
+                : NSColor(DesignSystem.Colors.textPrimary)
+
+            for position in entity.positions {
+                guard position.count >= 2 else { continue }
+                let start = position[0]
+                let end = position[1]
+
+                // Convert Int positions to AttributedString indices
+                guard start >= 0 && end <= text.count && start < end else { continue }
+
+                let startIdx = attributedString.index(attributedString.startIndex, offsetByCharacters: start)
+                let endIdx = attributedString.index(attributedString.startIndex, offsetByCharacters: end)
+
+                guard startIdx < attributedString.endIndex && endIdx <= attributedString.endIndex else { continue }
+
+                attributedString[startIdx..<endIdx].backgroundColor = bgColor
+                attributedString[startIdx..<endIdx].foregroundColor = fgColor
+            }
+        }
+
+        return attributedString
+    }
+
+    /// Build highlighted AttributedString for redacted text
+    private func buildRedactedAttributed() -> AttributedString {
+        let text = displayedRedactedText
+        var attributedString = AttributedString(text)
+        attributedString.font = NSFont.systemFont(ofSize: 14)
+        attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+
+        // Highlight replacement codes for active entities
+        for entity in activeEntities {
+            let code = entity.replacementCode
+            var searchStart = attributedString.startIndex
+
+            while searchStart < attributedString.endIndex {
+                let searchRange = searchStart..<attributedString.endIndex
+                if let range = attributedString[searchRange].range(of: code) {
+                    attributedString[range].backgroundColor = NSColor(entity.type.highlightColor)
+                    attributedString[range].foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+                    searchStart = range.upperBound
+                } else {
+                    break
+                }
+            }
+        }
+
+        return attributedString
+    }
+
+    /// Build highlighted AttributedString for restored text
+    private func buildRestoredAttributed() -> AttributedString {
+        guard let result = result else { return AttributedString("") }
+
+        // Parse Markdown formatting first
+        var attributedString = MarkdownParser.parseToAttributedString(restoredText, baseFont: .systemFont(ofSize: 14))
+        attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+
+        // Highlight restored entities using text search (restored text may have moved)
+        for entity in result.entities {
+            let originalText = entity.originalText
+            var searchStart = attributedString.startIndex
+
+            while searchStart < attributedString.endIndex {
+                let searchRange = searchStart..<attributedString.endIndex
+                if let range = attributedString[searchRange].range(of: originalText, options: [.caseInsensitive]) {
+                    attributedString[range].backgroundColor = NSColor(entity.type.highlightColor)
+                    attributedString[range].foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+                    searchStart = range.upperBound
+                } else {
+                    break
+                }
+            }
+        }
+
+        return attributedString
+    }
+
+    /// Update highlights for a single entity toggle - much faster than full rebuild
+    func updateHighlightsForToggle(_ entity: Entity, isNowExcluded: Bool) {
+        guard let result = result else { return }
+
+        // Update original text highlighting for this entity only
+        if var original = cachedOriginalAttributed {
+            let text = result.originalText
+            let bgColor = isNowExcluded
+                ? NSColor.gray.withAlphaComponent(0.3)
+                : NSColor(entity.type.highlightColor)
+            let fgColor = isNowExcluded
+                ? NSColor(DesignSystem.Colors.textSecondary)
+                : NSColor(DesignSystem.Colors.textPrimary)
+
+            for position in entity.positions {
+                guard position.count >= 2 else { continue }
+                let start = position[0]
+                let end = position[1]
+
+                guard start >= 0 && end <= text.count && start < end else { continue }
+
+                let startIdx = original.index(original.startIndex, offsetByCharacters: start)
+                let endIdx = original.index(original.startIndex, offsetByCharacters: end)
+
+                guard startIdx < original.endIndex && endIdx <= original.endIndex else { continue }
+
+                original[startIdx..<endIdx].backgroundColor = bgColor
+                original[startIdx..<endIdx].foregroundColor = fgColor
+            }
+
+            cachedOriginalAttributed = original
+        }
+
+        // Redacted and restored need full rebuild as the text content changes
+        redactedTextNeedsUpdate = true
+        _ = displayedRedactedText  // Force cache update
+        cachedRedactedAttributed = buildRedactedAttributed()
+
+        // Only rebuild restored if there's restored text
+        if !restoredText.isEmpty {
+            cachedRestoredAttributed = buildRestoredAttributed()
         }
     }
 
@@ -788,6 +965,15 @@ class AnonymizationViewModel: ObservableObject {
 
             result = try await engine.anonymize(inputText)
 
+            // Invalidate cache so it rebuilds with new entities
+            redactedTextNeedsUpdate = true
+
+            // Sync backing store from published (fresh start after analyze)
+            _excludedIds = excludedEntityIds
+
+            // Build highlighted AttributedString caches
+            rebuildAllHighlightCaches()
+
             updateTask.cancel()
             updateFromEngine()
 
@@ -817,14 +1003,23 @@ class AnonymizationViewModel: ObservableObject {
         aiImprovedText = ""
         restoredText = ""
         excludedEntityIds.removeAll()
+        _excludedIds.removeAll()
         customEntities.removeAll()
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
 
+        // Reset caches
+        cachedRedactedText = ""
+        redactedTextNeedsUpdate = true
+        cachedOriginalAttributed = nil
+        cachedRedactedAttributed = nil
+        cachedRestoredAttributed = nil
+
         // Reset completion states
         hasCopiedRedacted = false
         hasRestoredText = false
+        hasPendingChanges = false
     }
 
     func clearInputText() {
@@ -903,13 +1098,33 @@ class AnonymizationViewModel: ObservableObject {
 
     // MARK: - Entity Management Actions
 
-    /// Toggle an entity on/off (excluded entities are restored in redacted text)
+    /// Toggle an entity on/off - instant, no processing
+    /// Call applyChanges() to update text panes
     func toggleEntity(_ entity: Entity) {
-        if excludedEntityIds.contains(entity.id) {
-            excludedEntityIds.remove(entity.id)
+        // Toggle in backing store only (instant)
+        if _excludedIds.contains(entity.id) {
+            _excludedIds.remove(entity.id)
         } else {
-            excludedEntityIds.insert(entity.id)
+            _excludedIds.insert(entity.id)
         }
+        hasPendingChanges = true
+    }
+
+    /// Check if there are unapplied toggle changes
+    @Published var hasPendingChanges: Bool = false
+
+    /// Apply all pending toggle changes - rebuilds text panes
+    func applyChanges() {
+        guard hasPendingChanges else { return }
+
+        // Sync to published property
+        excludedEntityIds = _excludedIds
+
+        // Rebuild caches
+        redactedTextNeedsUpdate = true
+        rebuildAllHighlightCaches()
+
+        hasPendingChanges = false
     }
 
     /// Add a custom redaction for text that wasn't automatically detected
@@ -955,6 +1170,9 @@ class AnonymizationViewModel: ObservableObject {
 
         // Add to mapping
         _ = engine.entityMapping.getReplacementCode(for: trimmedText, type: type)
+
+        // Invalidate cache so it rebuilds with new entity
+        redactedTextNeedsUpdate = true
 
         successMessage = "Added custom redaction: \(code) (\(positions.count) occurrences)"
         autoHideSuccess()
@@ -1088,13 +1306,32 @@ struct EntityManagementSidebar: View {
                             ForEach(viewModel.allEntities) { entity in
                                 EntitySidebarRow(
                                     entity: entity,
-                                    isActive: !viewModel.excludedEntityIds.contains(entity.id),
+                                    isActive: !viewModel.isEntityExcluded(entity),
                                     onToggle: { viewModel.toggleEntity(entity) }
                                 )
                             }
                         }
                         .padding(.horizontal, DesignSystem.Spacing.small)
                         .padding(.vertical, DesignSystem.Spacing.xs)
+                    }
+
+                    // Apply Changes button - only shown when there are pending changes
+                    if viewModel.hasPendingChanges {
+                        Button(action: { viewModel.applyChanges() }) {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Apply Changes")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(DesignSystem.Colors.primaryTeal)
+                            .foregroundColor(.white)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, DesignSystem.Spacing.small)
+                        .padding(.bottom, DesignSystem.Spacing.small)
                     }
                 }
             }
@@ -1204,7 +1441,7 @@ struct EntityManagementPanel: View {
                         ForEach(viewModel.allEntities) { entity in
                             EntityManagementRow(
                                 entity: entity,
-                                isActive: !viewModel.excludedEntityIds.contains(entity.id),
+                                isActive: !viewModel.isEntityExcluded(entity),
                                 onToggle: { viewModel.toggleEntity(entity) }
                             )
                         }
@@ -1795,6 +2032,52 @@ struct HelpModalView: View {
                     Divider()
                         .opacity(0.3)
 
+                    // Settings & Whitelist
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                        Text("Settings & Whitelist")
+                            .font(DesignSystem.Typography.subheading)
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        Text("Some words get flagged incorrectly (like organisation names or clinical terms). You can permanently exclude them:")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Press ⌘, (Cmd + comma) to open Settings")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Add words you want to whitelist - they'll never be flagged again")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                                Text("Import/export your whitelist as a comma-separated list")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+                        .padding(.leading, DesignSystem.Spacing.small)
+
+                        Text("Your whitelist is saved permanently and applies to all documents.")
+                            .font(DesignSystem.Typography.bodyBold)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .padding(.top, 4)
+                    }
+
+                    Divider()
+                        .opacity(0.3)
+
                     // Tips
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
                         Text("Tips")
@@ -1833,7 +2116,7 @@ struct HelpModalView: View {
             }
             .background(DesignSystem.Colors.background)
         }
-        .frame(width: 600, height: 700)
+        .frame(width: 600, height: 750)
         .background(DesignSystem.Colors.surface)
         .cornerRadius(DesignSystem.CornerRadius.large)
         .shadow(color: Color.black.opacity(0.3), radius: 30, x: 0, y: 10)
