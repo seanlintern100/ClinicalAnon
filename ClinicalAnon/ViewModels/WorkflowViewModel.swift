@@ -152,6 +152,11 @@ class WorkflowViewModel: ObservableObject {
         !aiOutput.isEmpty && !isAIProcessing
     }
 
+    /// Whether AI has generated output (for UI state)
+    var hasGeneratedOutput: Bool {
+        !chatHistory.isEmpty || (!aiOutput.isEmpty && !isAIProcessing)
+    }
+
     // MARK: - Phase Navigation
 
     func goToPhase(_ phase: WorkflowPhase) {
@@ -466,6 +471,25 @@ class WorkflowViewModel: ObservableObject {
         isInRefinementMode = false
         chatHistory = []
         processWithAI()
+    }
+
+    /// Start over - reset all AI state
+    func startOverAI() {
+        // Cancel any ongoing request
+        currentAITask?.cancel()
+        aiService.cancel()
+
+        // Reset all AI state
+        isInRefinementMode = false
+        aiOutput = ""
+        chatHistory = []
+        refinementInput = ""
+        customInstructions = ""
+        aiError = nil
+        isAIProcessing = false
+
+        // Reset conversation context
+        aiService.resetContext()
     }
 
     /// Cancel ongoing AI request
