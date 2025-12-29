@@ -474,3 +474,58 @@ struct DesignSystem_Previews: PreviewProvider {
     }
 }
 #endif
+
+// MARK: - Button Styles
+
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DesignSystem.Typography.button)
+            .foregroundColor(.white)
+            .padding(.horizontal, DesignSystem.Spacing.large)
+            .padding(.vertical, DesignSystem.Spacing.small + 2)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                    .fill(
+                        configuration.isPressed
+                            ? DesignSystem.Colors.primaryTeal.opacity(0.8)
+                            : DesignSystem.Colors.primaryTeal
+                    )
+                    .shadow(
+                        color: DesignSystem.Colors.primaryTeal.opacity(0.3),
+                        radius: configuration.isPressed ? 2 : 4,
+                        x: 0,
+                        y: configuration.isPressed ? 1 : 2
+                    )
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DesignSystem.Typography.caption)
+            .foregroundColor(DesignSystem.Colors.textPrimary)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, DesignSystem.Spacing.small)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .fill(
+                        configuration.isPressed
+                            ? DesignSystem.Colors.surface.opacity(0.7)
+                            : DesignSystem.Colors.surface
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                            .strokeBorder(
+                                DesignSystem.Colors.border,
+                                lineWidth: configuration.isPressed ? 0.5 : 1
+                            )
+                    )
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}

@@ -13,122 +13,18 @@ import SwiftUI
 @main
 struct ClinicalAnonApp: App {
 
-    // MARK: - Properties
-
-    #if ENABLE_AI_FEATURES
-    @StateObject private var setupManager = SetupManager()
-    #endif
-
     // MARK: - Scene Configuration
 
     var body: some Scene {
         WindowGroup {
-            // Go straight to app - no setup blocking
-            #if ENABLE_AI_FEATURES
-            AnonymizationView(
-                ollamaService: OllamaService(mockMode: false),
-                setupManager: setupManager
-            )
-            #else
-            AnonymizationView()
-            #endif
+            MainContentView()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 700)
 
         // Settings window (Cmd+,)
         Settings {
-            ExclusionSettingsView()
+            SettingsContainerView()
         }
     }
 }
-
-// MARK: - Temporary Content View (Phase 1)
-
-struct ContentView: View {
-
-    var body: some View {
-        ZStack {
-            // Background
-            DesignSystem.Colors.background
-                .ignoresSafeArea()
-
-            VStack(spacing: DesignSystem.Spacing.large) {
-                // Title
-                Text("ClinicalAnon")
-                    .font(DesignSystem.Typography.title)
-                    .foregroundColor(DesignSystem.Colors.primaryTeal)
-
-                // Subtitle
-                Text("Privacy-first clinical text anonymization")
-                    .font(DesignSystem.Typography.heading)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                // Description
-                Text("Phase 1: Project Setup & Design System")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                Spacer()
-                    .frame(height: DesignSystem.Spacing.xlarge)
-
-                // Status card
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("✅ Phase 1 Progress")
-                        .font(DesignSystem.Typography.subheading)
-                        .foregroundColor(DesignSystem.Colors.primaryTeal)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                        StatusRow(completed: true, text: "Folder structure created")
-                        StatusRow(completed: true, text: "DesignSystem.swift implemented")
-                        StatusRow(completed: true, text: "AppError.swift created")
-                        StatusRow(completed: true, text: "ClinicalAnonApp.swift entry point")
-                        StatusRow(completed: false, text: "Fonts integration (pending)")
-                        StatusRow(completed: false, text: "Xcode project configuration (pending)")
-                    }
-                }
-                .padding(DesignSystem.Spacing.large)
-                .frame(maxWidth: 500)
-                .cardStyle()
-
-                Spacer()
-
-                // Footer
-                Text("Organization: 3 Big Things")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-            .padding(DesignSystem.Spacing.xxlarge)
-        }
-    }
-}
-
-// MARK: - Status Row Component
-
-struct StatusRow: View {
-    let completed: Bool
-    let text: String
-
-    var body: some View {
-        HStack(spacing: DesignSystem.Spacing.small) {
-            Image(systemName: completed ? "checkmark.circle.fill" : "circle")
-                .foregroundColor(completed ? DesignSystem.Colors.success : DesignSystem.Colors.textSecondary)
-                .font(.system(size: 16))
-
-            Text(text)
-                .font(DesignSystem.Typography.body)
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-        }
-    }
-}
-
-// MARK: - Preview
-
-#if DEBUG
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-            .frame(width: 1200, height: 700)
-    }
-}
-#endif

@@ -1603,45 +1603,6 @@ struct AddCustomEntityView: View {
     }
 }
 
-// MARK: - Text Reidentifier
-
-/// Service that reverses anonymization by replacing placeholders with original text
-class TextReidentifier {
-
-    /// Replace all placeholders with original text
-    @MainActor
-    func restore(text: String, using mapping: EntityMapping) -> String {
-        var result = text
-
-        // Get all mappings from EntityMapping
-        let allMappings = mapping.allMappings
-
-        // Create reverse mapping: [PERSON_A] → "John"
-        let reverseMappings = allMappings.map {
-            (placeholder: $0.replacement, original: $0.original)
-        }
-
-        // Sort by placeholder length (longest first to avoid partial replacements)
-        let sorted = reverseMappings.sorted { $0.placeholder.count > $1.placeholder.count }
-
-        print("🔄 TextReidentifier: Restoring \(sorted.count) placeholders")
-
-        // Replace each placeholder with original text
-        for mapping in sorted {
-            let occurrences = result.components(separatedBy: mapping.placeholder).count - 1
-            if occurrences > 0 {
-                result = result.replacingOccurrences(
-                    of: mapping.placeholder,
-                    with: mapping.original
-                )
-                print("  ✓ Replaced \(mapping.placeholder) → '\(mapping.original)' (\(occurrences) times)")
-            }
-        }
-
-        return result
-    }
-}
-
 // MARK: - Detection Mode Picker
 
 #if ENABLE_AI_FEATURES

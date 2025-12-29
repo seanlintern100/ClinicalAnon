@@ -11,6 +11,7 @@ import Foundation
 // MARK: - Text Reidentifier
 
 /// Service that reverses anonymization by replacing placeholders with original text
+@MainActor
 class TextReidentifier {
 
     // MARK: - Public Methods
@@ -59,12 +60,12 @@ class TextReidentifier {
     ///   - mapping: EntityMapping to use
     /// - Returns: Array of (placeholder, original text, count) tuples
     func previewReplacements(in text: String, using mapping: EntityMapping) -> [(placeholder: String, original: String, count: Int)] {
-        var previews: [(String, String, Int)] = []
+        var previews: [(placeholder: String, original: String, count: Int)] = []
 
         for (original, replacement) in mapping.allMappings {
             let count = countOccurrences(of: replacement, in: text)
             if count > 0 {
-                previews.append((replacement, original, count))
+                previews.append((placeholder: replacement, original: original, count: count))
             }
         }
 
