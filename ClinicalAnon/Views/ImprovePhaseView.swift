@@ -2,7 +2,7 @@
 //  ImprovePhaseView.swift
 //  Redactor
 //
-//  Purpose: Second phase - AI processing with document type selection
+//  Purpose: Second phase - AI processing with document type selection and refinement
 //  Organization: 3 Big Things
 //
 
@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - Improve Phase View
 
-/// Phase 2: Send redacted text to AI for processing
+/// Phase 2: Send redacted text to AI for processing, then refine iteratively
 struct ImprovePhaseView: View {
 
     // MARK: - Properties
@@ -22,15 +22,27 @@ struct ImprovePhaseView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Document type selector (flat chips)
-            documentTypeSelector
+            // Document type selector and custom instructions
+            if !viewModel.isInRefinementMode {
+                documentTypeSelector
+                customInstructionsField
+            } else {
+                refinementHeader
+            }
 
             Divider().opacity(0.3)
 
-            // Two-pane content: Redacted Input | AI Output
+            // Two-pane content
             HStack(spacing: 0) {
-                redactedInputPane
-                aiOutputPane
+                if viewModel.isInRefinementMode {
+                    // Refinement mode: Current output | Chat
+                    currentOutputPane
+                    refinementChatPane
+                } else {
+                    // Initial mode: Redacted input | AI output
+                    redactedInputPane
+                    aiOutputPane
+                }
             }
         }
         .sheet(isPresented: $viewModel.showPromptEditor) {
@@ -68,12 +80,82 @@ struct ImprovePhaseView: View {
                 // Add Custom button
                 AddCategoryButton(onTap: { viewModel.openAddCustomCategory() })
             }
-            .padding(DesignSystem.Spacing.medium)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, DesignSystem.Spacing.small)
         }
         .background(DesignSystem.Colors.surface)
     }
 
-    // MARK: - Redacted Input Pane
+    // MARK: - Custom Instructions Field
+
+    private var customInstructionsField: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            HStack {
+                Text("Additional instructions")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Text("(optional)")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.6))
+            }
+
+            TextField("e.g., Keep under 500 words, include medication list...", text: $viewModel.customInstructions)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .padding(DesignSystem.Spacing.small)
+                .background(DesignSystem.Colors.background)
+                .cornerRadius(DesignSystem.CornerRadius.small)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                        .stroke(DesignSystem.Colors.textSecondary.opacity(0.2), lineWidth: 1)
+                )
+        }
+        .padding(.horizontal, DesignSystem.Spacing.medium)
+        .padding(.bottom, DesignSystem.Spacing.small)
+        .background(DesignSystem.Colors.surface)
+    }
+
+    // MARK: - Refinement Header
+
+    private var refinementHeader: some View {
+        HStack {
+            Button(action: { viewModel.exitRefinementMode() }) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "arrow.left")
+                    Text("Back to Input")
+                }
+                .font(DesignSystem.Typography.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            Spacer()
+
+            if let docType = viewModel.selectedDocumentType {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: docType.icon)
+                    Text(docType.name)
+                }
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                .padding(.horizontal, DesignSystem.Spacing.small)
+                .padding(.vertical, 4)
+                .background(DesignSystem.Colors.primaryTeal.opacity(0.1))
+                .cornerRadius(DesignSystem.CornerRadius.small)
+            }
+
+            Spacer()
+
+            Text("Refinement Mode")
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+        }
+        .padding(DesignSystem.Spacing.medium)
+        .background(DesignSystem.Colors.surface)
+    }
+
+    // MARK: - Redacted Input Pane (Initial Mode)
 
     private var redactedInputPane: some View {
         VStack(spacing: 0) {
@@ -148,11 +230,11 @@ struct ImprovePhaseView: View {
         .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - AI Output Pane
+    // MARK: - AI Output Pane (Initial Mode)
 
     private var aiOutputPane: some View {
         VStack(spacing: 0) {
-            // Header with Redo button
+            // Header
             HStack {
                 Text("AI Output")
                     .font(DesignSystem.Typography.subheading)
@@ -165,17 +247,6 @@ struct ImprovePhaseView: View {
                 }
 
                 Spacer()
-
-                if !viewModel.aiOutput.isEmpty && !viewModel.isAIProcessing {
-                    Button(action: { viewModel.regenerateAIOutput() }) {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            Image(systemName: "arrow.clockwise")
-                            Text("Redo")
-                        }
-                        .font(DesignSystem.Typography.caption)
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                }
 
                 if viewModel.isAIProcessing {
                     Button("Cancel") {
@@ -191,60 +262,12 @@ struct ImprovePhaseView: View {
 
             // Content
             if viewModel.isAIProcessing && viewModel.aiOutput.isEmpty {
-                // Loading skeleton
                 SkeletonTextView()
             } else if let error = viewModel.aiError {
-                // Error state
-                VStack(spacing: DesignSystem.Spacing.medium) {
-                    Spacer()
-
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(DesignSystem.Colors.error)
-
-                    Text(error)
-                        .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.error)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-
-                    Button("Try Again") {
-                        viewModel.dismissError()
-                        viewModel.processWithAI()
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                errorView(error)
             } else if viewModel.aiOutput.isEmpty {
-                // Empty state
-                VStack(spacing: DesignSystem.Spacing.medium) {
-                    Spacer()
-
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 48))
-                        .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
-
-                    Text("AI output will appear here")
-                        .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                    if let docType = viewModel.selectedDocumentType {
-                        Text("Click \"\(docType.name)\" to process")
-                            .font(.system(size: 12))
-                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
-                    } else {
-                        Text("Select a document type to get started")
-                            .font(.system(size: 12))
-                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
-                    }
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyStateView
             } else {
-                // AI output content
                 ScrollView {
                     Text(viewModel.aiOutput)
                         .font(.system(size: 14))
@@ -255,25 +278,6 @@ struct ImprovePhaseView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            // Continue button
-            if !viewModel.aiOutput.isEmpty && !viewModel.isAIProcessing {
-                Divider().opacity(0.15)
-
-                HStack {
-                    Spacer()
-
-                    Button(action: { viewModel.continueToNextPhase() }) {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            Text("Continue")
-                            Image(systemName: "arrow.right")
-                        }
-                        .font(DesignSystem.Typography.body)
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                }
-                .padding(DesignSystem.Spacing.medium)
-            }
         }
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
@@ -282,6 +286,247 @@ struct ImprovePhaseView: View {
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
         .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Current Output Pane (Refinement Mode)
+
+    private var currentOutputPane: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Current Output")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                if viewModel.isAIProcessing {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .padding(.leading, DesignSystem.Spacing.xs)
+                }
+
+                Spacer()
+
+                if !viewModel.isAIProcessing {
+                    Button(action: { viewModel.regenerateAIOutput() }) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Start Over")
+                        }
+                        .font(DesignSystem.Typography.caption)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+            .frame(height: 52)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+
+            Divider().opacity(0.15)
+
+            // Content
+            ScrollView {
+                Text(viewModel.aiOutput)
+                    .font(.system(size: 14))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(DesignSystem.Spacing.medium)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Continue button
+            Divider().opacity(0.15)
+
+            HStack {
+                Spacer()
+
+                Button(action: { viewModel.continueToNextPhase() }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Text("Accept & Continue")
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(DesignSystem.Typography.body)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(viewModel.isAIProcessing)
+            }
+            .padding(DesignSystem.Spacing.medium)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                .fill(DesignSystem.Colors.surface)
+        )
+        .cornerRadius(DesignSystem.CornerRadius.medium)
+        .padding(6)
+        .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Refinement Chat Pane
+
+    private var refinementChatPane: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Refine")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+
+                Text("Chat to make changes")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+            .frame(height: 52)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+
+            Divider().opacity(0.15)
+
+            // Chat history
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                        ForEach(Array(viewModel.chatHistory.enumerated()), id: \.offset) { index, message in
+                            ChatMessageView(role: message.role, content: message.content)
+                                .id(index)
+                        }
+
+                        if viewModel.isAIProcessing {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                Text("Generating...")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                            .padding(.leading, DesignSystem.Spacing.medium)
+                        }
+                    }
+                    .padding(DesignSystem.Spacing.medium)
+                }
+                .onChange(of: viewModel.chatHistory.count) { _ in
+                    withAnimation {
+                        proxy.scrollTo(viewModel.chatHistory.count - 1, anchor: .bottom)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider().opacity(0.15)
+
+            // Input field
+            HStack(spacing: DesignSystem.Spacing.small) {
+                TextField("Ask for changes...", text: $viewModel.refinementInput)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .padding(DesignSystem.Spacing.small)
+                    .background(DesignSystem.Colors.background)
+                    .cornerRadius(DesignSystem.CornerRadius.small)
+                    .onSubmit {
+                        viewModel.sendRefinement()
+                    }
+
+                Button(action: { viewModel.sendRefinement() }) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(viewModel.refinementInput.isEmpty || viewModel.isAIProcessing
+                            ? DesignSystem.Colors.textSecondary.opacity(0.3)
+                            : DesignSystem.Colors.primaryTeal)
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.refinementInput.isEmpty || viewModel.isAIProcessing)
+            }
+            .padding(DesignSystem.Spacing.medium)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                .fill(DesignSystem.Colors.surface)
+        )
+        .cornerRadius(DesignSystem.CornerRadius.medium)
+        .padding(6)
+        .frame(minWidth: 300, idealWidth: 350, maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Helper Views
+
+    private func errorView(_ error: String) -> some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            Spacer()
+
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(DesignSystem.Colors.error)
+
+            Text(error)
+                .font(.system(size: 14))
+                .foregroundColor(DesignSystem.Colors.error)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button("Try Again") {
+                viewModel.dismissError()
+                viewModel.processWithAI()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            Spacer()
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
+
+            Text("AI output will appear here")
+                .font(.system(size: 14))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            if let docType = viewModel.selectedDocumentType {
+                Text("Click \"\(docType.name)\" to process")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+            } else {
+                Text("Select a document type to get started")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Chat Message View
+
+private struct ChatMessageView: View {
+    let role: String
+    let content: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text(role == "user" ? "You" : "AI")
+                .font(DesignSystem.Typography.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(role == "user" ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+
+            Text(content)
+                .font(.system(size: 13))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .lineLimit(role == "assistant" ? 5 : nil)  // Truncate AI responses in chat
+        }
+        .padding(DesignSystem.Spacing.small)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                .fill(role == "user"
+                    ? DesignSystem.Colors.primaryTeal.opacity(0.1)
+                    : DesignSystem.Colors.background)
+        )
     }
 }
 
@@ -305,7 +550,6 @@ private struct DocumentTypeChip: View {
                 Text(documentType.name)
                     .font(DesignSystem.Typography.caption)
 
-                // Edit button (visible on hover or when selected)
                 if isHovering || isSelected {
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
@@ -398,7 +642,6 @@ struct PromptEditorSheet: View {
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.large) {
-            // Header
             HStack {
                 Image(systemName: documentType.icon)
                     .font(.system(size: 20))
@@ -424,7 +667,6 @@ struct PromptEditorSheet: View {
                 .font(DesignSystem.Typography.body)
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
-            // Prompt editor
             TextEditor(text: $editedPrompt)
                 .font(.system(size: 13, design: .monospaced))
                 .frame(minHeight: 250)
@@ -436,7 +678,6 @@ struct PromptEditorSheet: View {
                     hasChanges = editedPrompt != documentType.prompt
                 }
 
-            // Buttons
             HStack {
                 if !documentType.isBuiltIn {
                     Button("Delete") {
@@ -490,7 +731,6 @@ struct AddCustomCategorySheet: View {
             Text("New Document Type")
                 .font(DesignSystem.Typography.heading)
 
-            // Name field
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Name")
                     .font(DesignSystem.Typography.caption)
@@ -500,7 +740,6 @@ struct AddCustomCategorySheet: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            // Icon picker
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Icon")
                     .font(DesignSystem.Typography.caption)
@@ -527,7 +766,6 @@ struct AddCustomCategorySheet: View {
                 }
             }
 
-            // Prompt field
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Prompt")
                     .font(DesignSystem.Typography.caption)
@@ -541,12 +779,11 @@ struct AddCustomCategorySheet: View {
                             .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
                     )
 
-                Text("Describe what the AI should do with the text. The redacted text will be sent along with this prompt.")
+                Text("Describe what the AI should do with the text.")
                     .font(.system(size: 11))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
 
-            // Buttons
             HStack {
                 Spacer()
 

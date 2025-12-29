@@ -64,9 +64,15 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Improve Phase Properties
 
     @Published var selectedDocumentType: DocumentType? = DocumentType.polish
+    @Published var customInstructions: String = ""  // Additional instructions to append to prompt
     @Published var aiOutput: String = ""
     @Published var isAIProcessing: Bool = false
     @Published var aiError: String?
+
+    // Refinement mode - after first generation
+    @Published var isInRefinementMode: Bool = false
+    @Published var refinementInput: String = ""  // User's refinement request
+    @Published var chatHistory: [(role: String, content: String)] = []  // Chat history for display
 
     // Sheet states for editing/adding document types
     @Published var showPromptEditor: Bool = false
@@ -356,20 +362,30 @@ class WorkflowViewModel: ObservableObject {
         currentAITask?.cancel()
         aiService.cancel()
 
-        // Clear previous output
+        // Clear previous output and chat history
         aiOutput = ""
         aiError = nil
         isAIProcessing = true
+        chatHistory = []
+
+        // Build prompt with optional custom instructions
+        var fullPrompt = docType.prompt
+        if !customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fullPrompt += "\n\nADDITIONAL INSTRUCTIONS:\n\(customInstructions)"
+        }
 
         currentAITask = Task {
             do {
-                let stream = aiService.processStreaming(text: inputForAI, prompt: docType.prompt)
+                let stream = aiService.processStreaming(text: inputForAI, prompt: fullPrompt)
 
                 for try await chunk in stream {
                     if Task.isCancelled { break }
                     aiOutput += chunk
                 }
 
+                // Enter refinement mode after successful generation
+                isInRefinementMode = true
+                chatHistory.append((role: "assistant", content: aiOutput))
                 isAIProcessing = false
             } catch {
                 if !Task.isCancelled {
@@ -380,8 +396,75 @@ class WorkflowViewModel: ObservableObject {
         }
     }
 
+    /// Send refinement request to improve the current output
+    func sendRefinement() {
+        let request = refinementInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !request.isEmpty else { return }
+        guard !aiOutput.isEmpty else { return }
+
+        // Add user message to chat history
+        chatHistory.append((role: "user", content: request))
+        refinementInput = ""
+
+        // Cancel any existing AI task
+        currentAITask?.cancel()
+        aiService.cancel()
+
+        aiError = nil
+        isAIProcessing = true
+
+        // Build refinement prompt
+        let refinementPrompt = """
+            You are refining a clinical document. Here is the current version:
+
+            ---
+            \(aiOutput)
+            ---
+
+            The user has requested the following changes:
+            \(request)
+
+            Please provide the updated document incorporating these changes.
+            Preserve all placeholders like [PERSON_A], [DATE_A] exactly as they appear.
+            Respond with ONLY the updated document.
+            """
+
+        currentAITask = Task {
+            do {
+                // Clear output for new version
+                aiOutput = ""
+
+                let stream = aiService.processStreaming(text: "", prompt: refinementPrompt)
+
+                for try await chunk in stream {
+                    if Task.isCancelled { break }
+                    aiOutput += chunk
+                }
+
+                // Add AI response to chat history
+                chatHistory.append((role: "assistant", content: aiOutput))
+                isAIProcessing = false
+            } catch {
+                if !Task.isCancelled {
+                    aiError = error.localizedDescription
+                    isAIProcessing = false
+                }
+            }
+        }
+    }
+
+    /// Exit refinement mode and go back to initial state
+    func exitRefinementMode() {
+        isInRefinementMode = false
+        aiOutput = ""
+        chatHistory = []
+        refinementInput = ""
+    }
+
     /// Regenerate AI output (redo button)
     func regenerateAIOutput() {
+        isInRefinementMode = false
+        chatHistory = []
         processWithAI()
     }
 
