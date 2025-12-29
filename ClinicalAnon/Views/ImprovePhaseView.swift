@@ -452,6 +452,13 @@ private struct ChatMessageView: View {
 
     private var isUser: Bool { role == "user" }
 
+    /// Check if content looks like a full document (has structure/length)
+    private var looksLikeDocument: Bool {
+        // If it has multiple paragraphs or headers, it's probably a document
+        let lineCount = content.components(separatedBy: .newlines).filter { !$0.isEmpty }.count
+        return lineCount > 5 || content.count > 500
+    }
+
     var body: some View {
         HStack {
             if isUser {
@@ -465,15 +472,22 @@ private struct ChatMessageView: View {
                     .foregroundColor(isUser ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
 
                 if role == "assistant" {
-                    // AI messages: show status message (full document is in left pane)
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
-                            .font(.system(size: 11))
-                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+                    if isFirstMessage || looksLikeDocument {
+                        // Document update: show status with hint
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
+                                .font(.system(size: 11))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
 
-                        Text(isFirstMessage ? "Document generated — see left pane" : "Document updated — see left pane")
+                            Text(isFirstMessage ? "Document generated" : "Document updated")
+                                .font(.system(size: 13))
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                        }
+                    } else {
+                        // Conversational response: show actual content
+                        Text(content)
                             .font(.system(size: 13))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
                     }
                 } else {
                     // User messages: show full content

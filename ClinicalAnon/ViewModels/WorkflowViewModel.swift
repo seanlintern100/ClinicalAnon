@@ -442,8 +442,16 @@ class WorkflowViewModel: ObservableObject {
             Respond with ONLY the updated document. Preserve all placeholders like [PERSON_A], [DATE_A] exactly.
             """
 
-        // System prompt for refinement
-        let systemPrompt = "You are a clinical writing assistant. The user will provide a document and requested changes. Apply the changes and return the updated document only."
+        // System prompt for chat (allows both conversation and edits)
+        let systemPrompt = """
+            You are a clinical writing assistant helping refine a document.
+
+            If the user asks a question or wants suggestions, respond conversationally.
+            If the user asks for specific changes, make them and return the full updated document.
+
+            When returning an updated document, just provide the document text without preamble.
+            When having a conversation, be helpful and concise.
+            """
 
         print("📤 [Refinement] Sending to AI...")
 
