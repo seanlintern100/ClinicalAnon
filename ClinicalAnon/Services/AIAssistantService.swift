@@ -40,28 +40,14 @@ class AIAssistantService: ObservableObject {
 
     // MARK: - Public Methods
 
-    /// Polish existing clinical notes (clean up grammar, structure)
-    func polish(text: String) async throws -> String {
-        let systemPrompt = buildPolishSystemPrompt()
-        return try await process(text: text, systemPrompt: systemPrompt)
+    /// Process text with a custom prompt (streaming)
+    func processStreaming(text: String, prompt: String) -> AsyncThrowingStream<String, Error> {
+        return processStreamingInternal(text: text, systemPrompt: prompt)
     }
 
-    /// Generate a report from input text
-    func generate(text: String, template: ReportTemplate, customPrompt: String? = nil) async throws -> String {
-        let systemPrompt = buildGenerateSystemPrompt(template: template, customPrompt: customPrompt)
-        return try await process(text: text, systemPrompt: systemPrompt)
-    }
-
-    /// Polish with streaming output
-    func polishStreaming(text: String) -> AsyncThrowingStream<String, Error> {
-        let systemPrompt = buildPolishSystemPrompt()
-        return processStreaming(text: text, systemPrompt: systemPrompt)
-    }
-
-    /// Generate with streaming output
-    func generateStreaming(text: String, template: ReportTemplate, customPrompt: String? = nil) -> AsyncThrowingStream<String, Error> {
-        let systemPrompt = buildGenerateSystemPrompt(template: template, customPrompt: customPrompt)
-        return processStreaming(text: text, systemPrompt: systemPrompt)
+    /// Process text with a custom prompt (non-streaming)
+    func process(text: String, prompt: String) async throws -> String {
+        return try await processInternal(text: text, systemPrompt: prompt)
     }
 
     /// Cancel the current operation
@@ -83,7 +69,7 @@ class AIAssistantService: ObservableObject {
 
     // MARK: - Private Processing
 
-    private func process(text: String, systemPrompt: String) async throws -> String {
+    private func processInternal(text: String, systemPrompt: String) async throws -> String {
         guard bedrockService.isConfigured else {
             throw AIAssistantError.notConfigured
         }
@@ -123,7 +109,7 @@ class AIAssistantService: ObservableObject {
         }
     }
 
-    private func processStreaming(text: String, systemPrompt: String) -> AsyncThrowingStream<String, Error> {
+    private func processStreamingInternal(text: String, systemPrompt: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             self.currentTask = Task {
                 guard self.bedrockService.isConfigured else {
@@ -187,117 +173,6 @@ class AIAssistantService: ObservableObject {
                     continuation.finish(throwing: error)
                 }
             }
-        }
-    }
-
-    // MARK: - System Prompts
-
-    private func buildPolishSystemPrompt() -> String {
-        """
-        You are a clinical writing assistant helping healthcare professionals improve their documentation.
-
-        Your task is to POLISH the provided clinical notes:
-        - Fix grammar, spelling, and punctuation errors
-        - Improve clarity and readability
-        - Maintain professional clinical tone
-        - Preserve all medical information accurately
-        - Keep the same general structure unless it's confusing
-        - Do NOT add information that wasn't in the original
-        - Do NOT remove any clinical details
-
-        IMPORTANT: The text contains placeholder codes like [PERSON_A], [PERSON_B], [DATE_A], etc.
-        These are anonymization placeholders - keep them exactly as they appear.
-
-        Respond with ONLY the polished text. Do not include explanations or commentary.
-        """
-    }
-
-    private func buildGenerateSystemPrompt(template: ReportTemplate, customPrompt: String?) -> String {
-        if template == .custom, let customPrompt = customPrompt, !customPrompt.isEmpty {
-            return """
-            You are a clinical writing assistant helping healthcare professionals create documentation.
-
-            CUSTOM INSTRUCTIONS:
-            \(customPrompt)
-
-            IMPORTANT: The text contains placeholder codes like [PERSON_A], [PERSON_B], [DATE_A], etc.
-            These are anonymization placeholders - preserve them exactly as they appear in your output.
-
-            Generate the requested content based on the provided notes. Use only the information given.
-            """
-        }
-
-        let templateInstructions = getTemplateInstructions(template)
-
-        return """
-        You are a clinical writing assistant helping healthcare professionals create documentation.
-
-        Your task is to GENERATE a \(template.displayName) based on the provided notes.
-
-        \(templateInstructions)
-
-        IMPORTANT: The text contains placeholder codes like [PERSON_A], [PERSON_B], [DATE_A], etc.
-        These are anonymization placeholders - preserve them exactly as they appear in your output.
-
-        Generate the \(template.displayName) using ONLY the information provided. Do not invent details.
-        Respond with ONLY the generated document. Do not include explanations or commentary.
-        """
-    }
-
-    private func getTemplateInstructions(_ template: ReportTemplate) -> String {
-        switch template {
-        case .progressNote:
-            return """
-            Structure the Progress Note with these sections as appropriate:
-            - Client/Patient identification (using placeholders)
-            - Date of session
-            - Attendees
-            - Presenting issues/concerns
-            - Session content/interventions
-            - Client response/observations
-            - Plan/next steps
-            """
-
-        case .referralLetter:
-            return """
-            Structure the Referral Letter with:
-            - Salutation (Dear [appropriate recipient])
-            - Reason for referral
-            - Relevant history
-            - Current presentation
-            - Specific request/recommendations
-            - Your contact details placeholder
-            - Professional closing
-            """
-
-        case .assessment:
-            return """
-            Structure the Assessment with:
-            - Identifying information
-            - Referral source and reason
-            - Presenting problems
-            - Relevant history
-            - Mental status/observations
-            - Assessment findings
-            - Formulation/diagnosis considerations
-            - Recommendations
-            """
-
-        case .discharge:
-            return """
-            Structure the Discharge Summary with:
-            - Client/Patient identification
-            - Dates of service
-            - Reason for admission/referral
-            - Treatment provided
-            - Progress made
-            - Current status
-            - Follow-up recommendations
-            - Discharge plan
-            """
-
-        case .custom:
-            return "Follow the user's custom instructions."
         }
     }
 }

@@ -2,7 +2,7 @@
 //  ImprovePhaseView.swift
 //  Redactor
 //
-//  Purpose: Second phase - AI polish or generate
+//  Purpose: Second phase - AI processing with document type selection
 //  Organization: 3 Big Things
 //
 
@@ -10,19 +10,20 @@ import SwiftUI
 
 // MARK: - Improve Phase View
 
-/// Phase 2: Send redacted text to AI for polishing or report generation
+/// Phase 2: Send redacted text to AI for processing
 struct ImprovePhaseView: View {
 
     // MARK: - Properties
 
     @ObservedObject var viewModel: WorkflowViewModel
+    @ObservedObject var documentTypeManager: DocumentTypeManager = .shared
 
     // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
-            // Mode selector and template chips
-            modeSelector
+            // Document type selector (flat chips)
+            documentTypeSelector
 
             Divider().opacity(0.3)
 
@@ -32,51 +33,43 @@ struct ImprovePhaseView: View {
                 aiOutputPane
             }
         }
-        .sheet(isPresented: $viewModel.showCustomPromptSheet) {
-            CustomPromptSheet(viewModel: viewModel)
+        .sheet(isPresented: $viewModel.showPromptEditor) {
+            if let docType = viewModel.documentTypeToEdit {
+                PromptEditorSheet(
+                    documentType: docType,
+                    documentTypeManager: documentTypeManager,
+                    onDismiss: { viewModel.showPromptEditor = false }
+                )
+            }
+        }
+        .sheet(isPresented: $viewModel.showAddCustomCategory) {
+            AddCustomCategorySheet(
+                documentTypeManager: documentTypeManager,
+                onDismiss: { viewModel.showAddCustomCategory = false }
+            )
         }
     }
 
-    // MARK: - Mode Selector
+    // MARK: - Document Type Selector
 
-    private var modeSelector: some View {
-        VStack(spacing: DesignSystem.Spacing.medium) {
-            // Mode toggle: Polish vs Generate
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                ForEach(AIMode.allCases, id: \.self) { mode in
-                    ModeButton(
-                        mode: mode,
-                        isSelected: viewModel.aiMode == mode,
-                        onSelect: { viewModel.aiMode = mode }
+    private var documentTypeSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSystem.Spacing.small) {
+                // All document type chips
+                ForEach(documentTypeManager.documentTypes) { docType in
+                    DocumentTypeChip(
+                        documentType: docType,
+                        isSelected: viewModel.selectedDocumentType?.id == docType.id,
+                        onSelect: { viewModel.selectedDocumentType = docType },
+                        onEdit: { viewModel.editPrompt(for: docType) }
                     )
                 }
 
-                Spacer()
+                // Add Custom button
+                AddCategoryButton(onTap: { viewModel.openAddCustomCategory() })
             }
-
-            // Template chips (only visible in Generate mode)
-            if viewModel.aiMode == .generate {
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    ForEach(ReportTemplate.quickSelectTemplates, id: \.self) { template in
-                        TemplateChip(
-                            template: template,
-                            isSelected: viewModel.selectedTemplate == template,
-                            onSelect: { viewModel.selectedTemplate = template }
-                        )
-                    }
-
-                    // Custom chip
-                    TemplateChip(
-                        template: .custom,
-                        isSelected: viewModel.selectedTemplate == .custom,
-                        onSelect: { viewModel.openCustomPromptSheet() }
-                    )
-
-                    Spacer()
-                }
-            }
+            .padding(DesignSystem.Spacing.medium)
         }
-        .padding(DesignSystem.Spacing.medium)
         .background(DesignSystem.Colors.surface)
     }
 
@@ -132,13 +125,17 @@ struct ImprovePhaseView: View {
 
                 Button(action: { viewModel.processWithAI() }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: viewModel.aiMode.icon)
-                        Text(viewModel.aiMode == .polish ? "Polish Text" : "Generate \(viewModel.selectedTemplate.shortName)")
+                        if let docType = viewModel.selectedDocumentType {
+                            Image(systemName: docType.icon)
+                            Text(docType.name)
+                        } else {
+                            Text("Select a type")
+                        }
                     }
                     .font(DesignSystem.Typography.body)
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(viewModel.displayedRedactedText.isEmpty || viewModel.isAIProcessing)
+                .disabled(viewModel.displayedRedactedText.isEmpty || viewModel.isAIProcessing || viewModel.selectedDocumentType == nil)
             }
             .padding(DesignSystem.Spacing.medium)
         }
@@ -233,9 +230,15 @@ struct ImprovePhaseView: View {
                         .font(.system(size: 14))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                    Text("Select a mode and click \"\(viewModel.aiMode == .polish ? "Polish Text" : "Generate")\"")
-                        .font(.system(size: 12))
-                        .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                    if let docType = viewModel.selectedDocumentType {
+                        Text("Click \"\(docType.name)\" to process")
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                    } else {
+                        Text("Select a document type to get started")
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                    }
 
                     Spacer()
                 }
@@ -282,70 +285,79 @@ struct ImprovePhaseView: View {
     }
 }
 
-// MARK: - Mode Button
+// MARK: - Document Type Chip
 
-private struct ModeButton: View {
+private struct DocumentTypeChip: View {
 
-    let mode: AIMode
+    let documentType: DocumentType
     let isSelected: Bool
     let onSelect: () -> Void
+    let onEdit: () -> Void
+
+    @State private var isHovering: Bool = false
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: DesignSystem.Spacing.small) {
-                Image(systemName: mode.icon)
-                    .font(.system(size: 16))
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Image(systemName: documentType.icon)
+                    .font(.system(size: 12))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.displayName)
-                        .font(DesignSystem.Typography.body)
-                        .fontWeight(.semibold)
+                Text(documentType.name)
+                    .font(DesignSystem.Typography.caption)
 
-                    Text(mode.description)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                // Edit button (visible on hover or when selected)
+                if isHovering || isSelected {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 10))
+                            .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(DesignSystem.Spacing.medium)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, DesignSystem.Spacing.small)
             .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                    .fill(isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.1) : Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                            .stroke(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: isSelected ? 2 : 1)
-                    )
+                Capsule()
+                    .fill(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.surface)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .foregroundColor(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textPrimary)
+        .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }
 
-// MARK: - Template Chip
+// MARK: - Add Category Button
 
-private struct TemplateChip: View {
+private struct AddCategoryButton: View {
 
-    let template: ReportTemplate
-    let isSelected: Bool
-    let onSelect: () -> Void
+    let onTap: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
-            Text(template.displayName)
-                .font(DesignSystem.Typography.caption)
-                .padding(.horizontal, DesignSystem.Spacing.medium)
-                .padding(.vertical, DesignSystem.Spacing.small)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.surface)
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
-                )
+        Button(action: onTap) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12))
+
+                Text("Add")
+                    .font(DesignSystem.Typography.caption)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, DesignSystem.Spacing.small)
+            .background(
+                Capsule()
+                    .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4]))
+            )
         }
         .buttonStyle(.plain)
-        .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+        .foregroundColor(DesignSystem.Colors.textSecondary)
     }
 }
 
@@ -373,45 +385,186 @@ private struct SkeletonTextView: View {
     }
 }
 
-// MARK: - Custom Prompt Sheet
+// MARK: - Prompt Editor Sheet
 
-struct CustomPromptSheet: View {
+struct PromptEditorSheet: View {
 
-    @ObservedObject var viewModel: WorkflowViewModel
-    @Environment(\.dismiss) private var dismiss
+    let documentType: DocumentType
+    @ObservedObject var documentTypeManager: DocumentTypeManager
+    let onDismiss: () -> Void
+
+    @State private var editedPrompt: String = ""
+    @State private var hasChanges: Bool = false
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.large) {
-            Text("Custom Instructions")
-                .font(DesignSystem.Typography.heading)
+            // Header
+            HStack {
+                Image(systemName: documentType.icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
 
-            Text("Describe what kind of report or output you'd like the AI to generate:")
+                Text("Edit \(documentType.name) Prompt")
+                    .font(DesignSystem.Typography.heading)
+
+                Spacer()
+
+                if documentType.isBuiltIn && documentTypeManager.hasCustomPrompt(typeId: documentType.id) {
+                    Button("Reset to Default") {
+                        documentTypeManager.resetToDefault(typeId: documentType.id)
+                        editedPrompt = DocumentType.defaultPrompt(for: documentType.id) ?? ""
+                        hasChanges = false
+                    }
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+
+            Text("This prompt is sent to the AI along with your redacted text.")
                 .font(DesignSystem.Typography.body)
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
-            TextEditor(text: $viewModel.customPrompt)
-                .font(.system(size: 14))
-                .frame(height: 150)
+            // Prompt editor
+            TextEditor(text: $editedPrompt)
+                .font(.system(size: 13, design: .monospaced))
+                .frame(minHeight: 250)
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
                         .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
                 )
+                .onChange(of: editedPrompt) { _ in
+                    hasChanges = editedPrompt != documentType.prompt
+                }
 
+            // Buttons
             HStack {
+                if !documentType.isBuiltIn {
+                    Button("Delete") {
+                        documentTypeManager.deleteCustomType(documentType)
+                        onDismiss()
+                    }
+                    .foregroundColor(DesignSystem.Colors.error)
+                }
+
+                Spacer()
+
                 Button("Cancel") {
-                    dismiss()
+                    onDismiss()
                 }
                 .buttonStyle(SecondaryButtonStyle())
 
-                Button("Generate") {
-                    viewModel.generateWithCustomPrompt()
+                Button("Save") {
+                    documentTypeManager.updatePrompt(for: documentType.id, newPrompt: editedPrompt)
+                    onDismiss()
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(viewModel.customPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(!hasChanges)
             }
         }
         .padding(DesignSystem.Spacing.large)
-        .frame(width: 450)
+        .frame(width: 600, height: 450)
+        .onAppear {
+            editedPrompt = documentType.prompt
+        }
+    }
+}
+
+// MARK: - Add Custom Category Sheet
+
+struct AddCustomCategorySheet: View {
+
+    @ObservedObject var documentTypeManager: DocumentTypeManager
+    let onDismiss: () -> Void
+
+    @State private var name: String = ""
+    @State private var prompt: String = ""
+    @State private var selectedIcon: String = "doc.text"
+
+    private let availableIcons = [
+        "doc.text", "doc.richtext", "clipboard", "list.bullet", "text.alignleft",
+        "person.text.rectangle", "heart.text.square", "brain", "cross.case"
+    ]
+
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.large) {
+            Text("New Document Type")
+                .font(DesignSystem.Typography.heading)
+
+            // Name field
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Name")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                TextField("e.g., Case Summary", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            // Icon picker
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Icon")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                HStack(spacing: DesignSystem.Spacing.small) {
+                    ForEach(availableIcons, id: \.self) { icon in
+                        Button(action: { selectedIcon = icon }) {
+                            Image(systemName: icon)
+                                .font(.system(size: 18))
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(selectedIcon == icon ? DesignSystem.Colors.primaryTeal.opacity(0.2) : Color.clear)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(selectedIcon == icon ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(selectedIcon == icon ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textPrimary)
+                    }
+                }
+            }
+
+            // Prompt field
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Prompt")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                TextEditor(text: $prompt)
+                    .font(.system(size: 13, design: .monospaced))
+                    .frame(minHeight: 150)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
+                    )
+
+                Text("Describe what the AI should do with the text. The redacted text will be sent along with this prompt.")
+                    .font(.system(size: 11))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+
+            // Buttons
+            HStack {
+                Spacer()
+
+                Button("Cancel") {
+                    onDismiss()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Button("Create") {
+                    documentTypeManager.addCustomType(name: name, prompt: prompt, icon: selectedIcon)
+                    onDismiss()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(DesignSystem.Spacing.large)
+        .frame(width: 500, height: 500)
     }
 }
 

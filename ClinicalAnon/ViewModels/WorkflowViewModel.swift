@@ -63,13 +63,15 @@ class WorkflowViewModel: ObservableObject {
 
     // MARK: - Improve Phase Properties
 
-    @Published var aiMode: AIMode = .polish
-    @Published var selectedTemplate: ReportTemplate = .progressNote
-    @Published var customPrompt: String = ""
+    @Published var selectedDocumentType: DocumentType? = DocumentType.polish
     @Published var aiOutput: String = ""
     @Published var isAIProcessing: Bool = false
     @Published var aiError: String?
-    @Published var showCustomPromptSheet: Bool = false
+
+    // Sheet states for editing/adding document types
+    @Published var showPromptEditor: Bool = false
+    @Published var showAddCustomCategory: Bool = false
+    @Published var documentTypeToEdit: DocumentType?
 
     // Conversation context is now managed by AIAssistantService
     // Access via aiService.context for message history
@@ -337,11 +339,16 @@ class WorkflowViewModel: ObservableObject {
 
     // MARK: - Improve Phase Actions
 
-    /// Process text with AI (polish or generate based on mode)
+    /// Process text with AI using selected document type
     func processWithAI() {
         let inputForAI = displayedRedactedText
         guard !inputForAI.isEmpty else {
             aiError = "No redacted text to process"
+            return
+        }
+
+        guard let docType = selectedDocumentType else {
+            aiError = "No document type selected"
             return
         }
 
@@ -356,26 +363,12 @@ class WorkflowViewModel: ObservableObject {
 
         currentAITask = Task {
             do {
-                let stream: AsyncThrowingStream<String, Error>
-
-                switch aiMode {
-                case .polish:
-                    stream = aiService.polishStreaming(text: inputForAI)
-                case .generate:
-                    let customPromptToUse = selectedTemplate == .custom ? customPrompt : nil
-                    stream = aiService.generateStreaming(
-                        text: inputForAI,
-                        template: selectedTemplate,
-                        customPrompt: customPromptToUse
-                    )
-                }
+                let stream = aiService.processStreaming(text: inputForAI, prompt: docType.prompt)
 
                 for try await chunk in stream {
                     if Task.isCancelled { break }
                     aiOutput += chunk
                 }
-
-                // Conversation history is now automatically managed by AIAssistantService.context
 
                 isAIProcessing = false
             } catch {
@@ -399,16 +392,15 @@ class WorkflowViewModel: ObservableObject {
         isAIProcessing = false
     }
 
-    /// Open custom prompt sheet
-    func openCustomPromptSheet() {
-        selectedTemplate = .custom
-        showCustomPromptSheet = true
+    /// Open prompt editor for a document type
+    func editPrompt(for docType: DocumentType) {
+        documentTypeToEdit = docType
+        showPromptEditor = true
     }
 
-    /// Generate with custom prompt from sheet
-    func generateWithCustomPrompt() {
-        showCustomPromptSheet = false
-        processWithAI()
+    /// Open add custom category sheet
+    func openAddCustomCategory() {
+        showAddCustomCategory = true
     }
 
     // MARK: - Restore Phase Actions
