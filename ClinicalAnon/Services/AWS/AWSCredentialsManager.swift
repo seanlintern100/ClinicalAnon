@@ -2,7 +2,7 @@
 //  AWSCredentialsManager.swift
 //  Redactor
 //
-//  Purpose: Manages AWS credentials from environment variables
+//  Purpose: Manages AWS credentials (built-in for internal use)
 //  Organization: 3 Big Things
 //
 
@@ -37,21 +37,11 @@ class AWSCredentialsManager: ObservableObject {
     @Published var region: String = AWSCredentials.defaultRegion
     @Published var selectedModel: String = "apac.anthropic.claude-sonnet-4-20250514-v1:0"
 
-    // MARK: - Environment Variable Names
+    // MARK: - Built-in Credentials (internal use only)
 
-    private let envAccessKey = "AWS_ACCESS_KEY_ID"
-    private let envSecretKey = "AWS_SECRET_ACCESS_KEY"
-    private let envRegion = "AWS_REGION"
-
-    // MARK: - Computed Properties (for easy access)
-
-    var accessKeyId: String? {
-        ProcessInfo.processInfo.environment[envAccessKey]
-    }
-
-    var secretAccessKey: String? {
-        ProcessInfo.processInfo.environment[envSecretKey]
-    }
+    private let builtInAccessKey = "PLACEHOLDER_ACCESS_KEY"
+    private let builtInSecretKey = "PLACEHOLDER_SECRET_KEY"
+    private let builtInRegion = "ap-southeast-2"
 
     // MARK: - Defaults
 
@@ -72,25 +62,18 @@ class AWSCredentialsManager: ObservableObject {
         checkCredentials()
     }
 
-    // MARK: - Credentials from Environment
+    // MARK: - Credentials
 
-    /// Load AWS credentials from environment variables
+    /// Load AWS credentials (built-in)
     func loadCredentials() -> AWSCredentials? {
-        guard let accessKeyId = ProcessInfo.processInfo.environment[envAccessKey],
-              let secretAccessKey = ProcessInfo.processInfo.environment[envSecretKey] else {
-            return nil
-        }
-
-        let region = ProcessInfo.processInfo.environment[envRegion] ?? AWSCredentials.defaultRegion
-
         return AWSCredentials(
-            accessKeyId: accessKeyId,
-            secretAccessKey: secretAccessKey,
-            region: region
+            accessKeyId: builtInAccessKey,
+            secretAccessKey: builtInSecretKey,
+            region: builtInRegion
         )
     }
 
-    /// Check if credentials exist in environment
+    /// Check if credentials are available
     func checkCredentials() {
         hasCredentials = loadCredentials()?.isValid ?? false
         if let creds = loadCredentials() {
@@ -101,7 +84,6 @@ class AWSCredentialsManager: ObservableObject {
     // MARK: - Settings
 
     private func loadSettings() {
-        // Model selection can still be saved in UserDefaults
         if let savedModel = UserDefaults.standard.string(forKey: "aws_model") {
             selectedModel = savedModel
         }
