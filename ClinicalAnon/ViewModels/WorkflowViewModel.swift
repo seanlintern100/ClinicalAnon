@@ -99,6 +99,13 @@ class WorkflowViewModel: ObservableObject {
         let credentialsManager = AWSCredentialsManager.shared
         let aiService = AIAssistantService(bedrockService: bedrockService, credentialsManager: credentialsManager)
         self.init(engine: engine, aiService: aiService)
+
+        // Auto-configure BedrockService with built-in credentials
+        Task {
+            if let credentials = credentialsManager.loadCredentials() {
+                try? await bedrockService.configure(with: credentials)
+            }
+        }
     }
 
     // MARK: - Computed Properties
