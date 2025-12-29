@@ -175,11 +175,9 @@ struct ImprovePhaseView: View {
                 // Error state
                 errorView(error)
             } else {
-                // Document content (streams in real-time)
+                // Document content (streams in real-time) with markdown
                 ScrollView {
-                    Text(viewModel.aiOutput)
-                        .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    MarkdownText(viewModel.aiOutput)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DesignSystem.Spacing.medium)
@@ -452,39 +450,73 @@ private struct ChatMessageView: View {
     var isLatest: Bool = false
     var isFirstMessage: Bool = false
 
+    private var isUser: Bool { role == "user" }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            Text(role == "user" ? "You" : "AI")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(role == "user" ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+        HStack {
+            if isUser {
+                Spacer(minLength: 40)  // Push user messages to right
+            }
 
-            if role == "assistant" {
-                // AI messages: show status message (full document is in left pane)
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+            VStack(alignment: isUser ? .trailing : .leading, spacing: DesignSystem.Spacing.xs) {
+                Text(isUser ? "You" : "AI")
+                    .font(DesignSystem.Typography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isUser ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
 
-                    Text(isFirstMessage ? "Document generated — see left pane" : "Document updated — see left pane")
+                if role == "assistant" {
+                    // AI messages: show status message (full document is in left pane)
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                        Text(isFirstMessage ? "Document generated — see left pane" : "Document updated — see left pane")
+                            .font(.system(size: 13))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                } else {
+                    // User messages: show full content
+                    Text(content)
                         .font(.system(size: 13))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
                 }
-            } else {
-                // User messages: show full content
-                Text(content)
-                    .font(.system(size: 13))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+            }
+            .padding(DesignSystem.Spacing.small)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                    .fill(isUser
+                        ? DesignSystem.Colors.primaryTeal.opacity(0.1)
+                        : DesignSystem.Colors.background)
+            )
+
+            if !isUser {
+                Spacer(minLength: 40)  // Push AI messages to left
             }
         }
-        .padding(DesignSystem.Spacing.small)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                .fill(role == "user"
-                    ? DesignSystem.Colors.primaryTeal.opacity(0.1)
-                    : DesignSystem.Colors.background)
-        )
+    }
+}
+
+// MARK: - Markdown Text View
+
+private struct MarkdownText: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        if let attributedString = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            Text(attributedString)
+                .font(.system(size: 14))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+        } else {
+            // Fallback to plain text if markdown parsing fails
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+        }
     }
 }
 
