@@ -404,8 +404,16 @@ class WorkflowViewModel: ObservableObject {
     /// Send refinement request to improve the current output
     func sendRefinement() {
         let request = refinementInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !request.isEmpty else { return }
-        guard !aiOutput.isEmpty else { return }
+        guard !request.isEmpty else {
+            print("⚠️ [Refinement] Empty request, skipping")
+            return
+        }
+        guard !aiOutput.isEmpty else {
+            print("⚠️ [Refinement] No AI output to refine, skipping")
+            return
+        }
+
+        print("📝 [Refinement] Starting refinement with request: \(request.prefix(50))...")
 
         // Add user message to chat history
         chatHistory.append((role: "user", content: request))
@@ -418,38 +426,54 @@ class WorkflowViewModel: ObservableObject {
         aiError = nil
         isAIProcessing = true
 
-        // Build refinement prompt
-        let refinementPrompt = """
-            You are refining a clinical document. Here is the current version:
+        // Capture current output before clearing
+        let currentDocument = aiOutput
+
+        // Build the user message for refinement (includes current doc + request)
+        let userMessage = """
+            Here is the current document:
 
             ---
-            \(aiOutput)
+            \(currentDocument)
             ---
 
-            The user has requested the following changes:
-            \(request)
+            Please make these changes: \(request)
 
-            Please provide the updated document incorporating these changes.
-            Preserve all placeholders like [PERSON_A], [DATE_A] exactly as they appear.
-            Respond with ONLY the updated document.
+            Respond with ONLY the updated document. Preserve all placeholders like [PERSON_A], [DATE_A] exactly.
             """
+
+        // System prompt for refinement
+        let systemPrompt = "You are a clinical writing assistant. The user will provide a document and requested changes. Apply the changes and return the updated document only."
+
+        print("📤 [Refinement] Sending to AI...")
 
         currentAITask = Task {
             do {
                 // Clear output for new version
                 aiOutput = ""
 
-                let stream = aiService.processStreaming(text: "", prompt: refinementPrompt)
+                let stream = aiService.processStreaming(text: userMessage, prompt: systemPrompt)
 
+                var chunkCount = 0
                 for try await chunk in stream {
-                    if Task.isCancelled { break }
+                    if Task.isCancelled {
+                        print("⚠️ [Refinement] Task cancelled")
+                        break
+                    }
+                    chunkCount += 1
                     aiOutput += chunk
+                    if chunkCount == 1 {
+                        print("📥 [Refinement] First chunk received")
+                    }
                 }
+
+                print("✅ [Refinement] Complete - received \(chunkCount) chunks, output length: \(aiOutput.count)")
 
                 // Add AI response to chat history
                 chatHistory.append((role: "assistant", content: aiOutput))
                 isAIProcessing = false
             } catch {
+                print("❌ [Refinement] Error: \(error.localizedDescription)")
                 if !Task.isCancelled {
                     aiError = error.localizedDescription
                     isAIProcessing = false
