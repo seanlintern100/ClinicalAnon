@@ -50,8 +50,8 @@ struct MainContentView: View {
 
             Spacer()
 
-            // Clear/New button
-            if viewModel.result != nil {
+            // Clear/New button (hidden on Improve phase which has its own Start Over)
+            if viewModel.result != nil && viewModel.currentPhase != .improve {
                 Button(action: { viewModel.clearAll() }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         Image(systemName: "arrow.counterclockwise")
