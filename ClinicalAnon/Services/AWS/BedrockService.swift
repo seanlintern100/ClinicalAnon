@@ -338,7 +338,7 @@ enum BedrockError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "AWS Bedrock is not configured. Please add your credentials in Settings."
+            return "AWS Bedrock is not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables."
         case .configurationFailed(let message):
             return "Failed to configure AWS: \(message)"
         case .connectionFailed(let message):
