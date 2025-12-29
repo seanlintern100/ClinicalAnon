@@ -2,7 +2,7 @@
 //  ImprovePhaseView.swift
 //  Redactor
 //
-//  Purpose: Second phase - AI processing with chat-based interaction
+//  Purpose: Second phase - AI processing with artifact-style document + chat
 //  Organization: 3 Big Things
 //
 
@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - Improve Phase View
 
-/// Phase 2: Chat-based AI processing with iterative refinement
+/// Phase 2: Artifact-style layout with document on left, chat on right
 struct ImprovePhaseView: View {
 
     // MARK: - Properties
@@ -22,16 +22,19 @@ struct ImprovePhaseView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Document type selector
-            documentTypeSelector
+            // Header: Document type selector + Start Over
+            headerBar
 
             // Custom instructions field
             customInstructionsField
 
             Divider().opacity(0.3)
 
-            // Main chat area
-            chatArea
+            // Two-pane content: Document | Chat
+            HStack(spacing: 0) {
+                documentPane
+                chatPane
+            }
 
             Divider().opacity(0.3)
 
@@ -55,9 +58,9 @@ struct ImprovePhaseView: View {
         }
     }
 
-    // MARK: - Document Type Selector
+    // MARK: - Header Bar
 
-    private var documentTypeSelector: some View {
+    private var headerBar: some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DesignSystem.Spacing.small) {
@@ -79,7 +82,7 @@ struct ImprovePhaseView: View {
                 .padding(.vertical, DesignSystem.Spacing.small)
             }
 
-            // Start Over button in header (only when output exists)
+            // Start Over button (only when output exists)
             if viewModel.hasGeneratedOutput {
                 Divider()
                     .frame(height: 24)
@@ -131,60 +134,141 @@ struct ImprovePhaseView: View {
         .background(DesignSystem.Colors.surface)
     }
 
-    // MARK: - Chat Area
+    // MARK: - Document Pane (Left)
 
-    private var chatArea: some View {
+    private var documentPane: some View {
         VStack(spacing: 0) {
-            if !viewModel.hasGeneratedOutput && !viewModel.isAIProcessing {
-                // Empty state - waiting to generate
-                emptyStateView
+            // Header
+            HStack {
+                Text("Document")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                if viewModel.isAIProcessing {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .padding(.leading, DesignSystem.Spacing.xs)
+                }
+
+                Spacer()
+
+                if !viewModel.aiOutput.isEmpty {
+                    Button(action: { copyDocument() }) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .help("Copy document")
+                }
+            }
+            .frame(height: 44)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+
+            Divider().opacity(0.15)
+
+            // Document content
+            if viewModel.aiOutput.isEmpty && !viewModel.isAIProcessing {
+                // Empty state
+                documentEmptyState
             } else if let error = viewModel.aiError {
                 // Error state
                 errorView(error)
             } else {
-                // Chat conversation
-                chatConversation
+                // Document content (streams in real-time)
+                ScrollView {
+                    Text(viewModel.aiOutput)
+                        .font(.system(size: 14))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DesignSystem.Spacing.medium)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                .fill(DesignSystem.Colors.surface)
+        )
+        .cornerRadius(DesignSystem.CornerRadius.medium)
+        .padding(6)
+        .frame(minWidth: 350, idealWidth: 450, maxWidth: .infinity, maxHeight: .infinity)
+    }
 
-                // Refinement input
-                if viewModel.hasGeneratedOutput && !viewModel.isAIProcessing {
-                    refinementInputBar
+    // MARK: - Chat Pane (Right)
+
+    private var chatPane: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Chat")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+
+                if viewModel.hasGeneratedOutput {
+                    Text("Ask for changes")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+            .frame(height: 44)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+
+            Divider().opacity(0.15)
+
+            // Chat content
+            if !viewModel.hasGeneratedOutput && !viewModel.isAIProcessing {
+                // Empty state
+                chatEmptyState
+            } else {
+                // Chat history
+                chatHistory
+
+                // Input field (only after first generation)
+                if viewModel.hasGeneratedOutput {
+                    chatInputBar
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesignSystem.Colors.background)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                .fill(DesignSystem.Colors.surface)
+        )
+        .cornerRadius(DesignSystem.CornerRadius.medium)
+        .padding(6)
+        .frame(minWidth: 280, idealWidth: 350, maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Chat Conversation
+    // MARK: - Chat History
 
-    private var chatConversation: some View {
+    private var chatHistory: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    // All chat messages
                     ForEach(Array(viewModel.chatHistory.enumerated()), id: \.offset) { index, message in
-                        ChatMessageView(role: message.role, content: message.content)
-                            .id(index)
+                        ChatMessageView(
+                            role: message.role,
+                            content: message.content,
+                            isLatest: index == viewModel.chatHistory.count - 1,
+                            isFirstMessage: index == 0
+                        )
+                        .id(index)
                     }
 
-                    // Current streaming output (if generating)
+                    // Show generating indicator
                     if viewModel.isAIProcessing {
-                        if viewModel.aiOutput.isEmpty {
-                            // Loading state
-                            HStack(spacing: DesignSystem.Spacing.xs) {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Text("Generating...")
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                            }
-                            .padding(DesignSystem.Spacing.medium)
-                            .id("loading")
-                        } else {
-                            // Streaming response
-                            ChatMessageView(role: "assistant", content: viewModel.aiOutput, isStreaming: true)
-                                .id("streaming")
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                            Text("Updating document...")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
                         }
+                        .padding(.leading, DesignSystem.Spacing.medium)
+                        .id("generating")
                     }
                 }
                 .padding(DesignSystem.Spacing.medium)
@@ -194,48 +278,45 @@ struct ImprovePhaseView: View {
                     proxy.scrollTo(viewModel.chatHistory.count - 1, anchor: .bottom)
                 }
             }
-            .onChange(of: viewModel.aiOutput) { _ in
-                if viewModel.isAIProcessing {
+            .onChange(of: viewModel.isAIProcessing) { isProcessing in
+                if isProcessing {
                     withAnimation {
-                        proxy.scrollTo("streaming", anchor: .bottom)
+                        proxy.scrollTo("generating", anchor: .bottom)
                     }
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Refinement Input Bar
+    // MARK: - Chat Input Bar
 
-    private var refinementInputBar: some View {
+    private var chatInputBar: some View {
         VStack(spacing: 0) {
             Divider().opacity(0.15)
 
             HStack(spacing: DesignSystem.Spacing.small) {
                 TextField("Ask for changes...", text: $viewModel.refinementInput)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .padding(DesignSystem.Spacing.small)
-                    .background(DesignSystem.Colors.surface)
+                    .background(DesignSystem.Colors.background)
                     .cornerRadius(DesignSystem.CornerRadius.small)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.2), lineWidth: 1)
-                    )
                     .onSubmit {
                         viewModel.sendRefinement()
                     }
 
                 Button(action: { viewModel.sendRefinement() }) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(viewModel.refinementInput.isEmpty
+                        .font(.system(size: 24))
+                        .foregroundColor(viewModel.refinementInput.isEmpty || viewModel.isAIProcessing
                             ? DesignSystem.Colors.textSecondary.opacity(0.3)
                             : DesignSystem.Colors.primaryTeal)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.refinementInput.isEmpty)
+                .disabled(viewModel.refinementInput.isEmpty || viewModel.isAIProcessing)
             }
-            .padding(DesignSystem.Spacing.medium)
+            .padding(DesignSystem.Spacing.small)
         }
     }
 
@@ -271,7 +352,7 @@ struct ImprovePhaseView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(viewModel.displayedRedactedText.isEmpty || viewModel.selectedDocumentType == nil)
             } else {
-                // Continue button only (Start Over is in header)
+                // Continue button
                 Button(action: { viewModel.continueToNextPhase() }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         Text("Accept & Continue")
@@ -286,33 +367,43 @@ struct ImprovePhaseView: View {
         .background(DesignSystem.Colors.surface)
     }
 
-    // MARK: - Helper Views
+    // MARK: - Empty States
 
-    private var emptyStateView: some View {
+    private var documentEmptyState: some View {
         VStack(spacing: DesignSystem.Spacing.medium) {
             Spacer()
 
-            Image(systemName: "sparkles")
-                .font(.system(size: 48))
+            Image(systemName: "doc.text")
+                .font(.system(size: 40))
                 .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
 
             if let docType = viewModel.selectedDocumentType {
-                Text("Ready to generate \(docType.name)")
-                    .font(.system(size: 16))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                Text("Click \"Generate \(docType.name)\" below to start")
-                    .font(.system(size: 13))
+                Text("Your \(docType.name.lowercased()) will appear here")
+                    .font(.system(size: 14))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             } else {
-                Text("Select a document type above")
-                    .font(.system(size: 16))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                Text("Then click Generate to process your text")
-                    .font(.system(size: 13))
+                Text("Select a document type to get started")
+                    .font(.system(size: 14))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var chatEmptyState: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            Spacer()
+
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 36))
+                .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
+
+            Text("Generate a document to start refining")
+                .font(.system(size: 13))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .multilineTextAlignment(.center)
 
             Spacer()
         }
@@ -324,11 +415,11 @@ struct ImprovePhaseView: View {
             Spacer()
 
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
+                .font(.system(size: 40))
                 .foregroundColor(DesignSystem.Colors.error)
 
             Text(error)
-                .font(.system(size: 14))
+                .font(.system(size: 13))
                 .foregroundColor(DesignSystem.Colors.error)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -343,6 +434,14 @@ struct ImprovePhaseView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // MARK: - Actions
+
+    private func copyDocument() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(viewModel.aiOutput, forType: .string)
+    }
 }
 
 // MARK: - Chat Message View
@@ -350,34 +449,41 @@ struct ImprovePhaseView: View {
 private struct ChatMessageView: View {
     let role: String
     let content: String
-    var isStreaming: Bool = false
+    var isLatest: Bool = false
+    var isFirstMessage: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            HStack {
-                Text(role == "user" ? "You" : "AI")
-                    .font(DesignSystem.Typography.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(role == "user" ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+            Text(role == "user" ? "You" : "AI")
+                .font(DesignSystem.Typography.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(role == "user" ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
 
-                if isStreaming {
-                    ProgressView()
-                        .scaleEffect(0.5)
+            if role == "assistant" {
+                // AI messages: show status message (full document is in left pane)
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                    Text(isFirstMessage ? "Document generated — see left pane" : "Document updated — see left pane")
+                        .font(.system(size: 13))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
+            } else {
+                // User messages: show full content
+                Text(content)
+                    .font(.system(size: 13))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
             }
-
-            Text(content)
-                .font(.system(size: 14))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-                .textSelection(.enabled)
         }
-        .padding(DesignSystem.Spacing.medium)
+        .padding(DesignSystem.Spacing.small)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
                 .fill(role == "user"
                     ? DesignSystem.Colors.primaryTeal.opacity(0.1)
-                    : DesignSystem.Colors.surface)
+                    : DesignSystem.Colors.background)
         )
     }
 }

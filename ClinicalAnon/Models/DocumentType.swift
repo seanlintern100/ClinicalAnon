@@ -117,7 +117,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
 
             Preserve placeholders exactly. Use ONLY information provided.
             """,
-        icon: "arrow.right.doc",
+        icon: "doc.badge.arrow.up",
         isBuiltIn: true
     )
 
