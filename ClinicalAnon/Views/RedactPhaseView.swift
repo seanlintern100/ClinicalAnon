@@ -192,7 +192,7 @@ struct RedactPhaseView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Review PII and Continue buttons at bottom
+            // LLM Scan and Continue buttons at bottom
             if viewModel.result != nil {
                 Divider().opacity(0.15)
 
@@ -236,7 +236,7 @@ struct RedactPhaseView: View {
                     HStack {
                         Spacer()
 
-                        // Review PII button (if local LLM available)
+                        // LLM Scan button (if local LLM available)
                         if LocalLLMService.shared.isAvailable {
                             Button(action: { Task { await viewModel.runLocalPIIReview() } }) {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -245,9 +245,9 @@ struct RedactPhaseView: View {
                                             .scaleEffect(0.7)
                                             .frame(width: 14, height: 14)
                                     } else {
-                                        Image(systemName: "magnifyingglass")
+                                        Image(systemName: "brain")
                                     }
-                                    Text("Review PII")
+                                    Text("LLM Scan")
                                 }
                                 .font(DesignSystem.Typography.body)
                             }
