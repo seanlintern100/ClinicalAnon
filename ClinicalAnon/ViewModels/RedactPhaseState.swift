@@ -263,9 +263,10 @@ class RedactPhaseState: ObservableObject {
         }
 
         do {
-            // Update message once model is loaded and analysis starts
+            // Pass original text and existing entities - LLM will find deltas
             let findings = try await LocalLLMService.shared.reviewForMissedPII(
-                text: cachedRedactedText,
+                originalText: result.originalText,
+                existingEntities: allEntities,
                 onAnalysisStarted: { [weak self] in
                     Task { @MainActor in
                         self?.successMessage = "Analyzing text (this may take several minutes)..."

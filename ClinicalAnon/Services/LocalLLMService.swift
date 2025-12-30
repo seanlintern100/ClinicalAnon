@@ -240,11 +240,16 @@ class LocalLLMService: ObservableObject {
         print("LocalLLMService: Model unloaded")
     }
 
-    /// Review redacted text for missed PII
+    /// Review original text for PII and return only findings not already covered by existing entities
     /// - Parameters:
-    ///   - text: The redacted text to analyze
+    ///   - originalText: The original (unredacted) text to analyze
+    ///   - existingEntities: Entities already detected by NER
     ///   - onAnalysisStarted: Optional callback invoked when model is loaded and analysis begins
-    func reviewForMissedPII(text: String, onAnalysisStarted: (() -> Void)? = nil) async throws -> [PIIFinding] {
+    func reviewForMissedPII(
+        originalText: String,
+        existingEntities: [Entity],
+        onAnalysisStarted: (() -> Void)? = nil
+    ) async throws -> [PIIFinding] {
         guard isAvailable else {
             throw AppError.localLLMNotAvailable
         }
@@ -264,23 +269,23 @@ class LocalLLMService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        // Strong instructions to ignore bracketed content
+        // Simple prompt - LLM sees original text, no bracket confusion
         let prompt = """
-            IMPORTANT: This text has already been partially redacted. Any text in [SQUARE_BRACKETS] like [PERSON_A] or [DATE_1] is ALREADY REDACTED - do NOT report these.
+            Find ALL personal information in this clinical text:
+            - Names (including international names, multi-part surnames)
+            - Email addresses
+            - Phone numbers
+            - Physical addresses
 
-            Your task: Find ONLY plain text PII that was MISSED - names, emails, phones, addresses that appear WITHOUT brackets.
+            Skip: drug names, medical terms, diagnoses, organization names.
 
-            Include international names (European, Asian, Māori) and multi-part surnames.
+            Format: NAME|exact text|reason (or EMAIL|, PHONE|, ADDRESS|)
 
-            Format: TYPE|exact text|reason
-            If all PII is already redacted: NO_ISSUES_FOUND
-
-            Skip: drug names, medical terms, symptoms, diagnoses.
-
-            \(text)
+            \(originalText)
             """
-        print("LocalLLMService: Starting PII review, prompt length: \(prompt.count) chars")
+        print("LocalLLMService: Starting PII review on original text, prompt length: \(prompt.count) chars")
         print("LocalLLMService: Using model: \(selectedModelId)")
+        print("LocalLLMService: Existing entities to compare: \(existingEntities.count)")
 
         let startTime = Date()
 
@@ -292,9 +297,14 @@ class LocalLLMService: ObservableObject {
             print("LocalLLMService: Got response in \(String(format: "%.1f", elapsed))s, length: \(responseText.count) chars")
             print("LocalLLMService: Response: \(responseText)")
 
-            let findings = parseFindings(response: responseText)
-            print("LocalLLMService: Parsed \(findings.count) findings")
-            return findings
+            let allFindings = parseFindings(response: responseText)
+            print("LocalLLMService: Parsed \(allFindings.count) total findings")
+
+            // Filter to only findings not already covered by existing entities (delta)
+            let deltaFindings = filterToDeltas(allFindings, existingEntities: existingEntities, in: originalText)
+            print("LocalLLMService: Delta findings (new): \(deltaFindings.count)")
+
+            return deltaFindings
 
         } catch {
             print("LocalLLMService: Generation failed: \(error)")
@@ -513,5 +523,99 @@ class LocalLLMService: ObservableObject {
         default:
             return .personOther
         }
+    }
+
+    // MARK: - Delta Detection (Span Overlap)
+
+    /// Filter findings to only those not already covered by existing entities
+    /// Uses span/position overlap to handle edge cases like "Bob" vs "Bob's"
+    private func filterToDeltas(
+        _ findings: [PIIFinding],
+        existingEntities: [Entity],
+        in text: String
+    ) -> [PIIFinding] {
+        return findings.filter { finding in
+            // Find all occurrences of this finding in the text
+            let positions = findAllOccurrences(of: finding.text, in: text)
+
+            guard !positions.isEmpty else {
+                print("LocalLLMService: Finding '\(finding.text)' not found in text, skipping")
+                return false
+            }
+
+            // Check if ANY occurrence is not covered by existing entities
+            let hasUncoveredOccurrence = positions.contains { position in
+                !isPositionCovered(position, by: existingEntities)
+            }
+
+            if hasUncoveredOccurrence {
+                print("LocalLLMService: Delta found - '\(finding.text)' has uncovered occurrence")
+            } else {
+                print("LocalLLMService: '\(finding.text)' already covered by NER")
+            }
+
+            return hasUncoveredOccurrence
+        }
+    }
+
+    /// Check if a position is covered by any existing entity (>50% overlap)
+    private func isPositionCovered(_ position: [Int], by entities: [Entity], threshold: Double = 0.5) -> Bool {
+        for entity in entities {
+            for entityPos in entity.positions {
+                if overlapRatio(span1: position, span2: entityPos) > threshold {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Calculate overlap ratio between two spans
+    /// Returns intersection / min(length1, length2)
+    private func overlapRatio(span1: [Int], span2: [Int]) -> Double {
+        guard span1.count >= 2, span2.count >= 2 else { return 0 }
+
+        let start1 = span1[0], end1 = span1[1]
+        let start2 = span2[0], end2 = span2[1]
+
+        let overlapStart = max(start1, start2)
+        let overlapEnd = min(end1, end2)
+        let intersection = max(0, overlapEnd - overlapStart)
+
+        let minLength = min(end1 - start1, end2 - start2)
+        guard minLength > 0 else { return 0 }
+
+        return Double(intersection) / Double(minLength)
+    }
+
+    /// Find all occurrences of a string in text, returning positions as [[start, end], ...]
+    private func findAllOccurrences(of searchText: String, in text: String) -> [[Int]] {
+        // Normalize apostrophes for matching
+        let normalizedSearch = searchText
+            .replacingOccurrences(of: "'", with: "'")
+            .replacingOccurrences(of: "'", with: "'")
+        let normalizedText = text
+            .replacingOccurrences(of: "'", with: "'")
+            .replacingOccurrences(of: "'", with: "'")
+
+        var positions: [[Int]] = []
+        var searchStartIndex = normalizedText.startIndex
+
+        while searchStartIndex < normalizedText.endIndex {
+            if let range = normalizedText.range(
+                of: normalizedSearch,
+                options: .caseInsensitive,
+                range: searchStartIndex..<normalizedText.endIndex
+            ) {
+                let start = normalizedText.distance(from: normalizedText.startIndex, to: range.lowerBound)
+                let end = normalizedText.distance(from: normalizedText.startIndex, to: range.upperBound)
+                positions.append([start, end])
+                searchStartIndex = range.upperBound
+            } else {
+                break
+            }
+        }
+
+        return positions
     }
 }
