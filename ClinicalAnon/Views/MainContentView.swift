@@ -15,7 +15,7 @@ struct MainContentView: View {
 
     // MARK: - Properties
 
-    @StateObject private var viewModel = WorkflowViewModel()
+    @EnvironmentObject var viewModel: WorkflowViewModel
 
     // MARK: - Body
 
@@ -88,6 +88,7 @@ struct MainContentView: View {
 struct MainContentView_Previews: PreviewProvider {
     static var previews: some View {
         MainContentView()
+            .environmentObject(WorkflowViewModel())
     }
 }
 #endif

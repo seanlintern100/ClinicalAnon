@@ -659,6 +659,9 @@ class AnonymizationViewModel: ObservableObject {
     @Published var justCopiedOriginal: Bool = false
     @Published var justCopiedRestored: Bool = false
 
+    // Clipboard auto-clear (security)
+    private var clipboardClearTask: DispatchWorkItem?
+
     // Completion state for card color changes
     @Published var hasCopiedRedacted: Bool = false
     @Published var hasRestoredText: Bool = false
@@ -1203,6 +1206,7 @@ class AnonymizationViewModel: ObservableObject {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        scheduleClipboardClear()
     }
 
     private func copyFormattedToClipboard(_ markdown: String) {
@@ -1215,6 +1219,19 @@ class AnonymizationViewModel: ObservableObject {
         }
         // Also include plain text as fallback for apps that don't support RTF
         pasteboard.setString(markdown, forType: .string)
+        scheduleClipboardClear()
+    }
+
+    /// Schedule clipboard to be cleared after 5 minutes for security
+    private func scheduleClipboardClear() {
+        clipboardClearTask?.cancel()
+        clipboardClearTask = DispatchWorkItem { [weak self] in
+            NSPasteboard.general.clearContents()
+            self?.clipboardClearTask = nil
+        }
+        if let task = clipboardClearTask {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 300, execute: task)  // 5 minutes
+        }
     }
 
     private func autoHideSuccess() {

@@ -434,9 +434,7 @@ struct ImprovePhaseView: View {
     // MARK: - Actions
 
     private func copyDocument() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(viewModel.currentDocument, forType: .string)
+        viewModel.copyCurrentDocument()
     }
 }
 

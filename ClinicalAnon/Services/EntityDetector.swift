@@ -23,10 +23,12 @@ class EntityDetector {
         // Clean the response (remove markdown code blocks if present)
         let cleanedJSON = cleanJSON(jsonResponse)
 
+        #if DEBUG
         // DEBUG: Print the cleaned JSON
         print("🔍 DEBUG - Cleaned JSON response:")
         print(cleanedJSON)
         print("---")
+        #endif
 
         // Parse JSON
         guard let data = cleanedJSON.data(using: .utf8) else {
@@ -37,11 +39,14 @@ class EntityDetector {
         do {
             llmResponse = try JSONDecoder().decode(LLMResponse.self, from: data)
         } catch {
+            #if DEBUG
             print("❌ JSON Decode Error: \(error)")
             print("Raw JSON: \(cleanedJSON)")
+            #endif
             throw AppError.malformedJSON("Failed to decode JSON: \(error.localizedDescription)")
         }
 
+        #if DEBUG
         // DEBUG: Print parsed entities
         print("🔍 DEBUG - Parsed \(llmResponse.entities.count) entities:")
         for (index, entity) in llmResponse.entities.enumerated() {
@@ -50,6 +55,7 @@ class EntityDetector {
             print("      type: '\(entity.type)'")
             print("      positions: \(entity.positions)")
         }
+        #endif
 
         // Convert LLM entities to our Entity objects
         let entities = try convertLLMEntities(llmResponse.entities)
@@ -103,21 +109,27 @@ class EntityDetector {
             // Skip entities with empty fields (LLM sometimes lists things it should preserve)
             if llmEntity.original.isEmpty || llmEntity.replacement.isEmpty || llmEntity.type.isEmpty {
                 skippedCount += 1
+                #if DEBUG
                 print("⚠️  Skipping entity with empty fields: '\(llmEntity.original)'")
+                #endif
                 continue
             }
 
             // Convert type string to EntityType
             guard let entityType = mapLLMType(llmEntity.type) else {
+                #if DEBUG
                 print("⚠️  Skipping entity with unknown type '\(llmEntity.type)': '\(llmEntity.original)'")
+                #endif
                 skippedCount += 1
                 continue
             }
 
             // Validate positions (optional - we don't use them anymore)
+            #if DEBUG
             if llmEntity.positions.isEmpty {
                 print("⚠️  Entity '\(llmEntity.original)' has no positions (will still process)")
             }
+            #endif
 
             // Create Entity object
             let entity = Entity(
@@ -131,9 +143,11 @@ class EntityDetector {
             entities.append(entity)
         }
 
+        #if DEBUG
         if skippedCount > 0 {
             print("ℹ️  Skipped \(skippedCount) invalid entities, kept \(entities.count) valid entities")
         }
+        #endif
 
         return entities
     }

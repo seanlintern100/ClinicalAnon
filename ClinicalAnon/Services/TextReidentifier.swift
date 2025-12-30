@@ -36,7 +36,9 @@ class TextReidentifier {
         // Example: [PERSON_AB] should be replaced before [PERSON_A]
         let sorted = reverseMappings.sorted { $0.placeholder.count > $1.placeholder.count }
 
+        #if DEBUG
         print("🔄 TextReidentifier: Restoring \(sorted.count) placeholders")
+        #endif
 
         // Replace each placeholder with original text
         for mapping in sorted {
@@ -46,7 +48,9 @@ class TextReidentifier {
                     of: mapping.placeholder,
                     with: mapping.original
                 )
+                #if DEBUG
                 print("  ✓ Replaced \(mapping.placeholder) → '\(mapping.original)' (\(occurrences) times)")
+                #endif
             }
         }
 

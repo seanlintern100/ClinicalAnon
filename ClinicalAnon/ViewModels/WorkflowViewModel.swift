@@ -63,6 +63,9 @@ class WorkflowViewModel: ObservableObject {
     @Published var justCopiedOriginal: Bool = false
     @Published var justCopiedRestored: Bool = false
 
+    // Clipboard auto-clear (security)
+    private var clipboardClearTask: DispatchWorkItem?
+
     // Completion state for card color changes
     @Published var hasCopiedRedacted: Bool = false
     @Published var hasRestoredText: Bool = false
@@ -447,15 +450,21 @@ class WorkflowViewModel: ObservableObject {
     func sendRefinement() {
         let request = refinementInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !request.isEmpty else {
+            #if DEBUG
             print("⚠️ [Refinement] Empty request, skipping")
+            #endif
             return
         }
         guard !aiOutput.isEmpty else {
+            #if DEBUG
             print("⚠️ [Refinement] No AI output to refine, skipping")
+            #endif
             return
         }
 
+        #if DEBUG
         print("📝 [Refinement] Starting refinement with request: \(request.prefix(50))...")
+        #endif
 
         // Add user message to chat history
         chatHistory.append((role: "user", content: request))
@@ -501,7 +510,9 @@ class WorkflowViewModel: ObservableObject {
             - User asks "make it shorter" → Return the shortened document directly (no prefix)
             """
 
+        #if DEBUG
         print("📤 [Refinement] Sending to AI...")
+        #endif
 
         // Reset streaming destination
         streamingDestination = .unknown
@@ -517,7 +528,9 @@ class WorkflowViewModel: ObservableObject {
                 var chunkCount = 0
                 for try await chunk in stream {
                     if Task.isCancelled {
+                        #if DEBUG
                         print("⚠️ [Refinement] Task cancelled")
+                        #endif
                         break
                     }
                     chunkCount += 1
@@ -531,19 +544,27 @@ class WorkflowViewModel: ObservableObject {
                             aiOutput = String(aiOutput.dropFirst(conversationMarker.count))
                             // Also strip leading whitespace/newlines after marker
                             aiOutput = aiOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                            #if DEBUG
                             print("💬 [Refinement] Detected CONVERSATION response")
+                            #endif
                         } else {
                             streamingDestination = .document
+                            #if DEBUG
                             print("📄 [Refinement] Detected DOCUMENT response")
+                            #endif
                         }
                     }
 
+                    #if DEBUG
                     if chunkCount == 1 {
                         print("📥 [Refinement] First chunk received")
                     }
+                    #endif
                 }
 
+                #if DEBUG
                 print("✅ [Refinement] Complete - received \(chunkCount) chunks, output length: \(aiOutput.count)")
+                #endif
 
                 // Handle completion based on detected destination
                 if streamingDestination == .document {
@@ -551,17 +572,23 @@ class WorkflowViewModel: ObservableObject {
                     currentDocument = aiOutput
                     changedLineIndices = self.computeChangedLines(from: previousDocument, to: aiOutput)
                     chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                    #if DEBUG
                     print("📄 [Refinement] Document updated, \(changedLineIndices.count) lines changed")
+                    #endif
                 } else {
                     // Conversational - add to chat history
                     chatHistory.append((role: "assistant", content: aiOutput))
+                    #if DEBUG
                     print("💬 [Refinement] Chat response added to history")
+                    #endif
                 }
 
                 streamingDestination = .unknown
                 isAIProcessing = false
             } catch {
+                #if DEBUG
                 print("❌ [Refinement] Error: \(error.localizedDescription)")
+                #endif
                 if !Task.isCancelled {
                     aiError = error.localizedDescription
                     isAIProcessing = false
@@ -665,6 +692,12 @@ class WorkflowViewModel: ObservableObject {
         copyFormattedToClipboard(finalRestoredText)
         justCopiedRestored = true
         autoResetCopyState { self.justCopiedRestored = false }
+    }
+
+    /// Copy the current document to clipboard (used by ImprovePhaseView)
+    func copyCurrentDocument() {
+        guard !currentDocument.isEmpty else { return }
+        copyToClipboard(currentDocument)
     }
 
     func dismissError() {
@@ -842,6 +875,7 @@ class WorkflowViewModel: ObservableObject {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        scheduleClipboardClear()
     }
 
     private func copyFormattedToClipboard(_ markdown: String) {
@@ -852,6 +886,19 @@ class WorkflowViewModel: ObservableObject {
             pasteboard.setData(rtfData, forType: .rtf)
         }
         pasteboard.setString(markdown, forType: .string)
+        scheduleClipboardClear()
+    }
+
+    /// Schedule clipboard to be cleared after 5 minutes for security
+    private func scheduleClipboardClear() {
+        clipboardClearTask?.cancel()
+        clipboardClearTask = DispatchWorkItem { [weak self] in
+            NSPasteboard.general.clearContents()
+            self?.clipboardClearTask = nil
+        }
+        if let task = clipboardClearTask {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 300, execute: task)  // 5 minutes
+        }
     }
 
     private func autoHideSuccess() {

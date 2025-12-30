@@ -2,13 +2,13 @@
 //  AWSCredentialsManager.swift
 //  Redactor
 //
-//  Purpose: Manages AWS credentials (built-in for internal use)
+//  Purpose: Manages model selection (credentials handled by Lambda proxy)
 //  Organization: 3 Big Things
 //
 
 import Foundation
 
-// MARK: - AWS Credentials
+// MARK: - AWS Credentials (kept for API compatibility)
 
 struct AWSCredentials: Codable, Equatable {
     var accessKeyId: String
@@ -18,7 +18,8 @@ struct AWSCredentials: Codable, Equatable {
     static let defaultRegion = "ap-southeast-2"
 
     var isValid: Bool {
-        !accessKeyId.isEmpty && !secretAccessKey.isEmpty && !region.isEmpty
+        // Always valid with proxy - credentials not needed on client
+        true
     }
 }
 
@@ -33,19 +34,9 @@ class AWSCredentialsManager: ObservableObject {
 
     // MARK: - Published Properties
 
-    @Published var hasCredentials: Bool = false
+    @Published var hasCredentials: Bool = true  // Always true with proxy
     @Published var region: String = AWSCredentials.defaultRegion
     @Published var selectedModel: String = "apac.anthropic.claude-sonnet-4-20250514-v1:0"
-
-    // MARK: - Credentials from Environment
-
-    private var builtInAccessKey: String {
-        ProcessInfo.processInfo.environment["AWS_ACCESS_KEY_ID"] ?? ""
-    }
-    private var builtInSecretKey: String {
-        ProcessInfo.processInfo.environment["AWS_SECRET_ACCESS_KEY"] ?? ""
-    }
-    private let builtInRegion = "ap-southeast-2"
 
     // MARK: - Defaults
 
@@ -56,33 +47,29 @@ class AWSCredentialsManager: ObservableObject {
     static let availableModels: [(id: String, name: String)] = [
         ("apac.anthropic.claude-sonnet-4-20250514-v1:0", "Claude Sonnet 4 (Default)"),
         ("apac.anthropic.claude-3-5-sonnet-20241022-v2:0", "Claude 3.5 Sonnet v2"),
-        ("apac.anthropic.claude-3-5-haiku-20241022-v1:0", "Claude 3.5 Haiku")
+        ("apac.anthropic.claude-3-5-haiku-20241022-v1:0", "Claude 3.5 Haiku (Fast)")
     ]
 
     // MARK: - Initialization
 
     init() {
         loadSettings()
-        checkCredentials()
     }
 
-    // MARK: - Credentials
+    // MARK: - Credentials (no-op with proxy, kept for compatibility)
 
-    /// Load AWS credentials (built-in)
     func loadCredentials() -> AWSCredentials? {
+        // Return dummy credentials - proxy handles real auth
         return AWSCredentials(
-            accessKeyId: builtInAccessKey,
-            secretAccessKey: builtInSecretKey,
-            region: builtInRegion
+            accessKeyId: "proxy",
+            secretAccessKey: "proxy",
+            region: region
         )
     }
 
-    /// Check if credentials are available
     func checkCredentials() {
-        hasCredentials = loadCredentials()?.isValid ?? false
-        if let creds = loadCredentials() {
-            region = creds.region
-        }
+        // Always has credentials with proxy
+        hasCredentials = true
     }
 
     // MARK: - Settings

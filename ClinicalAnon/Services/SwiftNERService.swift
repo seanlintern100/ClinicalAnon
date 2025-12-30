@@ -34,7 +34,9 @@ class SwiftNERService {
             DateRecognizer()               // Date patterns
         ]
 
+        #if DEBUG
         print("🔧 Initialized SwiftNERService with \(recognizers.count) recognizers")
+        #endif
     }
 
     // MARK: - Entity Detection
@@ -45,8 +47,10 @@ class SwiftNERService {
     func detectEntities(in text: String) async throws -> [Entity] {
         let startTime = Date()
 
+        #if DEBUG
         print("🔍 SwiftNER: Starting entity detection...")
         print("📝 Input text length: \(text.count) chars")
+        #endif
 
         var allEntities: [Entity] = []
 
@@ -55,13 +59,16 @@ class SwiftNERService {
             let recognizerName = String(describing: type(of: recognizer))
             let entities = recognizer.recognize(in: text)
 
+            #if DEBUG
             if !entities.isEmpty {
                 print("  ✓ \(recognizerName): Found \(entities.count) entities")
             }
+            #endif
 
             allEntities.append(contentsOf: entities)
         }
 
+        #if DEBUG
         print("📊 Total entities found (before dedup): \(allEntities.count)")
 
         // DEBUG: Print all detected entities
@@ -69,9 +76,11 @@ class SwiftNERService {
         for (index, entity) in allEntities.enumerated() {
             print("  [\(index)] '\(entity.originalText)' type=\(entity.type) conf=\(entity.confidence ?? 0) pos=\(entity.positions.first ?? [0,0])")
         }
+        #endif
 
         // Remove overlaps FIRST (keeps longer, higher-confidence entities)
         let noOverlaps = removeOverlaps(allEntities)
+        #if DEBUG
         print("📊 After removing overlaps: \(noOverlaps.count)")
 
         // DEBUG: Print entities after overlap removal
@@ -79,19 +88,24 @@ class SwiftNERService {
         for (index, entity) in noOverlaps.enumerated() {
             print("  [\(index)] '\(entity.originalText)' type=\(entity.type) conf=\(entity.confidence ?? 0)")
         }
+        #endif
 
         // Then deduplicate exact matches
         let deduplicated = deduplicateEntities(noOverlaps)
+        #if DEBUG
         print("📊 Unique entities after deduplication: \(deduplicated.count)")
+        #endif
 
         // Validate all entity positions are within bounds
         let validated = validateEntityPositions(deduplicated, textLength: text.count)
+        #if DEBUG
         if validated.count < deduplicated.count {
             print("⚠️ Filtered out \(deduplicated.count - validated.count) entities with invalid positions")
         }
 
         let elapsed = Date().timeIntervalSince(startTime)
         print("✅ SwiftNER: Completed in \(String(format: "%.2f", elapsed))s")
+        #endif
 
         return validated
     }
@@ -111,13 +125,17 @@ class SwiftNERService {
 
             // If no valid positions remain, skip this entity
             guard !validPositions.isEmpty else {
+                #if DEBUG
                 print("⚠️ Skipping entity '\(entity.originalText)' - no valid positions")
+                #endif
                 return nil
             }
 
             // If some positions were invalid, create new entity with only valid positions
             if validPositions.count < entity.positions.count {
+                #if DEBUG
                 print("⚠️ Entity '\(entity.originalText)' had \(entity.positions.count - validPositions.count) invalid positions")
+                #endif
                 return Entity(
                     id: entity.id,
                     originalText: entity.originalText,
