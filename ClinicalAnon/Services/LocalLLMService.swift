@@ -130,9 +130,11 @@ class LocalLLMService: ObservableObject {
     }
 
     /// Get the path where the model would be cached
-    /// Uses the same path calculation as the Hub library
+    /// Uses the same configuration as MLXLMCommon (caches directory, not documents)
     var cachedModelPath: URL {
-        let hub = HubApi()
+        // MLXLMCommon uses cachesDirectory as downloadBase, not the default documentDirectory
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        let hub = HubApi(downloadBase: cacheDir)
         let repo = Hub.Repo(id: selectedModelId)
         return hub.localRepoLocation(repo)
     }
