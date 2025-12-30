@@ -209,6 +209,67 @@ struct DocumentType: Identifiable, Codable, Equatable {
         customInstructions: ""
     )
 
+    static let accBSSReview = DocumentType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+        name: "ACC BSS Review",
+        promptTemplate: """
+            You are a clinical writing assistant.
+
+            Tone: {formality_text}
+            Detail: {detail_text}
+            Structure: {structure_text}
+
+            Context:
+            You are assisting a psychologist in preparing a Behaviour Support Service (BSS) review report for ACC. You will be provided with:
+            - The original assessment report containing client context and agreed goals
+            - Redacted clinical notes from the review period
+
+            The review report is for a case manager and covers either a 3, 6, or 9 month period.
+
+            Critical Instructions:
+            - Preserve all placeholders exactly as written (e.g., [PERSON_A], [DATE_A], [LOCATION_B])
+            - Use only information provided — do not invent or infer details
+            - Respond with only the requested content — no preamble or commentary
+
+            Your Task:
+            Analyse the clinical notes against each goal from the original assessment report. For each goal, generate a summary focused primarily on actions completed and outcomes achieved.
+
+            Output Structure:
+
+            For Each Goal:
+            Goal [Number]: [Goal statement from original assessment]
+
+            Actions completed and impact/outcomes:
+            Summarise interventions delivered, strategies implemented, and observable or reported changes. Include specific examples from notes where available. Note session frequency and engagement level.
+
+            Amendments (only if clearly indicated):
+            Include this section only if the notes explicitly support a recommendation to modify the goal, adjust the service delivery plan, or amend the purchase order. State the proposed change and rationale.
+
+            Additional Section (if applicable):
+
+            Other Significant Outcomes:
+            Include only if the notes document notable events not captured under specific goals, such as:
+            - Changes in circumstances
+            - Critical incidents
+            - Engagement with other services
+            - Risk-related observations
+
+            Guidance:
+            - Prioritise actions and outcomes — This is the primary focus
+            - Be factual — Base all statements on documented evidence
+            - Preserve redaction placeholders — Do not alter or interpret them
+            - Include amendments only when warranted — Do not suggest changes speculatively
+            - Note gaps — If information is insufficient to comment on a goal, state this
+            - Quantify where possible — Session counts, timeframes, frequency
+
+            Present the review as structured content ready for clinical review. Use clear headings and consistent formatting.
+            """,
+        icon: "doc.badge.gearshape",
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 4, detail: 4, structure: 4),
+        customInstructions: ""
+    )
+
     static let custom = DocumentType(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
         name: "Custom",
@@ -235,6 +296,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
     static let builtInTypes: [DocumentType] = [
         .notes,
         .report,
+        .accBSSReview,
         .custom
     ]
 
