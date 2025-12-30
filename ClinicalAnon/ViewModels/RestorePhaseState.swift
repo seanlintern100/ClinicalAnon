@@ -62,8 +62,7 @@ class RestorePhaseState: ObservableObject {
         finalRestoredText = reidentifier.restore(text: aiOutput, using: mapping)
         hasRestoredText = true
 
-        // Trigger cache rebuild
-        cacheManager?.rebuildRestoredCache(restoredText: finalRestoredText)
+        // Note: Cache rebuild is now handled by WorkflowViewModel.restoreNamesFromAIOutput()
     }
 
     /// Copy restored text to clipboard with formatting

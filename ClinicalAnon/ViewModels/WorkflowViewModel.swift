@@ -102,12 +102,34 @@ class WorkflowViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Forwarded Properties (Redact Phase)
+    // MARK: - Bindable Properties (need @Published for SwiftUI $ bindings)
+    // These sync with state objects via didSet
 
-    var inputText: String {
-        get { redactState.inputText }
-        set { redactState.inputText = newValue }
+    @Published var inputText: String = "" {
+        didSet { redactState.inputText = inputText }
     }
+
+    @Published var showingAddCustom: Bool = false {
+        didSet { redactState.showingAddCustom = showingAddCustom }
+    }
+
+    @Published var refinementInput: String = "" {
+        didSet { improveState.refinementInput = refinementInput }
+    }
+
+    @Published var customInstructions: String = "" {
+        didSet { improveState.customInstructions = customInstructions }
+    }
+
+    @Published var showPromptEditor: Bool = false {
+        didSet { improveState.showPromptEditor = showPromptEditor }
+    }
+
+    @Published var showAddCustomCategory: Bool = false {
+        didSet { improveState.showAddCustomCategory = showAddCustomCategory }
+    }
+
+    // MARK: - Forwarded Properties (Redact Phase)
 
     var result: AnonymizationResult? { redactState.result }
     var isProcessing: Bool { redactState.isProcessing }
@@ -136,11 +158,6 @@ class WorkflowViewModel: ObservableObject {
 
     var cachedRedactedText: String { redactState.cachedRedactedText }
 
-    var showingAddCustom: Bool {
-        get { redactState.showingAddCustom }
-        set { redactState.showingAddCustom = newValue }
-    }
-
     var prefilledText: String? {
         get { redactState.prefilledText }
         set { redactState.prefilledText = newValue }
@@ -163,36 +180,16 @@ class WorkflowViewModel: ObservableObject {
         set { improveState.sliderSettings = newValue }
     }
 
-    var customInstructions: String {
-        get { improveState.customInstructions }
-        set { improveState.customInstructions = newValue }
-    }
-
     var aiOutput: String { improveState.aiOutput }
     var isAIProcessing: Bool { improveState.isAIProcessing }
     var aiError: String? { improveState.aiError }
     var isInRefinementMode: Bool { improveState.isInRefinementMode }
-
-    var refinementInput: String {
-        get { improveState.refinementInput }
-        set { improveState.refinementInput = newValue }
-    }
 
     var chatHistory: [(role: String, content: String)] { improveState.chatHistory }
     var streamingDestination: StreamingDestination { improveState.streamingDestination }
     var currentDocument: String { improveState.currentDocument }
     var previousDocument: String { improveState.previousDocument }
     var changedLineIndices: Set<Int> { improveState.changedLineIndices }
-
-    var showPromptEditor: Bool {
-        get { improveState.showPromptEditor }
-        set { improveState.showPromptEditor = newValue }
-    }
-
-    var showAddCustomCategory: Bool {
-        get { improveState.showAddCustomCategory }
-        set { improveState.showAddCustomCategory = newValue }
-    }
 
     var documentTypeToEdit: DocumentType? {
         get { improveState.documentTypeToEdit }
@@ -261,10 +258,45 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Redact Phase Actions
 
     func analyze() async {
+        print("DEBUG: WorkflowViewModel.analyze() called")
         await redactState.analyze()
+
+        print("DEBUG: redactState.analyze() completed")
+        print("DEBUG: redactState.result is \(redactState.result == nil ? "nil" : "set")")
+
+        // Ensure cache is rebuilt using our strong reference to cacheManager
+        // Pass values directly to avoid any computed property timing issues
+        if let result = redactState.result {
+            print("DEBUG: result.originalText length = \(result.originalText.count)")
+            print("DEBUG: allEntities count = \(redactState.allEntities.count)")
+            print("DEBUG: Calling cacheManager.rebuildAllCaches()")
+
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+
+            print("DEBUG: After rebuild - cachedOriginalAttributed is \(cacheManager.cachedOriginalAttributed == nil ? "nil" : "set")")
+            print("DEBUG: After rebuild - cachedRedactedAttributed is \(cacheManager.cachedRedactedAttributed == nil ? "nil" : "set")")
+        } else {
+            print("DEBUG: result is nil, skipping cache rebuild")
+        }
     }
 
     func clearAll() {
+        // Reset @Published bindable properties
+        inputText = ""
+        showingAddCustom = false
+        refinementInput = ""
+        customInstructions = ""
+        showPromptEditor = false
+        showAddCustomCategory = false
+
+        // Clear child state objects
         redactState.clearAll()
         improveState.clearAll()
         restoreState.clearAll()
@@ -278,6 +310,16 @@ class WorkflowViewModel: ObservableObject {
 
     func applyChanges() {
         redactState.applyChanges()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
     }
 
     func openAddCustomEntity(withText text: String? = nil) {
@@ -286,10 +328,30 @@ class WorkflowViewModel: ObservableObject {
 
     func addCustomEntity(text: String, type: EntityType) {
         redactState.addCustomEntity(text: text, type: type)
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
     }
 
     func runLocalPIIReview() async {
         await redactState.runLocalPIIReview()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
     }
 
     // MARK: - Improve Phase Actions
@@ -330,6 +392,10 @@ class WorkflowViewModel: ObservableObject {
 
     func restoreNamesFromAIOutput() {
         restoreState.restoreNamesFromAIOutput()
+        // Rebuild restored text cache using strong reference
+        if !restoreState.finalRestoredText.isEmpty {
+            cacheManager.rebuildRestoredCache(restoredText: restoreState.finalRestoredText)
+        }
     }
 
     // MARK: - Copy Actions

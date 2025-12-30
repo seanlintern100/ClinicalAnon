@@ -130,14 +130,8 @@ class RedactPhaseState: ObservableObject {
             redactedTextNeedsUpdate = true
             _excludedIds = excludedEntityIds
 
-            cacheManager?.rebuildAllCaches(
-                originalText: result?.originalText,
-                allEntities: allEntities,
-                activeEntities: activeEntities,
-                excludedIds: _excludedIds,
-                redactedText: displayedRedactedText,
-                restoredText: nil
-            )
+            // Note: Cache rebuild is now handled by WorkflowViewModel.analyze()
+            // to ensure strong reference to cacheManager is used
 
             updateTask.cancel()
             updateFromEngine()
@@ -196,14 +190,7 @@ class RedactPhaseState: ObservableObject {
         excludedEntityIds = _excludedIds
         redactedTextNeedsUpdate = true
 
-        cacheManager?.rebuildAllCaches(
-            originalText: result?.originalText,
-            allEntities: allEntities,
-            activeEntities: activeEntities,
-            excludedIds: _excludedIds,
-            redactedText: displayedRedactedText,
-            restoredText: nil
-        )
+        // Note: Cache rebuild is now handled by WorkflowViewModel.applyChanges()
 
         hasPendingChanges = false
     }
@@ -246,14 +233,7 @@ class RedactPhaseState: ObservableObject {
         _ = engine.entityMapping.getReplacementCode(for: trimmedText, type: type)
         redactedTextNeedsUpdate = true
 
-        cacheManager?.rebuildAllCaches(
-            originalText: result.originalText,
-            allEntities: allEntities,
-            activeEntities: activeEntities,
-            excludedIds: _excludedIds,
-            redactedText: displayedRedactedText,
-            restoredText: nil
-        )
+        // Note: Cache rebuild is now handled by WorkflowViewModel.addCustomEntity()
 
         successMessage = "Added custom redaction: \(code) (\(positions.count) occurrences)"
         autoHideSuccess()
@@ -306,14 +286,7 @@ class RedactPhaseState: ObservableObject {
                     autoHideSuccess()
                     redactedTextNeedsUpdate = true
 
-                    cacheManager?.rebuildAllCaches(
-                        originalText: result.originalText,
-                        allEntities: allEntities,
-                        activeEntities: activeEntities,
-                        excludedIds: _excludedIds,
-                        redactedText: displayedRedactedText,
-                        restoredText: nil
-                    )
+                    // Note: Cache rebuild is now handled by WorkflowViewModel.runLocalPIIReview()
                 }
             }
         } catch {

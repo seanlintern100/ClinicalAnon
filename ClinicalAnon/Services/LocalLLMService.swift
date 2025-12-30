@@ -82,13 +82,16 @@ class LocalLLMService: ObservableObject {
 
     // MARK: - Private Properties
 
-    private var modelContainer: ModelContainer?
+    private var modelContext: ModelContext?
+    private var chatSession: ChatSession?
     private let defaultModelId = "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit"
 
     // MARK: - Prompt
 
-    private let piiReviewPrompt = """
-        This text has been redacted with placeholders like [PERSON_A], [LOCATION_B], etc. Find any PII that was missed or partially redacted:
+    private let systemInstructions = """
+        You are a PII detection assistant. Analyze redacted text and report any personal identifiable information that was missed.
+
+        The text has been redacted with placeholders like [PERSON_A], [LOCATION_B], etc. Find any PII that was missed or partially redacted:
         - Unredacted names, emails, phone numbers, addresses
         - Malformed placeholders (e.g., [PERSON_X]ohn where part of the name leaked)
         - Any identifiable information
@@ -103,8 +106,6 @@ class LocalLLMService: ObservableObject {
         NAME|[PERSON_V]eaver|partial name leak - 'eaver' visible after placeholder
 
         If no issues found, respond with: NO_ISSUES_FOUND
-
-        Text to analyze:
         """
 
     // MARK: - Initialization
@@ -140,7 +141,7 @@ class LocalLLMService: ObservableObject {
             throw LocalLLMError.notAvailable
         }
 
-        if isModelLoaded && modelContainer != nil {
+        if isModelLoaded && modelContext != nil {
             print("LocalLLMService: Model already loaded")
             return
         }
@@ -150,35 +151,46 @@ class LocalLLMService: ObservableObject {
         downloadStatus = "Preparing to download model..."
         lastError = nil
 
-        defer {
-            isDownloading = false
-            downloadStatus = ""
-        }
-
         print("LocalLLMService: Loading model: \(selectedModelId)")
 
         do {
-            let modelConfig = ModelConfiguration(id: selectedModelId)
-
-            // Load the model with progress tracking
-            let container = try await LLMModelFactory.shared.loadContainer(
-                configuration: modelConfig
-            ) { progress in
-                Task { @MainActor in
-                    self.downloadProgress = progress.fractionCompleted
+            // Use the simple loadModel API from MLXLMCommon
+            let context = try await MLXLMCommon.loadModel(
+                id: selectedModelId
+            ) { [weak self] progress in
+                Task { @MainActor [weak self] in
+                    self?.downloadProgress = progress.fractionCompleted
                     if progress.fractionCompleted < 1.0 {
-                        self.downloadStatus = "Downloading: \(Int(progress.fractionCompleted * 100))%"
+                        self?.downloadStatus = "Downloading: \(Int(progress.fractionCompleted * 100))%"
                     } else {
-                        self.downloadStatus = "Loading model..."
+                        self?.downloadStatus = "Loading model..."
                     }
                 }
             }
 
-            self.modelContainer = container
+            self.modelContext = context
+
+            // Create chat session with the model
+            let generateParams = GenerateParameters(
+                maxTokens: 1000,
+                temperature: 0.1,
+                topP: 0.9
+            )
+
+            self.chatSession = ChatSession(
+                context,
+                instructions: systemInstructions,
+                generateParameters: generateParams
+            )
+
             self.isModelLoaded = true
+            self.isDownloading = false
+            self.downloadStatus = ""
             print("LocalLLMService: Model loaded successfully")
 
         } catch {
+            isDownloading = false
+            downloadStatus = ""
             print("LocalLLMService: Failed to load model: \(error)")
             lastError = "Failed to load model: \(error.localizedDescription)"
             throw LocalLLMError.modelLoadFailed(error.localizedDescription)
@@ -187,7 +199,8 @@ class LocalLLMService: ObservableObject {
 
     /// Unload the current model to free memory
     func unloadModel() {
-        modelContainer = nil
+        modelContext = nil
+        chatSession = nil
         isModelLoaded = false
         print("LocalLLMService: Model unloaded")
     }
@@ -203,55 +216,26 @@ class LocalLLMService: ObservableObject {
             try await loadModel()
         }
 
-        guard let container = modelContainer else {
+        guard let session = chatSession else {
             throw LocalLLMError.modelNotLoaded
         }
 
         isProcessing = true
         defer { isProcessing = false }
 
-        let fullPrompt = piiReviewPrompt + "\n\n" + text
-        print("LocalLLMService: Starting PII review, prompt length: \(fullPrompt.count) chars")
+        let prompt = "Analyze this text for missed PII:\n\n\(text)"
+        print("LocalLLMService: Starting PII review, prompt length: \(prompt.count) chars")
         print("LocalLLMService: Using model: \(selectedModelId)")
 
         let startTime = Date()
 
         do {
-            // Create user input with chat messages
-            let messages: [Chat.Message] = [
-                .system("You are a PII detection assistant. Analyze text and report any personal identifiable information that was missed during redaction."),
-                .user(fullPrompt)
-            ]
-
-            let userInput = UserInput(prompt: .chat(messages))
-
-            // Generate response using the container
-            let responseText = try await container.perform { context in
-                // Prepare input
-                let lmInput = try await context.processor.prepare(input: userInput)
-
-                // Generate with parameters
-                let params = GenerateParameters(
-                    maxTokens: 2000,
-                    temperature: 0.1,
-                    topP: 0.9
-                )
-
-                var outputTokens = [Int]()
-                let result = try generate(
-                    input: lmInput,
-                    parameters: params,
-                    context: context
-                ) { tokens in
-                    outputTokens = tokens
-                    return .more
-                }
-
-                return result.output
-            }
+            // Use the simple ChatSession API
+            let responseText = try await session.respond(to: prompt)
 
             let elapsed = Date().timeIntervalSince(startTime)
             print("LocalLLMService: Got response in \(String(format: "%.1f", elapsed))s, length: \(responseText.count) chars")
+            print("LocalLLMService: Response: \(responseText)")
 
             let findings = parseFindings(response: responseText)
             print("LocalLLMService: Parsed \(findings.count) findings")
