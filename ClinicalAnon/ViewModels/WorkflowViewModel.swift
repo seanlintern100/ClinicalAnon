@@ -9,6 +9,15 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Streaming Destination
+
+/// Where streaming AI output should be displayed
+enum StreamingDestination {
+    case unknown    // Not yet determined
+    case document   // Stream to document pane (left)
+    case chat       // Stream to chat pane (right)
+}
+
 // MARK: - Workflow ViewModel
 
 /// Main view model for the three-phase anonymization workflow
@@ -63,8 +72,9 @@ class WorkflowViewModel: ObservableObject {
 
     // MARK: - Improve Phase Properties
 
-    @Published var selectedDocumentType: DocumentType? = DocumentType.polish
-    @Published var customInstructions: String = ""  // Additional instructions to append to prompt
+    @Published var selectedDocumentType: DocumentType? = DocumentType.notes
+    @Published var sliderSettings: SliderSettings = SliderSettings()  // Current slider values
+    @Published var customInstructions: String = ""  // For Custom type only
     @Published var aiOutput: String = ""
     @Published var isAIProcessing: Bool = false
     @Published var aiError: String?
@@ -73,6 +83,17 @@ class WorkflowViewModel: ObservableObject {
     @Published var isInRefinementMode: Bool = false
     @Published var refinementInput: String = ""  // User's refinement request
     @Published var chatHistory: [(role: String, content: String)] = []  // Chat history for display
+    @Published var streamingDestination: StreamingDestination = .unknown  // Where current stream goes
+
+    // Track what redacted text was used for AI generation
+    private var lastProcessedRedactedText: String = ""
+
+    // The actual document (left pane) - separate from chat responses
+    @Published var currentDocument: String = ""
+
+    // Track previous output for highlighting changes
+    @Published var previousDocument: String = ""
+    @Published var changedLineIndices: Set<Int> = []  // Lines that changed in last update
 
     // Sheet states for editing/adding document types
     @Published var showPromptEditor: Bool = false
@@ -155,6 +176,11 @@ class WorkflowViewModel: ObservableObject {
     /// Whether AI has generated output (for UI state)
     var hasGeneratedOutput: Bool {
         !chatHistory.isEmpty || (!aiOutput.isEmpty && !isAIProcessing)
+    }
+
+    /// Whether the redacted input has changed since AI generation
+    var inputChangedSinceGeneration: Bool {
+        hasGeneratedOutput && lastProcessedRedactedText != displayedRedactedText
     }
 
     // MARK: - Phase Navigation
@@ -277,6 +303,16 @@ class WorkflowViewModel: ObservableObject {
         aiOutput = ""
         aiError = nil
         finalRestoredText = ""
+        currentDocument = ""
+        previousDocument = ""
+        changedLineIndices = []
+        chatHistory = []
+        isInRefinementMode = false
+        refinementInput = ""
+        customInstructions = ""
+        sliderSettings = SliderSettings()
+        isAIProcessing = false
+        lastProcessedRedactedText = ""
 
         // Reset conversation context for new session
         aiService.resetContext()
@@ -373,11 +409,16 @@ class WorkflowViewModel: ObservableObject {
         isAIProcessing = true
         chatHistory = []
 
-        // Build prompt with optional custom instructions
-        var fullPrompt = docType.prompt
-        if !customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            fullPrompt += "\n\nADDITIONAL INSTRUCTIONS:\n\(customInstructions)"
-        }
+        // Track what input we're processing and clear change tracking
+        lastProcessedRedactedText = inputForAI
+        previousDocument = ""
+        changedLineIndices = []
+        currentDocument = ""
+
+        // Build prompt with slider settings injected
+        var docTypeWithInstructions = docType
+        docTypeWithInstructions.customInstructions = customInstructions
+        let fullPrompt = docTypeWithInstructions.buildPrompt(with: sliderSettings)
 
         currentAITask = Task {
             do {
@@ -388,7 +429,8 @@ class WorkflowViewModel: ObservableObject {
                     aiOutput += chunk
                 }
 
-                // Enter refinement mode after successful generation
+                // Initial generation is always a document
+                currentDocument = aiOutput
                 isInRefinementMode = true
                 chatHistory.append((role: "assistant", content: aiOutput))
                 isAIProcessing = false
@@ -426,39 +468,49 @@ class WorkflowViewModel: ObservableObject {
         aiError = nil
         isAIProcessing = true
 
-        // Capture current output before clearing
-        let currentDocument = aiOutput
+        // Store current document for diff highlighting
+        previousDocument = currentDocument
+        changedLineIndices = []  // Clear previous highlights
 
         // Build the user message for refinement (includes current doc + request)
+        let docSnapshot = currentDocument  // Capture before async
         let userMessage = """
             Here is the current document:
 
             ---
-            \(currentDocument)
+            \(docSnapshot)
             ---
 
-            Please make these changes: \(request)
+            User request: \(request)
 
-            Respond with ONLY the updated document. Preserve all placeholders like [PERSON_A], [DATE_A] exactly.
+            If this is an editing request, return the full updated document only.
+            If this is a question or discussion, respond conversationally.
             """
 
         // System prompt for chat (allows both conversation and edits)
         let systemPrompt = """
             You are a clinical writing assistant helping refine a document.
 
-            If the user asks a question or wants suggestions, respond conversationally.
-            If the user asks for specific changes, make them and return the full updated document.
+            CRITICAL RESPONSE FORMAT:
+            - If responding conversationally (answering questions, giving suggestions, discussing),
+              start your response with exactly: [CONVERSATION]
+            - If providing an updated document, return ONLY the document text with no prefix.
 
-            When returning an updated document, just provide the document text without preamble.
-            When having a conversation, be helpful and concise.
+            Examples:
+            - User asks "what are the risks?" → Start with [CONVERSATION] then give your answer
+            - User asks "make it shorter" → Return the shortened document directly (no prefix)
             """
 
         print("📤 [Refinement] Sending to AI...")
+
+        // Reset streaming destination
+        streamingDestination = .unknown
 
         currentAITask = Task {
             do {
                 // Clear output for new version
                 aiOutput = ""
+                let conversationMarker = "[CONVERSATION]"
 
                 let stream = aiService.processStreaming(text: userMessage, prompt: systemPrompt)
 
@@ -470,6 +522,22 @@ class WorkflowViewModel: ObservableObject {
                     }
                     chunkCount += 1
                     aiOutput += chunk
+
+                    // Detect destination from accumulated output (marker might span chunks)
+                    if streamingDestination == .unknown && aiOutput.count >= conversationMarker.count {
+                        if aiOutput.hasPrefix(conversationMarker) {
+                            streamingDestination = .chat
+                            // Strip the marker from output
+                            aiOutput = String(aiOutput.dropFirst(conversationMarker.count))
+                            // Also strip leading whitespace/newlines after marker
+                            aiOutput = aiOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                            print("💬 [Refinement] Detected CONVERSATION response")
+                        } else {
+                            streamingDestination = .document
+                            print("📄 [Refinement] Detected DOCUMENT response")
+                        }
+                    }
+
                     if chunkCount == 1 {
                         print("📥 [Refinement] First chunk received")
                     }
@@ -477,8 +545,20 @@ class WorkflowViewModel: ObservableObject {
 
                 print("✅ [Refinement] Complete - received \(chunkCount) chunks, output length: \(aiOutput.count)")
 
-                // Add AI response to chat history
-                chatHistory.append((role: "assistant", content: aiOutput))
+                // Handle completion based on detected destination
+                if streamingDestination == .document {
+                    // Update the document and compute diff
+                    currentDocument = aiOutput
+                    changedLineIndices = self.computeChangedLines(from: previousDocument, to: aiOutput)
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                    print("📄 [Refinement] Document updated, \(changedLineIndices.count) lines changed")
+                } else {
+                    // Conversational - add to chat history
+                    chatHistory.append((role: "assistant", content: aiOutput))
+                    print("💬 [Refinement] Chat response added to history")
+                }
+
+                streamingDestination = .unknown
                 isAIProcessing = false
             } catch {
                 print("❌ [Refinement] Error: \(error.localizedDescription)")
@@ -786,5 +866,27 @@ class WorkflowViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 500_000_000)
             reset()
         }
+    }
+
+    // MARK: - Document Diff Helpers
+
+    /// Compute which lines changed between old and new document
+    private func computeChangedLines(from oldDoc: String, to newDoc: String) -> Set<Int> {
+        let oldLines = oldDoc.components(separatedBy: .newlines)
+        let newLines = newDoc.components(separatedBy: .newlines)
+
+        var changedIndices = Set<Int>()
+
+        for (index, newLine) in newLines.enumerated() {
+            if index >= oldLines.count {
+                // New line added
+                changedIndices.insert(index)
+            } else if oldLines[index] != newLine {
+                // Line changed
+                changedIndices.insert(index)
+            }
+        }
+
+        return changedIndices
     }
 }

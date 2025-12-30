@@ -2,7 +2,7 @@
 //  DocumentTypeManager.swift
 //  Redactor
 //
-//  Purpose: Manages document types with persistence for custom types and prompt overrides
+//  Purpose: Manages document types with persistence for slider settings and prompt overrides
 //  Organization: 3 Big Things
 //
 
@@ -19,13 +19,14 @@ class DocumentTypeManager: ObservableObject {
 
     // MARK: - Published Properties
 
-    /// All available document types (built-in + custom)
+    /// All available document types (built-in only for now)
     @Published private(set) var documentTypes: [DocumentType] = []
 
     // MARK: - UserDefaults Keys
 
-    private let customTypesKey = "customDocumentTypes"
-    private let promptOverridesKey = "promptOverrides"
+    private let sliderOverridesKey = "sliderOverrides"
+    private let promptOverridesKey = "promptTemplateOverrides"
+    private let customInstructionsKey = "customInstructions"
 
     // MARK: - Initialization
 
@@ -35,127 +36,145 @@ class DocumentTypeManager: ObservableObject {
 
     // MARK: - Loading
 
-    /// Load all document types (built-in with overrides + custom)
+    /// Load all document types with any saved overrides
     func loadTypes() {
         var types: [DocumentType] = []
 
-        // Load built-in types with any prompt overrides
-        let overrides = loadPromptOverrides()
+        let sliderOverrides = loadSliderOverrides()
+        let promptOverrides = loadPromptOverrides()
+        let customInstructions = loadCustomInstructions()
+
         for builtIn in DocumentType.builtInTypes {
             var docType = builtIn
-            if let override = overrides[builtIn.id.uuidString] {
-                docType.prompt = override
+
+            // Apply slider overrides
+            if let sliders = sliderOverrides[builtIn.id.uuidString] {
+                docType.defaultSliders = sliders
             }
+
+            // Apply prompt template overrides
+            if let promptOverride = promptOverrides[builtIn.id.uuidString] {
+                docType.promptTemplate = promptOverride
+            }
+
+            // Apply custom instructions (for Custom type)
+            if let instructions = customInstructions[builtIn.id.uuidString] {
+                docType.customInstructions = instructions
+            }
+
             types.append(docType)
         }
-
-        // Load custom types
-        let customTypes = loadCustomTypes()
-        types.append(contentsOf: customTypes)
 
         documentTypes = types
     }
 
-    // MARK: - Custom Types
+    // MARK: - Slider Settings
 
-    /// Add a new custom document type
-    func addCustomType(name: String, prompt: String, icon: String) {
-        let newType = DocumentType(
-            id: UUID(),
-            name: name,
-            prompt: prompt,
-            icon: icon,
-            isBuiltIn: false
-        )
-
-        var customTypes = loadCustomTypes()
-        customTypes.append(newType)
-        saveCustomTypes(customTypes)
-
-        loadTypes() // Refresh
+    /// Update slider settings for a document type
+    func updateSliders(for typeId: UUID, sliders: SliderSettings) {
+        var overrides = loadSliderOverrides()
+        overrides[typeId.uuidString] = sliders
+        saveSliderOverrides(overrides)
+        loadTypes()
     }
 
-    /// Delete a custom document type
-    func deleteCustomType(_ type: DocumentType) {
-        guard !type.isBuiltIn else { return }
-
-        var customTypes = loadCustomTypes()
-        customTypes.removeAll { $0.id == type.id }
-        saveCustomTypes(customTypes)
-
-        loadTypes() // Refresh
-    }
-
-    /// Update a custom document type
-    func updateCustomType(_ type: DocumentType) {
-        guard !type.isBuiltIn else { return }
-
-        var customTypes = loadCustomTypes()
-        if let index = customTypes.firstIndex(where: { $0.id == type.id }) {
-            customTypes[index] = type
-            saveCustomTypes(customTypes)
-            loadTypes() // Refresh
+    /// Get current sliders for a document type (with overrides applied)
+    func getSliders(for typeId: UUID) -> SliderSettings {
+        let overrides = loadSliderOverrides()
+        if let sliders = overrides[typeId.uuidString] {
+            return sliders
         }
+        return DocumentType.defaultSliders(for: typeId) ?? SliderSettings()
     }
 
-    // MARK: - Prompt Overrides (for built-in types)
-
-    /// Update the prompt for a document type
-    func updatePrompt(for typeId: UUID, newPrompt: String) {
-        // Check if it's a built-in type
-        if let builtIn = DocumentType.builtInTypes.first(where: { $0.id == typeId }) {
-            // Save as override
-            var overrides = loadPromptOverrides()
-            overrides[typeId.uuidString] = newPrompt
-            savePromptOverrides(overrides)
-        } else {
-            // It's a custom type - update directly
-            var customTypes = loadCustomTypes()
-            if let index = customTypes.firstIndex(where: { $0.id == typeId }) {
-                customTypes[index].prompt = newPrompt
-                saveCustomTypes(customTypes)
-            }
-        }
-
-        loadTypes() // Refresh
+    /// Reset sliders to default for a document type
+    func resetSliders(for typeId: UUID) {
+        var overrides = loadSliderOverrides()
+        overrides.removeValue(forKey: typeId.uuidString)
+        saveSliderOverrides(overrides)
+        loadTypes()
     }
 
-    /// Reset a built-in type's prompt to default
-    func resetToDefault(typeId: UUID) {
+    // MARK: - Prompt Template Overrides
+
+    /// Update the prompt template for a document type
+    func updatePromptTemplate(for typeId: UUID, newTemplate: String) {
+        var overrides = loadPromptOverrides()
+        overrides[typeId.uuidString] = newTemplate
+        savePromptOverrides(overrides)
+        loadTypes()
+    }
+
+    /// Reset prompt template to default
+    func resetPromptTemplate(for typeId: UUID) {
         var overrides = loadPromptOverrides()
         overrides.removeValue(forKey: typeId.uuidString)
         savePromptOverrides(overrides)
-
-        loadTypes() // Refresh
+        loadTypes()
     }
 
-    /// Check if a built-in type has a custom prompt
+    /// Check if a type has a custom prompt template
     func hasCustomPrompt(typeId: UUID) -> Bool {
         let overrides = loadPromptOverrides()
         return overrides[typeId.uuidString] != nil
     }
 
+    /// Check if a type has custom sliders
+    func hasCustomSliders(typeId: UUID) -> Bool {
+        let overrides = loadSliderOverrides()
+        return overrides[typeId.uuidString] != nil
+    }
+
+    // MARK: - Custom Instructions (for Custom type)
+
+    /// Update custom instructions
+    func updateCustomInstructions(for typeId: UUID, instructions: String) {
+        var saved = loadCustomInstructions()
+        saved[typeId.uuidString] = instructions
+        saveCustomInstructions(saved)
+        loadTypes()
+    }
+
+    /// Get custom instructions for a type
+    func getCustomInstructions(for typeId: UUID) -> String {
+        let saved = loadCustomInstructions()
+        return saved[typeId.uuidString] ?? ""
+    }
+
+    // MARK: - Reset All
+
+    /// Reset all overrides for a document type
+    func resetAllOverrides(for typeId: UUID) {
+        resetSliders(for: typeId)
+        resetPromptTemplate(for: typeId)
+
+        var instructions = loadCustomInstructions()
+        instructions.removeValue(forKey: typeId.uuidString)
+        saveCustomInstructions(instructions)
+
+        loadTypes()
+    }
+
     // MARK: - Private Persistence
 
-    private func loadCustomTypes() -> [DocumentType] {
-        guard let data = UserDefaults.standard.data(forKey: customTypesKey) else {
-            return []
+    private func loadSliderOverrides() -> [String: SliderSettings] {
+        guard let data = UserDefaults.standard.data(forKey: sliderOverridesKey) else {
+            return [:]
         }
-
         do {
-            return try JSONDecoder().decode([DocumentType].self, from: data)
+            return try JSONDecoder().decode([String: SliderSettings].self, from: data)
         } catch {
-            print("Failed to decode custom types: \(error)")
-            return []
+            print("Failed to decode slider overrides: \(error)")
+            return [:]
         }
     }
 
-    private func saveCustomTypes(_ types: [DocumentType]) {
+    private func saveSliderOverrides(_ overrides: [String: SliderSettings]) {
         do {
-            let data = try JSONEncoder().encode(types)
-            UserDefaults.standard.set(data, forKey: customTypesKey)
+            let data = try JSONEncoder().encode(overrides)
+            UserDefaults.standard.set(data, forKey: sliderOverridesKey)
         } catch {
-            print("Failed to encode custom types: \(error)")
+            print("Failed to encode slider overrides: \(error)")
         }
     }
 
@@ -165,5 +184,13 @@ class DocumentTypeManager: ObservableObject {
 
     private func savePromptOverrides(_ overrides: [String: String]) {
         UserDefaults.standard.set(overrides, forKey: promptOverridesKey)
+    }
+
+    private func loadCustomInstructions() -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: customInstructionsKey) as? [String: String] ?? [:]
+    }
+
+    private func saveCustomInstructions(_ instructions: [String: String]) {
+        UserDefaults.standard.set(instructions, forKey: customInstructionsKey)
     }
 }

@@ -25,9 +25,6 @@ struct ImprovePhaseView: View {
             // Header: Document type selector + Start Over
             headerBar
 
-            // Custom instructions field
-            customInstructionsField
-
             Divider().opacity(0.3)
 
             // Two-pane content: Document | Chat
@@ -50,87 +47,35 @@ struct ImprovePhaseView: View {
                 )
             }
         }
-        .sheet(isPresented: $viewModel.showAddCustomCategory) {
-            AddCustomCategorySheet(
-                documentTypeManager: documentTypeManager,
-                onDismiss: { viewModel.showAddCustomCategory = false }
-            )
-        }
     }
 
     // MARK: - Header Bar
 
     private var headerBar: some View {
-        HStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    // All document type chips
-                    ForEach(documentTypeManager.documentTypes) { docType in
-                        DocumentTypeChip(
-                            documentType: docType,
-                            isSelected: viewModel.selectedDocumentType?.id == docType.id,
-                            isDisabled: viewModel.hasGeneratedOutput,
-                            onSelect: { viewModel.selectedDocumentType = docType },
-                            onEdit: { viewModel.editPrompt(for: docType) }
-                        )
-                    }
-
-                    // Add Custom button
-                    AddCategoryButton(onTap: { viewModel.openAddCustomCategory() })
-                }
-                .padding(.horizontal, DesignSystem.Spacing.medium)
-                .padding(.vertical, DesignSystem.Spacing.small)
-            }
-
-            // Start Over button (only when output exists)
-            if viewModel.hasGeneratedOutput {
-                Divider()
-                    .frame(height: 24)
-                    .opacity(0.3)
-                    .padding(.horizontal, DesignSystem.Spacing.small)
-
-                Button(action: { viewModel.startOverAI() }) {
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Start Over")
-                    }
-                    .font(DesignSystem.Typography.caption)
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                .padding(.trailing, DesignSystem.Spacing.medium)
-            }
-        }
-        .background(DesignSystem.Colors.surface)
-    }
-
-    // MARK: - Custom Instructions Field
-
-    private var customInstructionsField: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            HStack {
-                Text("Additional instructions")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                Text("(optional)")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.6))
-            }
-
-            TextField("e.g., Keep under 500 words, include medication list...", text: $viewModel.customInstructions)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .padding(DesignSystem.Spacing.small)
-                .background(DesignSystem.Colors.background)
-                .cornerRadius(DesignSystem.CornerRadius.small)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                        .stroke(DesignSystem.Colors.textSecondary.opacity(0.2), lineWidth: 1)
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            // Document type chips (Notes, Report, Custom)
+            ForEach(documentTypeManager.documentTypes) { docType in
+                DocumentTypeChip(
+                    documentType: docType,
+                    isSelected: viewModel.selectedDocumentType?.id == docType.id,
+                    isDisabled: viewModel.hasGeneratedOutput,
+                    onSelect: {
+                        viewModel.selectedDocumentType = docType
+                        // Load saved sliders for this type
+                        viewModel.sliderSettings = documentTypeManager.getSliders(for: docType.id)
+                        // Load custom instructions for Custom type
+                        if docType.id == DocumentType.custom.id {
+                            viewModel.customInstructions = documentTypeManager.getCustomInstructions(for: docType.id)
+                        }
+                    },
+                    onEdit: { viewModel.editPrompt(for: docType) }
                 )
-                .disabled(viewModel.hasGeneratedOutput)
+            }
+
+            Spacer()
         }
         .padding(.horizontal, DesignSystem.Spacing.medium)
-        .padding(.bottom, DesignSystem.Spacing.small)
+        .padding(.vertical, DesignSystem.Spacing.small)
         .background(DesignSystem.Colors.surface)
     }
 
@@ -152,7 +97,7 @@ struct ImprovePhaseView: View {
 
                 Spacer()
 
-                if !viewModel.aiOutput.isEmpty {
+                if !viewModel.currentDocument.isEmpty {
                     Button(action: { copyDocument() }) {
                         Image(systemName: "doc.on.doc")
                             .font(.system(size: 12))
@@ -168,19 +113,31 @@ struct ImprovePhaseView: View {
             Divider().opacity(0.15)
 
             // Document content
-            if viewModel.aiOutput.isEmpty && !viewModel.isAIProcessing {
-                // Empty state
+            if viewModel.currentDocument.isEmpty && !(viewModel.isAIProcessing && viewModel.streamingDestination == .document) {
+                // Empty state (unless actively streaming a document)
                 documentEmptyState
             } else if let error = viewModel.aiError {
                 // Error state
                 errorView(error)
             } else {
-                // Document content (streams in real-time) with markdown
+                // Document content - only show streaming if destination is document
                 ScrollView {
-                    MarkdownText(viewModel.aiOutput)
+                    if viewModel.isAIProcessing && viewModel.streamingDestination == .document {
+                        // Streaming a document update
+                        MarkdownText(viewModel.aiOutput)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DesignSystem.Spacing.medium)
+                    } else {
+                        // Show stable document with change highlighting
+                        HighlightedDocument(
+                            text: viewModel.currentDocument,
+                            changedLineIndices: viewModel.changedLineIndices
+                        )
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(DesignSystem.Spacing.medium)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -256,12 +213,23 @@ struct ImprovePhaseView: View {
                         .id(index)
                     }
 
-                    // Show generating indicator
+                    // Show streaming conversation response in chat
+                    if viewModel.isAIProcessing && viewModel.streamingDestination == .chat {
+                        ChatMessageView(
+                            role: "assistant",
+                            content: viewModel.aiOutput,
+                            isLatest: true,
+                            isFirstMessage: false
+                        )
+                        .id("streaming")
+                    }
+
+                    // Show status indicator while processing
                     if viewModel.isAIProcessing {
                         HStack(spacing: DesignSystem.Spacing.xs) {
                             ProgressView()
                                 .scaleEffect(0.6)
-                            Text("Updating document...")
+                            Text(viewModel.streamingDestination == .chat ? "Thinking..." : "Updating document...")
                                 .font(DesignSystem.Typography.caption)
                                 .foregroundColor(DesignSystem.Colors.textSecondary)
                         }
@@ -438,7 +406,7 @@ struct ImprovePhaseView: View {
     private func copyDocument() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(viewModel.aiOutput, forType: .string)
+        pasteboard.setString(viewModel.currentDocument, forType: .string)
     }
 }
 
@@ -451,13 +419,7 @@ private struct ChatMessageView: View {
     var isFirstMessage: Bool = false
 
     private var isUser: Bool { role == "user" }
-
-    /// Check if content looks like a full document (has structure/length)
-    private var looksLikeDocument: Bool {
-        // If it has multiple paragraphs or headers, it's probably a document
-        let lineCount = content.components(separatedBy: .newlines).filter { !$0.isEmpty }.count
-        return lineCount > 5 || content.count > 500
-    }
+    private var isDocumentUpdate: Bool { content == "[[DOCUMENT_UPDATED]]" }
 
     var body: some View {
         HStack {
@@ -472,8 +434,8 @@ private struct ChatMessageView: View {
                     .foregroundColor(isUser ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
 
                 if role == "assistant" {
-                    if isFirstMessage || looksLikeDocument {
-                        // Document update: show status with hint
+                    if isFirstMessage || isDocumentUpdate {
+                        // Document update: show status with icon
                         HStack(spacing: DesignSystem.Spacing.xs) {
                             Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
                                 .font(.system(size: 11))
@@ -484,10 +446,9 @@ private struct ChatMessageView: View {
                                 .foregroundColor(DesignSystem.Colors.textSecondary)
                         }
                     } else {
-                        // Conversational response: show actual content
-                        Text(content)
-                            .font(.system(size: 13))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                        // Conversational response: show with markdown formatting
+                        MarkdownText(content)
+                            .textSelection(.enabled)
                     }
                 } else {
                     // User messages: show full content
@@ -530,6 +491,49 @@ private struct MarkdownText: View {
             Text(text)
                 .font(.system(size: 14))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
+        }
+    }
+}
+
+// MARK: - Highlighted Document View
+
+private struct HighlightedDocument: View {
+    let text: String
+    let changedLineIndices: Set<Int>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(text.components(separatedBy: .newlines).enumerated()), id: \.offset) { index, line in
+                let isChanged = changedLineIndices.contains(index)
+
+                if let attributedString = try? AttributedString(markdown: line.isEmpty ? " " : line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                    Text(attributedString)
+                        .font(.system(size: 14))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            isChanged
+                                ? DesignSystem.Colors.primaryTeal.opacity(0.15)
+                                : Color.clear
+                        )
+                        .cornerRadius(2)
+                } else {
+                    Text(line.isEmpty ? " " : line)
+                        .font(.system(size: 14))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            isChanged
+                                ? DesignSystem.Colors.primaryTeal.opacity(0.15)
+                                : Color.clear
+                        )
+                        .cornerRadius(2)
+                }
+            }
         }
     }
 }
@@ -585,30 +589,44 @@ private struct DocumentTypeChip: View {
     }
 }
 
-// MARK: - Add Category Button
+// MARK: - Slider Control
 
-private struct AddCategoryButton: View {
-
-    let onTap: () -> Void
+private struct SliderControl: View {
+    let label: String
+    @Binding var value: Int
+    let texts: [String]
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12))
-
-                Text("Add")
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
                     .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Spacer()
+
+                Text("\(value)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
             }
-            .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.vertical, DesignSystem.Spacing.small)
-            .background(
-                Capsule()
-                    .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4]))
+
+            Slider(
+                value: Binding(
+                    get: { Double(value) },
+                    set: { value = Int($0) }
+                ),
+                in: 1...5,
+                step: 1
             )
+            .tint(DesignSystem.Colors.primaryTeal)
+
+            Text(texts[max(0, min(value - 1, 4))])
+                .font(.system(size: 10))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .buttonStyle(.plain)
-        .foregroundColor(DesignSystem.Colors.textSecondary)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -621,24 +639,33 @@ struct PromptEditorSheet: View {
     let onDismiss: () -> Void
 
     @State private var editedPrompt: String = ""
+    @State private var editedSliders: SliderSettings = SliderSettings()
+    @State private var editedCustomInstructions: String = ""
     @State private var hasChanges: Bool = false
 
+    private var isCustomType: Bool {
+        documentType.id == DocumentType.custom.id
+    }
+
     var body: some View {
-        VStack(spacing: DesignSystem.Spacing.large) {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            // Header
             HStack {
                 Image(systemName: documentType.icon)
                     .font(.system(size: 20))
                     .foregroundColor(DesignSystem.Colors.primaryTeal)
 
-                Text("Edit \(documentType.name) Prompt")
+                Text("Edit \(documentType.name) Settings")
                     .font(DesignSystem.Typography.heading)
 
                 Spacer()
 
                 if documentType.isBuiltIn && documentTypeManager.hasCustomPrompt(typeId: documentType.id) {
                     Button("Reset to Default") {
-                        documentTypeManager.resetToDefault(typeId: documentType.id)
-                        editedPrompt = DocumentType.defaultPrompt(for: documentType.id) ?? ""
+                        documentTypeManager.resetPromptTemplate(for: documentType.id)
+                        documentTypeManager.resetSliders(for: documentType.id)
+                        editedPrompt = DocumentType.defaultPromptTemplate(for: documentType.id) ?? ""
+                        editedSliders = DocumentType.defaultSliders(for: documentType.id) ?? SliderSettings()
                         hasChanges = false
                     }
                     .font(DesignSystem.Typography.caption)
@@ -646,30 +673,77 @@ struct PromptEditorSheet: View {
                 }
             }
 
-            Text("This prompt is sent to the AI along with your redacted text.")
-                .font(DesignSystem.Typography.body)
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+            // Sliders section
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                Text("Style Settings")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
 
-            TextEditor(text: $editedPrompt)
-                .font(.system(size: 13, design: .monospaced))
-                .frame(minHeight: 250)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                        .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
-                )
-                .onChange(of: editedPrompt) { _ in
-                    hasChanges = editedPrompt != documentType.prompt
+                HStack(spacing: DesignSystem.Spacing.large) {
+                    SliderControl(
+                        label: "Formality",
+                        value: $editedSliders.formality,
+                        texts: SliderSettings.formalityTexts
+                    )
+
+                    SliderControl(
+                        label: "Detail",
+                        value: $editedSliders.detail,
+                        texts: SliderSettings.detailTexts
+                    )
+
+                    SliderControl(
+                        label: "Structure",
+                        value: $editedSliders.structure,
+                        texts: SliderSettings.structureTexts
+                    )
                 }
+            }
+            .padding(DesignSystem.Spacing.medium)
+            .background(DesignSystem.Colors.background)
+            .cornerRadius(DesignSystem.CornerRadius.small)
 
+            // Custom instructions (only for Custom type)
+            if isCustomType {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Custom Instructions")
+                        .font(DesignSystem.Typography.subheading)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                    TextField("Describe what you want the AI to do...", text: $editedCustomInstructions)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(DesignSystem.Spacing.small)
+                        .background(DesignSystem.Colors.background)
+                        .cornerRadius(DesignSystem.CornerRadius.small)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                                .stroke(DesignSystem.Colors.textSecondary.opacity(0.2), lineWidth: 1)
+                        )
+                }
+            }
+
+            // Prompt template section
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Prompt Template")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Text("Use {formality_text}, {detail_text}, {structure_text} as placeholders for slider values.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                TextEditor(text: $editedPrompt)
+                    .font(.system(size: 13, design: .monospaced))
+                    .frame(minHeight: 200)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
+                    )
+            }
+
+            // Buttons
             HStack {
-                if !documentType.isBuiltIn {
-                    Button("Delete") {
-                        documentTypeManager.deleteCustomType(documentType)
-                        onDismiss()
-                    }
-                    .foregroundColor(DesignSystem.Colors.error)
-                }
-
                 Spacer()
 
                 Button("Cancel") {
@@ -678,113 +752,34 @@ struct PromptEditorSheet: View {
                 .buttonStyle(SecondaryButtonStyle())
 
                 Button("Save") {
-                    documentTypeManager.updatePrompt(for: documentType.id, newPrompt: editedPrompt)
-                    onDismiss()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(!hasChanges)
-            }
-        }
-        .padding(DesignSystem.Spacing.large)
-        .frame(width: 600, height: 450)
-        .onAppear {
-            editedPrompt = documentType.prompt
-        }
-    }
-}
-
-// MARK: - Add Custom Category Sheet
-
-struct AddCustomCategorySheet: View {
-
-    @ObservedObject var documentTypeManager: DocumentTypeManager
-    let onDismiss: () -> Void
-
-    @State private var name: String = ""
-    @State private var prompt: String = ""
-    @State private var selectedIcon: String = "doc.text"
-
-    private let availableIcons = [
-        "doc.text", "doc.richtext", "clipboard", "list.bullet", "text.alignleft",
-        "person.text.rectangle", "heart.text.square", "brain", "cross.case"
-    ]
-
-    var body: some View {
-        VStack(spacing: DesignSystem.Spacing.large) {
-            Text("New Document Type")
-                .font(DesignSystem.Typography.heading)
-
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text("Name")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                TextField("e.g., Case Summary", text: $name)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text("Icon")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    ForEach(availableIcons, id: \.self) { icon in
-                        Button(action: { selectedIcon = icon }) {
-                            Image(systemName: icon)
-                                .font(.system(size: 18))
-                                .frame(width: 36, height: 36)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(selectedIcon == icon ? DesignSystem.Colors.primaryTeal.opacity(0.2) : Color.clear)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(selectedIcon == icon ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(selectedIcon == icon ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textPrimary)
+                    documentTypeManager.updatePromptTemplate(for: documentType.id, newTemplate: editedPrompt)
+                    documentTypeManager.updateSliders(for: documentType.id, sliders: editedSliders)
+                    if isCustomType {
+                        documentTypeManager.updateCustomInstructions(for: documentType.id, instructions: editedCustomInstructions)
                     }
-                }
-            }
-
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text("Prompt")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                TextEditor(text: $prompt)
-                    .font(.system(size: 13, design: .monospaced))
-                    .frame(minHeight: 150)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
-                    )
-
-                Text("Describe what the AI should do with the text.")
-                    .font(.system(size: 11))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-
-            HStack {
-                Spacer()
-
-                Button("Cancel") {
-                    onDismiss()
-                }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Button("Create") {
-                    documentTypeManager.addCustomType(name: name, prompt: prompt, icon: selectedIcon)
                     onDismiss()
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(DesignSystem.Spacing.large)
-        .frame(width: 500, height: 500)
+        .frame(width: 700, height: isCustomType ? 650 : 580)
+        .onAppear {
+            editedPrompt = documentType.promptTemplate
+            editedSliders = documentTypeManager.getSliders(for: documentType.id)
+            editedCustomInstructions = documentTypeManager.getCustomInstructions(for: documentType.id)
+        }
+        .onChange(of: editedPrompt) { _ in updateHasChanges() }
+        .onChange(of: editedSliders) { _ in updateHasChanges() }
+        .onChange(of: editedCustomInstructions) { _ in updateHasChanges() }
+    }
+
+    private func updateHasChanges() {
+        let originalSliders = documentTypeManager.getSliders(for: documentType.id)
+        let originalCustomInstructions = documentTypeManager.getCustomInstructions(for: documentType.id)
+        hasChanges = editedPrompt != documentType.promptTemplate ||
+                     editedSliders != originalSliders ||
+                     (isCustomType && editedCustomInstructions != originalCustomInstructions)
     }
 }
 

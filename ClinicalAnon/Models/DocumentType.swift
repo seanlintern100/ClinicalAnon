@@ -2,136 +2,183 @@
 //  DocumentType.swift
 //  Redactor
 //
-//  Purpose: Unified model for AI document processing types
+//  Purpose: Unified model for AI document processing types with slider controls
 //  Organization: 3 Big Things
 //
 
 import Foundation
+
+// MARK: - Slider Settings
+
+struct SliderSettings: Codable, Equatable {
+    var formality: Int = 3  // 1-5
+    var detail: Int = 3     // 1-5
+    var structure: Int = 3  // 1-5
+
+    // MARK: - Formality Texts
+
+    static let formalityTexts: [String] = [
+        "Casual, warm tone suitable for internal notes or client-friendly summaries",
+        "Conversational but professional — relaxed clinical language",
+        "Standard professional clinical tone",
+        "Formal clinical language suitable for external correspondence",
+        "Precise, formal language appropriate for medico-legal or funding contexts"
+    ]
+
+    // MARK: - Detail Texts
+
+    static let detailTexts: [String] = [
+        "Brief — essential points only",
+        "Concise — key information with minimal elaboration",
+        "Balanced — sufficient detail for clinical clarity",
+        "Thorough — comprehensive coverage of relevant information",
+        "Exhaustive — preserve all available detail"
+    ]
+
+    // MARK: - Structure Texts
+
+    static let structureTexts: [String] = [
+        "Flowing narrative — minimal headings",
+        "Light structure — occasional groupings",
+        "Clear sections — organised by topic",
+        "Formal sections — consistent headings throughout",
+        "Rigid template — strict section format"
+    ]
+
+    // MARK: - Computed Properties
+
+    var formalityText: String {
+        Self.formalityTexts[max(0, min(formality - 1, 4))]
+    }
+
+    var detailText: String {
+        Self.detailTexts[max(0, min(detail - 1, 4))]
+    }
+
+    var structureText: String {
+        Self.structureTexts[max(0, min(structure - 1, 4))]
+    }
+}
 
 // MARK: - Document Type
 
 struct DocumentType: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
-    var prompt: String
+    var promptTemplate: String  // Contains {formality_text}, {detail_text}, {structure_text} placeholders
     var icon: String
     var isBuiltIn: Bool
+    var defaultSliders: SliderSettings
+    var customInstructions: String  // For Custom type only
+
+    // MARK: - Prompt Building
+
+    /// Build the final prompt by injecting slider text values
+    func buildPrompt(with sliders: SliderSettings) -> String {
+        var prompt = promptTemplate
+        prompt = prompt.replacingOccurrences(of: "{formality_text}", with: sliders.formalityText)
+        prompt = prompt.replacingOccurrences(of: "{detail_text}", with: sliders.detailText)
+        prompt = prompt.replacingOccurrences(of: "{structure_text}", with: sliders.structureText)
+        prompt = prompt.replacingOccurrences(of: "{user_custom_instructions}", with: customInstructions)
+        return prompt
+    }
 
     // MARK: - Built-in Types
 
-    static let polish = DocumentType(
+    static let notes = DocumentType(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-        name: "Polish",
-        prompt: """
-            You are a clinical writing assistant. POLISH the provided clinical notes:
-            - Fix grammar, spelling, and punctuation errors
-            - Improve clarity and readability
-            - Maintain professional clinical tone
-            - Preserve all medical information accurately
-            - Do NOT add or remove clinical details
+        name: "Notes",
+        promptTemplate: """
+            You are a clinical writing assistant. Transform the provided raw notes into clean clinical notes.
 
-            The text contains placeholders like [PERSON_A], [DATE_A] - keep them exactly as they appear.
-            Respond with ONLY the polished text.
-            """,
-        icon: "sparkles",
-        isBuiltIn: true
-    )
+            Tone: {formality_text}
+            Detail: {detail_text}
+            Structure: {structure_text}
 
-    static let progressNote = DocumentType(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
-        name: "Progress Note",
-        prompt: """
-            You are a clinical writing assistant. Generate a PROGRESS NOTE with:
-            - Client/Patient identification (using placeholders)
-            - Date of session
-            - Attendees
-            - Presenting issues/concerns
-            - Session content/interventions
-            - Client response/observations
-            - Plan/next steps
+            Tasks:
+            - Fix grammar, spelling, punctuation
+            - Organise content by topic/theme
+            - Clarify meaning without changing clinical content
+            - End with follow-up actions, clearly noting:
+              - Actions for the therapist
+              - Actions for the client (if any)
 
-            Preserve placeholders like [PERSON_A], [DATE_A] exactly.
-            Use ONLY information provided. Respond with the document only.
+            Do NOT add information not present in the original.
+            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
+            Respond with only the clinical notes.
             """,
         icon: "doc.text",
-        isBuiltIn: true
-    )
-
-    static let assessment = DocumentType(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
-        name: "Assessment",
-        prompt: """
-            You are a clinical writing assistant. Generate an ASSESSMENT with:
-            - Identifying information
-            - Referral source and reason
-            - Presenting problems
-            - Relevant history
-            - Mental status/observations
-            - Assessment findings
-            - Formulation/diagnosis considerations
-            - Recommendations
-
-            Preserve placeholders exactly. Use ONLY information provided.
-            """,
-        icon: "clipboard",
-        isBuiltIn: true
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 3, detail: 3, structure: 3),
+        customInstructions: ""
     )
 
     static let report = DocumentType(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
         name: "Report",
-        prompt: """
-            You are a clinical writing assistant. Generate a comprehensive REPORT including:
-            - Client identification
-            - Referral information
-            - Personal/family background
-            - Developmental history
-            - Education and employment
-            - Current living situation
-            - Presenting issues and challenges
-            - Mental health history
-            - Substance use (alcohol, drugs)
-            - Risk assessment
-            - Clinical formulation
-            - Recommendations and plan
+        promptTemplate: """
+            You are a clinical writing assistant. Generate a clinical report from the provided notes.
 
-            Preserve placeholders exactly. Use ONLY information provided.
+            Tone: {formality_text}
+            Detail: {detail_text}
+            Structure: {structure_text}
+
+            Audience: Case managers, external services, or funding bodies.
+
+            Content guidance:
+            - Present the person from a biopsychosocial perspective where relevant
+            - Summarise presenting concerns and context
+            - Include relevant clinical background and progress
+            - Highlight strengths and protective factors
+            - Provide practical recommendations the reader can act on
+
+            Maintain professional, objective tone appropriate for external readers.
+            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
+            Use only information provided — do not invent details.
+            Respond with only the report.
             """,
         icon: "doc.richtext",
-        isBuiltIn: true
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 4, detail: 4, structure: 4),
+        customInstructions: ""
     )
 
-    static let dischargeSummary = DocumentType(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000005")!,
-        name: "Discharge Summary",
-        prompt: """
-            You are a clinical writing assistant. Generate a DISCHARGE SUMMARY with:
-            - Client/Patient identification
-            - Dates of service
-            - Reason for admission/referral
-            - Treatment provided
-            - Progress made
-            - Current status
-            - Follow-up recommendations
-            - Discharge plan
+    static let custom = DocumentType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
+        name: "Custom",
+        promptTemplate: """
+            You are a clinical writing assistant.
 
-            Preserve placeholders exactly. Use ONLY information provided.
+            Tone: {formality_text}
+            Detail: {detail_text}
+            Structure: {structure_text}
+
+            {user_custom_instructions}
+
+            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
+            Use only information provided — do not invent details.
+            Respond with only the requested content.
             """,
-        icon: "doc.badge.arrow.up",
-        isBuiltIn: true
+        icon: "square.and.pencil",
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 3, detail: 3, structure: 3),
+        customInstructions: ""
     )
 
     /// All built-in document types in display order
     static let builtInTypes: [DocumentType] = [
-        .polish,
-        .progressNote,
-        .assessment,
+        .notes,
         .report,
-        .dischargeSummary
+        .custom
     ]
 
-    /// Get the default prompt for a built-in type by ID
-    static func defaultPrompt(for id: UUID) -> String? {
-        builtInTypes.first { $0.id == id }?.prompt
+    /// Get the default prompt template for a built-in type by ID
+    static func defaultPromptTemplate(for id: UUID) -> String? {
+        builtInTypes.first { $0.id == id }?.promptTemplate
+    }
+
+    /// Get the default sliders for a built-in type by ID
+    static func defaultSliders(for id: UUID) -> SliderSettings? {
+        builtInTypes.first { $0.id == id }?.defaultSliders
     }
 }
