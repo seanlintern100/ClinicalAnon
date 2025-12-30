@@ -298,6 +298,59 @@ class LocalLLMService: ObservableObject {
         }
     }
 
+    // MARK: - LLM TEST FEATURE (can be deleted)
+
+    /// Find PII in raw (unredacted) text - for testing purposes
+    /// This tests if the LLM can detect PII at all, before NER runs
+    func findPIIInRawText(text: String) async throws -> [PIIFinding] {
+        guard isAvailable else {
+            throw AppError.localLLMNotAvailable
+        }
+
+        if !isModelLoaded {
+            try await loadModel()
+        }
+
+        guard let session = chatSession else {
+            throw AppError.localLLMModelNotLoaded
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let prompt = """
+            Find ALL personal information in this text:
+            - Names of people
+            - Email addresses
+            - Phone numbers
+            - Physical addresses
+
+            Skip drug names, medical terms, and organization names.
+
+            Format: TYPE|exact text|reason
+            Or if none found: NO_ISSUES_FOUND
+
+            \(text)
+            """
+
+        print("🧪 LLM TEST: Starting raw text analysis, length: \(text.count) chars")
+
+        let startTime = Date()
+
+        do {
+            let responseText = try await session.respond(to: prompt)
+            let elapsed = Date().timeIntervalSince(startTime)
+            print("🧪 LLM TEST: Response in \(String(format: "%.1f", elapsed))s")
+            print("🧪 LLM TEST: Raw response:\n\(responseText)")
+
+            let findings = parseFindings(response: responseText)
+            return findings
+        } catch {
+            print("🧪 LLM TEST: Failed - \(error)")
+            throw AppError.localLLMGenerationFailed(error.localizedDescription)
+        }
+    }
+
     // MARK: - Private Methods
 
     /// Parse LLM response into structured findings (handles both pipe and markdown formats)

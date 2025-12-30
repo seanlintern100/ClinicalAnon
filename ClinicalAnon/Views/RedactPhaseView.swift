@@ -82,6 +82,26 @@ struct RedactPhaseView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
+
+                // MARK: - LLM TEST FEATURE (can be deleted)
+                Button(action: { Task { await viewModel.analyzeWithLLMTest() } }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        if viewModel.isLLMTesting {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .frame(width: 14, height: 14)
+                        } else {
+                            Image(systemName: "brain")
+                                .frame(width: 14, height: 14)
+                        }
+                        Text(viewModel.isLLMTesting ? "Testing..." : "LLM Test")
+                            .frame(minWidth: 60)
+                    }
+                    .font(DesignSystem.Typography.caption)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .disabled(viewModel.inputText.isEmpty || viewModel.isLLMTesting)
             }
             .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)

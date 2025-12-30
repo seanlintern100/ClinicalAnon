@@ -129,6 +129,9 @@ class WorkflowViewModel: ObservableObject {
         didSet { improveState.showAddCustomCategory = showAddCustomCategory }
     }
 
+    // MARK: - LLM TEST FEATURE (can be deleted)
+    @Published var isLLMTesting: Bool = false
+
     // MARK: - Forwarded Properties (Redact Phase)
 
     var result: AnonymizationResult? { redactState.result }
@@ -270,6 +273,25 @@ class WorkflowViewModel: ObservableObject {
                 redactedText: redactState.displayedRedactedText,
                 restoredText: nil
             )
+        }
+    }
+
+    // MARK: - LLM TEST FEATURE (can be deleted)
+    func analyzeWithLLMTest() async {
+        isLLMTesting = true
+        defer { isLLMTesting = false }
+
+        do {
+            let findings = try await LocalLLMService.shared.findPIIInRawText(text: inputText)
+            print("🧪 LLM TEST: Found \(findings.count) PII items:")
+            for finding in findings {
+                print("  - \(finding.suggestedType): '\(finding.text)' (\(finding.reason))")
+            }
+            if findings.isEmpty {
+                print("🧪 LLM TEST: No PII found (or model returned NO_ISSUES_FOUND)")
+            }
+        } catch {
+            print("🧪 LLM TEST ERROR: \(error)")
         }
     }
 
