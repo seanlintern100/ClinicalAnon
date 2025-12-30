@@ -47,8 +47,7 @@ struct TextEditorView: View {
     }
 
     private var wordCount: Int {
-        let words = text.components(separatedBy: .whitespacesAndNewlines)
-        return words.filter { !$0.isEmpty }.count
+        text.wordCount
     }
 
     // MARK: - Body
@@ -231,8 +230,7 @@ struct TextEditorWithActionsView: View {
                     // Metrics
                     MetricsView(
                         characterCount: text.count,
-                        wordCount: text.components(separatedBy: .whitespacesAndNewlines)
-                            .filter { !$0.isEmpty }.count
+                        wordCount: text.wordCount
                     )
                 }
             }

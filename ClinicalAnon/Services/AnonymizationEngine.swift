@@ -119,8 +119,7 @@ class AnonymizationEngine: ObservableObject {
         }
 
         // Calculate estimated time based on word count
-        let wordCount = originalText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
-        estimatedSeconds = estimateProcessingTime(wordCount: wordCount)
+        estimatedSeconds = estimateProcessingTime(wordCount: originalText.wordCount)
 
         // Start processing
         isProcessing = true

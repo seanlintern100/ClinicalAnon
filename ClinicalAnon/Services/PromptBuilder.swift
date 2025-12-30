@@ -222,8 +222,7 @@ extension PromptBuilder {
 
     /// Get word count of the prompt
     static var promptWordCount: Int {
-        let words = buildAnonymizationPrompt().components(separatedBy: .whitespacesAndNewlines)
-        return words.filter { !$0.isEmpty }.count
+        buildAnonymizationPrompt().wordCount
     }
 
     /// Get character count of the prompt

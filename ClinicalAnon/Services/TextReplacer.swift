@@ -106,7 +106,7 @@ class TextReplacer {
 
         for entity in entities {
             // Count occurrences of replacement code
-            let occurrences = text.components(separatedBy: entity.replacementCode).count - 1
+            let occurrences = text.occurrences(of: entity.replacementCode)
             count += occurrences
         }
 

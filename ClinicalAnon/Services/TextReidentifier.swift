@@ -42,7 +42,7 @@ class TextReidentifier {
 
         // Replace each placeholder with original text
         for mapping in sorted {
-            let occurrences = result.components(separatedBy: mapping.placeholder).count - 1
+            let occurrences = result.occurrences(of: mapping.placeholder)
             if occurrences > 0 {
                 result = result.replacingOccurrences(
                     of: mapping.placeholder,
@@ -67,7 +67,7 @@ class TextReidentifier {
         var previews: [(placeholder: String, original: String, count: Int)] = []
 
         for (original, replacement) in mapping.allMappings {
-            let count = countOccurrences(of: replacement, in: text)
+            let count = text.occurrences(of: replacement)
             if count > 0 {
                 previews.append((placeholder: replacement, original: original, count: count))
             }
@@ -93,12 +93,6 @@ class TextReidentifier {
         return missing
     }
 
-    // MARK: - Private Methods
-
-    /// Count occurrences of a substring in text
-    private func countOccurrences(of substring: String, in text: String) -> Int {
-        return text.components(separatedBy: substring).count - 1
-    }
 }
 
 // MARK: - Preview Helpers

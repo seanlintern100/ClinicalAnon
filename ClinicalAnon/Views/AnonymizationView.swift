@@ -67,7 +67,7 @@ struct AnonymizationView: View {
                         Spacer()
 
                         if !viewModel.inputText.isEmpty {
-                            Text("\(viewModel.inputText.split(separator: " ").count) words")
+                            Text("\(viewModel.inputText.wordCount) words")
                                 .font(DesignSystem.Typography.caption)
                                 .foregroundColor(DesignSystem.Colors.textSecondary)
                                 .padding(.trailing, DesignSystem.Spacing.small)
