@@ -319,31 +319,34 @@ private struct RedactEntitySidebar: View {
             if !isCollapsed {
                 Divider().opacity(0.15)
 
-                // Entity list
+                // Entity list grouped by type
                 ScrollView {
-                    LazyVStack(spacing: DesignSystem.Spacing.xs) {
-                        // Show AI Review section header if there are AI findings
+                    LazyVStack(spacing: DesignSystem.Spacing.small) {
+                        // Show AI Review section if there are AI findings
                         if !viewModel.piiReviewFindings.isEmpty {
-                            HStack {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.orange)
-                                Text("AI Review Findings")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.orange)
-                                Spacer()
-                            }
-                            .padding(.horizontal, DesignSystem.Spacing.xs)
-                            .padding(.top, DesignSystem.Spacing.xs)
+                            EntityTypeSection(
+                                title: "AI Review Findings",
+                                icon: "sparkles",
+                                color: .orange,
+                                entities: viewModel.piiReviewFindings,
+                                viewModel: viewModel,
+                                isAISection: true
+                            )
                         }
 
-                        ForEach(viewModel.allEntities) { entity in
-                            RedactEntityRow(
-                                entity: entity,
-                                isExcluded: viewModel.isEntityExcluded(entity),
-                                isFromAIReview: viewModel.piiReviewFindings.contains(where: { $0.id == entity.id }),
-                                onToggle: { viewModel.toggleEntity(entity) }
-                            )
+                        // Group entities by type
+                        ForEach(groupedEntityTypes, id: \.self) { entityType in
+                            let entities = entitiesForType(entityType)
+                            if !entities.isEmpty {
+                                EntityTypeSection(
+                                    title: entityType.displayName,
+                                    icon: entityType.iconName,
+                                    color: entityType.highlightColor,
+                                    entities: entities,
+                                    viewModel: viewModel,
+                                    isAISection: false
+                                )
+                            }
                         }
                     }
                     .padding(DesignSystem.Spacing.small)
@@ -366,6 +369,80 @@ private struct RedactEntitySidebar: View {
         .frame(width: isCollapsed ? 40 : 270)
         .background(DesignSystem.Colors.surface)
         .animation(.easeInOut(duration: 0.2), value: isCollapsed)
+    }
+
+    // MARK: - Grouping Helpers
+
+    /// Entity types in display order (excluding AI findings which are shown separately)
+    private var groupedEntityTypes: [EntityType] {
+        [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
+    }
+
+    /// Get entities for a specific type (excluding AI findings to avoid duplicates)
+    private func entitiesForType(_ type: EntityType) -> [Entity] {
+        let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
+        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) }
+    }
+}
+
+// MARK: - Entity Type Section
+
+private struct EntityTypeSection: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let entities: [Entity]
+    @ObservedObject var viewModel: WorkflowViewModel
+    let isAISection: Bool
+
+    @State private var isExpanded: Bool = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Section header
+            Button(action: { withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() } }) {
+                HStack(spacing: 6) {
+                    Image(systemName: icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(color)
+                        .frame(width: 14)
+
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(color)
+
+                    Text("(\(entities.count))")
+                        .font(.system(size: 10))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, DesignSystem.Spacing.xs)
+                .background(color.opacity(0.08))
+                .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+
+            // Entity rows
+            if isExpanded {
+                VStack(spacing: 2) {
+                    ForEach(entities) { entity in
+                        RedactEntityRow(
+                            entity: entity,
+                            isExcluded: viewModel.isEntityExcluded(entity),
+                            isFromAIReview: isAISection,
+                            onToggle: { viewModel.toggleEntity(entity) }
+                        )
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
     }
 }
 
