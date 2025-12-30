@@ -27,6 +27,11 @@ class DocumentTypeManager: ObservableObject {
     private let sliderOverridesKey = "sliderOverrides"
     private let promptOverridesKey = "promptTemplateOverrides"
     private let customInstructionsKey = "customInstructions"
+    private let userCreatedTypesKey = "userCreatedTypes"
+
+    // MARK: - Custom Type ID (for session-only behavior)
+
+    private let customTypeId = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
 
     // MARK: - Initialization
 
@@ -47,23 +52,30 @@ class DocumentTypeManager: ObservableObject {
         for builtIn in DocumentType.builtInTypes {
             var docType = builtIn
 
-            // Apply slider overrides
-            if let sliders = sliderOverrides[builtIn.id.uuidString] {
+            // Skip persistence for Custom type (session-only)
+            let isCustomType = builtIn.id == customTypeId
+
+            // Apply slider overrides (except for Custom type)
+            if !isCustomType, let sliders = sliderOverrides[builtIn.id.uuidString] {
                 docType.defaultSliders = sliders
             }
 
-            // Apply prompt template overrides
-            if let promptOverride = promptOverrides[builtIn.id.uuidString] {
+            // Apply prompt template overrides (except for Custom type)
+            if !isCustomType, let promptOverride = promptOverrides[builtIn.id.uuidString] {
                 docType.promptTemplate = promptOverride
             }
 
-            // Apply custom instructions (for Custom type)
-            if let instructions = customInstructions[builtIn.id.uuidString] {
+            // Apply custom instructions (except for Custom type - session only)
+            if !isCustomType, let instructions = customInstructions[builtIn.id.uuidString] {
                 docType.customInstructions = instructions
             }
 
             types.append(docType)
         }
+
+        // Load user-created types
+        let userCreatedTypes = loadUserCreatedTypes()
+        types.append(contentsOf: userCreatedTypes)
 
         documentTypes = types
     }
@@ -155,6 +167,54 @@ class DocumentTypeManager: ObservableObject {
         loadTypes()
     }
 
+    // MARK: - User-Created Types CRUD
+
+    /// Create a new user-created analysis type
+    func createAnalysisType(name: String, promptTemplate: String, sliders: SliderSettings, icon: String = "doc.badge.plus") -> DocumentType {
+        let newType = DocumentType(
+            id: UUID(),
+            name: name,
+            promptTemplate: promptTemplate,
+            icon: icon,
+            isBuiltIn: false,
+            isUserCreated: true,
+            defaultSliders: sliders,
+            customInstructions: ""
+        )
+
+        var userTypes = loadUserCreatedTypes()
+        userTypes.append(newType)
+        saveUserCreatedTypes(userTypes)
+        loadTypes()
+
+        return newType
+    }
+
+    /// Delete a user-created analysis type
+    func deleteAnalysisType(id: UUID) {
+        var userTypes = loadUserCreatedTypes()
+        userTypes.removeAll { $0.id == id }
+        saveUserCreatedTypes(userTypes)
+        loadTypes()
+    }
+
+    /// Update a user-created analysis type
+    func updateAnalysisType(_ type: DocumentType) {
+        guard type.isUserCreated else { return }
+
+        var userTypes = loadUserCreatedTypes()
+        if let index = userTypes.firstIndex(where: { $0.id == type.id }) {
+            userTypes[index] = type
+            saveUserCreatedTypes(userTypes)
+            loadTypes()
+        }
+    }
+
+    /// Check if a type is user-created (can be deleted)
+    func isUserCreatedType(id: UUID) -> Bool {
+        loadUserCreatedTypes().contains { $0.id == id }
+    }
+
     // MARK: - Private Persistence
 
     private func loadSliderOverrides() -> [String: SliderSettings] {
@@ -192,5 +252,26 @@ class DocumentTypeManager: ObservableObject {
 
     private func saveCustomInstructions(_ instructions: [String: String]) {
         UserDefaults.standard.set(instructions, forKey: customInstructionsKey)
+    }
+
+    private func loadUserCreatedTypes() -> [DocumentType] {
+        guard let data = UserDefaults.standard.data(forKey: userCreatedTypesKey) else {
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([DocumentType].self, from: data)
+        } catch {
+            print("Failed to decode user-created types: \(error)")
+            return []
+        }
+    }
+
+    private func saveUserCreatedTypes(_ types: [DocumentType]) {
+        do {
+            let data = try JSONEncoder().encode(types)
+            UserDefaults.standard.set(data, forKey: userCreatedTypesKey)
+        } catch {
+            print("Failed to encode user-created types: \(error)")
+        }
     }
 }

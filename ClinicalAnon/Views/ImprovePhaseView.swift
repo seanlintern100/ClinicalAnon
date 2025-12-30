@@ -17,6 +17,7 @@ struct ImprovePhaseView: View {
 
     @ObservedObject var viewModel: WorkflowViewModel
     @ObservedObject var documentTypeManager: DocumentTypeManager = .shared
+    @State private var showAddAnalysisSheet: Bool = false
 
     // MARK: - Body
 
@@ -47,13 +48,24 @@ struct ImprovePhaseView: View {
                 )
             }
         }
+        .sheet(isPresented: $showAddAnalysisSheet) {
+            AddAnalysisTypeSheet(
+                documentTypeManager: documentTypeManager,
+                onDismiss: { showAddAnalysisSheet = false },
+                onCreated: { newType in
+                    viewModel.selectedDocumentType = newType
+                    viewModel.sliderSettings = newType.defaultSliders
+                    showAddAnalysisSheet = false
+                }
+            )
+        }
     }
 
     // MARK: - Header Bar
 
     private var headerBar: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
-            // Document type chips (Notes, Report, Custom)
+            // Document type chips (Notes, Report, Custom, + user-created)
             ForEach(documentTypeManager.documentTypes) { docType in
                 DocumentTypeChip(
                     documentType: docType,
@@ -68,8 +80,26 @@ struct ImprovePhaseView: View {
                             viewModel.customInstructions = documentTypeManager.getCustomInstructions(for: docType.id)
                         }
                     },
-                    onEdit: { viewModel.editPrompt(for: docType) }
+                    onEdit: { viewModel.editPrompt(for: docType) },
+                    onDelete: docType.isUserCreated ? {
+                        // Clear selection if deleting selected type
+                        if viewModel.selectedDocumentType?.id == docType.id {
+                            viewModel.selectedDocumentType = documentTypeManager.documentTypes.first
+                        }
+                        documentTypeManager.deleteAnalysisType(id: docType.id)
+                    } : nil
                 )
+            }
+
+            // Add new analysis type button
+            if !viewModel.hasGeneratedOutput {
+                Button(action: { showAddAnalysisSheet = true }) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Add new analysis type")
             }
 
             Spacer()
@@ -554,6 +584,7 @@ private struct DocumentTypeChip: View {
     var isDisabled: Bool = false
     let onSelect: () -> Void
     let onEdit: () -> Void
+    var onDelete: (() -> Void)? = nil  // Only for user-created types
 
     @State private var isHovering: Bool = false
 
@@ -573,6 +604,16 @@ private struct DocumentTypeChip: View {
                             .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
                     }
                     .buttonStyle(.plain)
+
+                    // Delete button for user-created types
+                    if let deleteAction = onDelete {
+                        Button(action: deleteAction) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(.horizontal, DesignSystem.Spacing.medium)
@@ -783,6 +824,138 @@ struct PromptEditorSheet: View {
         hasChanges = editedPrompt != documentType.promptTemplate ||
                      editedSliders != originalSliders ||
                      (isCustomType && editedCustomInstructions != originalCustomInstructions)
+    }
+}
+
+// MARK: - Add Analysis Type Sheet
+
+struct AddAnalysisTypeSheet: View {
+
+    @ObservedObject var documentTypeManager: DocumentTypeManager
+    let onDismiss: () -> Void
+    let onCreated: (DocumentType) -> Void
+
+    @State private var name: String = ""
+    @State private var sliders: SliderSettings = SliderSettings()
+    @State private var promptTemplate: String = """
+        You are a clinical writing assistant.
+
+        Tone: {formality_text}
+        Detail: {detail_text}
+        Structure: {structure_text}
+
+        [Your instructions here]
+
+        Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
+        Use only information provided — do not invent details.
+        Respond with only the requested content.
+        """
+
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            // Header
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                Text("New Analysis Type")
+                    .font(DesignSystem.Typography.heading)
+
+                Spacer()
+            }
+
+            // Name field
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Name")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                TextField("e.g., Progress Note, Assessment Report", text: $name)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .padding(DesignSystem.Spacing.small)
+                    .background(DesignSystem.Colors.background)
+                    .cornerRadius(DesignSystem.CornerRadius.small)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.2), lineWidth: 1)
+                    )
+            }
+
+            // Sliders section
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                Text("Style Settings")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                HStack(spacing: DesignSystem.Spacing.large) {
+                    SliderControl(
+                        label: "Formality",
+                        value: $sliders.formality,
+                        texts: SliderSettings.formalityTexts
+                    )
+
+                    SliderControl(
+                        label: "Detail",
+                        value: $sliders.detail,
+                        texts: SliderSettings.detailTexts
+                    )
+
+                    SliderControl(
+                        label: "Structure",
+                        value: $sliders.structure,
+                        texts: SliderSettings.structureTexts
+                    )
+                }
+            }
+            .padding(DesignSystem.Spacing.medium)
+            .background(DesignSystem.Colors.background)
+            .cornerRadius(DesignSystem.CornerRadius.small)
+
+            // Prompt template section
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Prompt Template")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                TextEditor(text: $promptTemplate)
+                    .font(.system(size: 13, design: .monospaced))
+                    .frame(minHeight: 180)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
+                    )
+            }
+
+            // Buttons
+            HStack {
+                Spacer()
+
+                Button("Cancel") {
+                    onDismiss()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Button("Create") {
+                    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let newType = documentTypeManager.createAnalysisType(
+                        name: trimmedName,
+                        promptTemplate: promptTemplate,
+                        sliders: sliders
+                    )
+                    onCreated(newType)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!isValid)
+            }
+        }
+        .padding(DesignSystem.Spacing.large)
+        .frame(width: 700, height: 580)
     }
 }
 

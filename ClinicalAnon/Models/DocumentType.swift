@@ -68,6 +68,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
     var promptTemplate: String  // Contains {formality_text}, {detail_text}, {structure_text} placeholders
     var icon: String
     var isBuiltIn: Bool
+    var isUserCreated: Bool = false  // True for persistent user-created types
     var defaultSliders: SliderSettings
     var customInstructions: String  // For Custom type only
 
