@@ -65,6 +65,10 @@
 		FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* LocalLLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */; };
 		D1E2F3A4B5C6D7E8F9A0B1C2 /* LocalLLMSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */; };
+		E2F3A4B5C6D7E8F9A0B1C2D3 /* RedactPhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A4B5C6D7E8F9A0B1C2D3E4 /* RedactPhaseState.swift */; };
+		E3F4A5B6C7D8E9F0A1B2C3D4 /* ImprovePhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5B6C7D8E9F0A1B2C3D4E5 /* ImprovePhaseState.swift */; };
+		E4F5A6B7C8D9E0F1A2B3C4D5 /* RestorePhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A6B7C8D9E0F1A2B3C4D5E6 /* RestorePhaseState.swift */; };
+		E5F6A7B8C9D0E1F2A3B4C5D6 /* HighlightCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* HighlightCacheManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -138,6 +142,10 @@
 		F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMSettingsView.swift; sourceTree = "<group>"; };
+		F3A4B5C6D7E8F9A0B1C2D3E4 /* RedactPhaseState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactPhaseState.swift; sourceTree = "<group>"; };
+		F4A5B6C7D8E9F0A1B2C3D4E5 /* ImprovePhaseState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImprovePhaseState.swift; sourceTree = "<group>"; };
+		F5A6B7C8D9E0F1A2B3C4D5E6 /* RestorePhaseState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestorePhaseState.swift; sourceTree = "<group>"; };
+		F6A7B8C9D0E1F2A3B4C5D6E7 /* HighlightCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightCacheManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,6 +189,10 @@
 		147E65852C9AE897179C52A5 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				F6A7B8C9D0E1F2A3B4C5D6E7 /* HighlightCacheManager.swift */,
+				F4A5B6C7D8E9F0A1B2C3D4E5 /* ImprovePhaseState.swift */,
+				F3A4B5C6D7E8F9A0B1C2D3E4 /* RedactPhaseState.swift */,
+				F5A6B7C8D9E0F1A2B3C4D5E6 /* RestorePhaseState.swift */,
 				5652BE3366DB6BB9613DBF9C /* WorkflowViewModel.swift */,
 			);
 			path = ViewModels;
@@ -349,6 +361,8 @@
 			name = Redactor;
 			packageProductDependencies = (
 				B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */,
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* MLXLLM */,
+				E1F2A3B4C5D6E7F8A9B0C1D3 /* MLXLMCommon */,
 			);
 			productName = Redactor;
 			productReference = 212E6C017812F7CA53B24F18 /* Redactor.app */;
@@ -398,6 +412,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				117C3E2CDC8D8C97B6CB9ABE /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
+				A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 			);
 			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
@@ -481,6 +496,10 @@
 				C026D24088042251AFAEFCEF /* WorkflowViewModel.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F3 /* LocalLLMService.swift in Sources */,
 				D1E2F3A4B5C6D7E8F9A0B1C2 /* LocalLLMSettingsView.swift in Sources */,
+				E2F3A4B5C6D7E8F9A0B1C2D3 /* RedactPhaseState.swift in Sources */,
+				E3F4A5B6C7D8E9F0A1B2C3D4 /* ImprovePhaseState.swift in Sources */,
+				E4F5A6B7C8D9E0F1A2B3C4D5 /* RestorePhaseState.swift in Sources */,
+				E5F6A7B8C9D0E1F2A3B4C5D6 /* HighlightCacheManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -516,7 +535,7 @@
 				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 3 Big Things. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.Redactor;
 				PRODUCT_NAME = Redactor;
@@ -536,7 +555,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.RedactorTests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
@@ -596,7 +615,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -655,7 +674,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -681,7 +700,7 @@
 				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 3 Big Things. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.Redactor;
 				PRODUCT_NAME = Redactor;
@@ -701,7 +720,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.RedactorTests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
@@ -750,6 +769,14 @@
 				version = 1.0.40;
 			};
 		};
+		A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 2.29.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -757,6 +784,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 117C3E2CDC8D8C97B6CB9ABE /* XCRemoteSwiftPackageReference "aws-sdk-swift" */;
 			productName = AWSBedrockRuntime;
+		};
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		E1F2A3B4C5D6E7F8A9B0C1D3 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

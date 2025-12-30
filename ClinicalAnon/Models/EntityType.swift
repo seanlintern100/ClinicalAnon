@@ -179,10 +179,23 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
 
     /// Generate a replacement code for this entity type
     /// - Parameter index: The index/counter for this entity (e.g., 0 for "A", 1 for "B")
-    /// - Returns: Formatted replacement code (e.g., "[CLIENT_A]")
+    /// - Returns: Formatted replacement code (e.g., "[CLIENT_A]", "[CLIENT_AA]" for index >= 26)
     func replacementCode(for index: Int) -> String {
-        let letter = String(UnicodeScalar(65 + index)!) // A=65, B=66, etc.
+        let letter = Self.indexToLetters(index)
         return "[\(replacementPrefix)_\(letter)]"
+    }
+
+    /// Convert an index to letter(s): 0→A, 25→Z, 26→AA, 27→AB, etc.
+    private static func indexToLetters(_ index: Int) -> String {
+        var result = ""
+        var n = index
+
+        repeat {
+            result = String(UnicodeScalar(65 + (n % 26))!) + result
+            n = n / 26 - 1
+        } while n >= 0
+
+        return result
     }
 
     /// Check if this entity type represents a person

@@ -234,7 +234,7 @@ struct RestorePhaseView_Previews: PreviewProvider {
         RestorePhaseView(viewModel: {
             let vm = WorkflowViewModel()
             vm.currentPhase = .restore
-            vm.finalRestoredText = "Sample restored text with names back in place."
+            vm.restoreState.finalRestoredText = "Sample restored text with names back in place."
             return vm
         }())
         .frame(width: 900, height: 600)

@@ -2,7 +2,7 @@
 //  LocalLLMSettingsView.swift
 //  Redactor
 //
-//  Purpose: Settings UI for local LLM PII review feature
+//  Purpose: Settings UI for local LLM PII review feature (MLX Swift)
 //  Organization: 3 Big Things
 //
 
@@ -12,8 +12,6 @@ struct LocalLLMSettingsView: View {
 
     @StateObject private var llmService = LocalLLMService.shared
     @AppStorage("localLLMEnabled") private var isEnabled: Bool = true
-    @State private var isTestingConnection: Bool = false
-    @State private var testResult: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
@@ -22,7 +20,7 @@ struct LocalLLMSettingsView: View {
                 Text("Local PII Review")
                     .font(DesignSystem.Typography.heading)
 
-                Text("Use a local AI model to scan redacted text for missed personal information.")
+                Text("Use a local AI model to scan redacted text for missed personal information. Models run entirely on your device.")
                     .font(DesignSystem.Typography.body)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
@@ -34,19 +32,17 @@ struct LocalLLMSettingsView: View {
 
             Divider()
 
-            // Model Selection (if available)
+            // Model Selection
             if llmService.isAvailable {
                 modelSelectionSection
                 Divider()
             }
 
-            // Setup Instructions or Launch Button
-            if !llmService.isAvailable {
-                if llmService.isOllamaInstalled {
-                    launchOllamaSection
-                } else {
-                    setupInstructionsSection
-                }
+            // Download/Load Section
+            if llmService.isAvailable {
+                modelLoadSection
+            } else {
+                notSupportedSection
             }
 
             Spacer()
@@ -65,42 +61,51 @@ struct LocalLLMSettingsView: View {
 
                 Spacer()
 
-                // Connection status indicator
+                // Status indicator
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(llmService.isAvailable ? Color.green : Color.red)
+                        .fill(statusColor)
                         .frame(width: 8, height: 8)
 
-                    Text(llmService.isAvailable ? "Connected" : "Not Connected")
+                    Text(statusText)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundColor(llmService.isAvailable ? .green : .red)
+                        .foregroundColor(statusColor)
                 }
-
-                // Test connection button
-                Button(action: testConnection) {
-                    if isTestingConnection {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    } else {
-                        Text("Test")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(isTestingConnection)
-            }
-
-            // Test result message
-            if let result = testResult {
-                Text(result)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(result.contains("Success") ? .green : .orange)
-                    .padding(.top, 4)
             }
 
             // Enable toggle
             Toggle("Enable local PII review", isOn: $isEnabled)
                 .font(DesignSystem.Typography.body)
                 .disabled(!llmService.isAvailable)
+
+            // Error message
+            if let error = llmService.lastError {
+                Text(error)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+
+    private var statusColor: Color {
+        if !llmService.isAvailable {
+            return .red
+        } else if llmService.isModelLoaded {
+            return .green
+        } else {
+            return .yellow
+        }
+    }
+
+    private var statusText: String {
+        if !llmService.isAvailable {
+            return "Not Supported"
+        } else if llmService.isModelLoaded {
+            return "Model Loaded"
+        } else if llmService.isDownloading {
+            return "Downloading..."
+        } else {
+            return "Model Not Loaded"
         }
     }
 
@@ -111,149 +116,174 @@ struct LocalLLMSettingsView: View {
             Text("Model")
                 .font(DesignSystem.Typography.subheading)
 
-            Picker("Select Model", selection: $llmService.selectedModel) {
-                ForEach(llmService.availableModels, id: \.self) { model in
-                    Text(model).tag(model)
-                }
+            ForEach(LocalLLMService.availableModels) { model in
+                modelRow(model)
             }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 300)
-
-            Text("Recommended: llama3.1:8b for best accuracy")
-                .font(DesignSystem.Typography.caption)
-                .foregroundColor(DesignSystem.Colors.textSecondary)
         }
     }
 
-    // MARK: - Launch Ollama Section
+    private func modelRow(_ model: LocalLLMModelInfo) -> some View {
+        let isSelected = llmService.selectedModelId == model.id
 
-    private var launchOllamaSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Ollama Not Running")
-                .font(DesignSystem.Typography.subheading)
+        return HStack(spacing: DesignSystem.Spacing.small) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+                .font(.system(size: 16))
 
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                Text("Ollama is installed but not running. Click the button below to start it.")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-
-            Button(action: launchOllama) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    if llmService.isLaunchingOllama {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "play.fill")
-                    }
-                    Text(llmService.isLaunchingOllama ? "Starting Ollama..." : "Start Ollama")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(llmService.isLaunchingOllama)
+                    Text(model.name)
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
 
-            if let error = llmService.lastError, !llmService.isAvailable {
-                Text(error)
+                    Text(model.size)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(DesignSystem.Colors.background)
+                        .cornerRadius(4)
+                }
+
+                Text(model.description)
                     .font(DesignSystem.Typography.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+
+            Spacer()
+        }
+        .padding(DesignSystem.Spacing.small)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                .fill(isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.1) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !llmService.isDownloading {
+                llmService.selectedModelId = model.id
             }
         }
-        .padding(DesignSystem.Spacing.medium)
-        .background(DesignSystem.Colors.background)
-        .cornerRadius(DesignSystem.CornerRadius.medium)
+        .disabled(llmService.isDownloading)
     }
 
-    // MARK: - Setup Instructions Section
+    // MARK: - Model Load Section
 
-    private var setupInstructionsSection: some View {
+    private var modelLoadSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Setup Required")
+            Text("Model Status")
+                .font(DesignSystem.Typography.subheading)
+
+            if llmService.isDownloading {
+                // Download progress
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    Text(llmService.downloadStatus)
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                    ProgressView(value: llmService.downloadProgress)
+                        .progressViewStyle(.linear)
+
+                    Text("\(Int(llmService.downloadProgress * 100))%")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .padding(DesignSystem.Spacing.medium)
+                .background(DesignSystem.Colors.background)
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+
+            } else if llmService.isModelLoaded {
+                // Model loaded
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Model Ready")
+                                .font(DesignSystem.Typography.body)
+                                .foregroundColor(.green)
+                        }
+
+                        if let modelInfo = llmService.selectedModelInfo {
+                            Text("\(modelInfo.name) is loaded and ready to use")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button(action: { llmService.unloadModel() }) {
+                        Text("Unload")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(DesignSystem.Spacing.medium)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+
+            } else {
+                // Model not loaded
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    if let modelInfo = llmService.selectedModelInfo {
+                        Text("Selected: \(modelInfo.name)")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        Text("The model will be downloaded automatically when you first use PII Review, or you can download it now.")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+
+                    Button(action: loadModel) {
+                        HStack {
+                            Image(systemName: "arrow.down.circle")
+                            Text("Download & Load Model")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(DesignSystem.Spacing.medium)
+                .background(DesignSystem.Colors.background)
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+            }
+        }
+    }
+
+    // MARK: - Not Supported Section
+
+    private var notSupportedSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+            Text("Apple Silicon Required")
                 .font(DesignSystem.Typography.subheading)
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                Text("To enable local PII review, you need to install Ollama:")
-                    .font(DesignSystem.Typography.body)
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("Local LLM requires an Apple Silicon Mac (M1, M2, M3, or M4)")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+
+                Text("This feature uses Metal Performance Shaders (MPS) which are only available on Apple Silicon.")
+                    .font(DesignSystem.Typography.caption)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    instructionRow(number: 1, text: "Download Ollama from ollama.com")
-                    instructionRow(number: 2, text: "Install the application")
-                    instructionRow(number: 3, text: "Open Terminal and run: ollama pull llama3.1:8b")
-                    instructionRow(number: 4, text: "Ollama will start automatically when needed")
-                }
-                .padding(.vertical, DesignSystem.Spacing.small)
             }
-
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                Button(action: openOllamaWebsite) {
-                    HStack {
-                        Image(systemName: "arrow.up.right.square")
-                        Text("Download Ollama")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button(action: { Task { await llmService.checkAvailability() } }) {
-                    HStack {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Refresh")
-                    }
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(DesignSystem.Spacing.medium)
-        .background(DesignSystem.Colors.background)
-        .cornerRadius(DesignSystem.CornerRadius.medium)
-    }
-
-    // MARK: - Helper Views
-
-    private func instructionRow(number: Int, text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("\(number).")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.primaryTeal)
-                .frame(width: 20, alignment: .trailing)
-
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+            .padding(DesignSystem.Spacing.medium)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(DesignSystem.CornerRadius.medium)
         }
     }
 
     // MARK: - Actions
 
-    private func testConnection() {
-        isTestingConnection = true
-        testResult = nil
-
+    private func loadModel() {
         Task {
-            await llmService.checkAvailability()
-
-            await MainActor.run {
-                isTestingConnection = false
-                if llmService.isAvailable {
-                    testResult = "Success! Found \(llmService.availableModels.count) model(s)"
-                } else {
-                    testResult = "Could not connect to Ollama"
-                }
+            do {
+                try await llmService.loadModel()
+            } catch {
+                // Error is already captured in llmService.lastError
             }
-        }
-    }
-
-    private func launchOllama() {
-        Task {
-            let success = await llmService.launchOllama()
-            if success {
-                testResult = "Success! Ollama is now running"
-            }
-        }
-    }
-
-    private func openOllamaWebsite() {
-        if let url = URL(string: "https://ollama.com") {
-            NSWorkspace.shared.open(url)
         }
     }
 }
@@ -264,7 +294,7 @@ struct LocalLLMSettingsView: View {
 struct LocalLLMSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         LocalLLMSettingsView()
-            .frame(width: 500, height: 400)
+            .frame(width: 500, height: 500)
     }
 }
 #endif

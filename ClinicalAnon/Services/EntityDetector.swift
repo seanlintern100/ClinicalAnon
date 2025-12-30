@@ -162,7 +162,7 @@ class EntityDetector {
             return .personClient
         case "person_provider", "provider_name", "provider", "doctor", "therapist":
             return .personProvider
-        case "person_other", "other_name", "person", "other_person":
+        case "person_other", "other_name", "person", "other_person", "name":
             return .personOther
         case "date", "specific_date":
             return .date

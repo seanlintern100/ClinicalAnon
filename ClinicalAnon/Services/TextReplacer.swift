@@ -50,71 +50,6 @@ class TextReplacer {
         return result
     }
 
-    /// DEPRECATED: Replace entities using LLM-provided positions
-    /// This method is unreliable because LLMs calculate character positions incorrectly
-    static func replaceEntitiesUsingPositions(in originalText: String, with entities: [Entity]) throws -> String {
-        guard !originalText.isEmpty else {
-            throw AppError.textValidationFailed("Original text is empty")
-        }
-
-        // If no entities, return original text
-        if entities.isEmpty {
-            return originalText
-        }
-
-        // Create list of all replacements (entity, position index)
-        var replacements: [(entity: Entity, positionIndex: Int, start: Int, end: Int)] = []
-
-        for entity in entities {
-            for (posIndex, position) in entity.positions.enumerated() {
-                guard position.count >= 2 else { continue }
-                replacements.append((
-                    entity: entity,
-                    positionIndex: posIndex,
-                    start: position[0],
-                    end: position[1]
-                ))
-            }
-        }
-
-        // Sort by position (reverse order to maintain indices)
-        replacements.sort { $0.start > $1.start }
-
-        // Check for overlaps
-        let overlaps = detectOverlaps(in: replacements)
-        if !overlaps.isEmpty {
-            throw AppError.textValidationFailed("Found \(overlaps.count) overlapping entities")
-        }
-
-        // Perform replacements
-        var result = originalText
-
-        for replacement in replacements {
-            let start = replacement.start
-            let end = replacement.end
-
-            // Validate bounds
-            guard start >= 0, end <= result.count, start < end else {
-                throw AppError.textValidationFailed("Invalid position [\(start), \(end)) for text length \(result.count)")
-            }
-
-            // Get indices
-            let startIndex = result.index(result.startIndex, offsetBy: start)
-            let endIndex = result.index(result.startIndex, offsetBy: end)
-
-            // Verify the text matches
-            let extractedText = String(result[startIndex..<endIndex])
-            if extractedText != replacement.entity.originalText {
-                throw AppError.textValidationFailed("Expected '\(replacement.entity.originalText)' at position \(start), found '\(extractedText)'")
-            }
-
-            // Replace
-            result.replaceSubrange(startIndex..<endIndex, with: replacement.entity.replacementCode)
-        }
-
-        return result
-    }
-
     /// Reverse replacement - restore original text from anonymized text
     /// - Parameters:
     ///   - anonymizedText: The anonymized text with replacement codes
@@ -180,7 +115,7 @@ class TextReplacer {
 
     /// Get all replacement codes present in text
     static func extractReplacementCodes(from text: String) -> [String] {
-        let pattern = "\\[([A-Z]+_[A-Z])\\]"
+        let pattern = "\\[([A-Z]+_[A-Z]+)\\]"  // Matches [TYPE_A], [TYPE_AA], [TYPE_AB], etc.
 
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return []
@@ -199,28 +134,7 @@ class TextReplacer {
         return Array(codes).sorted()
     }
 
-    // MARK: - Private Methods
-
-    /// Detect overlapping replacements
-    private static func detectOverlaps(
-        in replacements: [(entity: Entity, positionIndex: Int, start: Int, end: Int)]
-    ) -> [(Int, Int)] {
-        var overlaps: [(Int, Int)] = []
-
-        for i in 0..<replacements.count {
-            for j in (i + 1)..<replacements.count {
-                let r1 = replacements[i]
-                let r2 = replacements[j]
-
-                // Check if they overlap
-                if r1.start < r2.end && r2.start < r1.end {
-                    overlaps.append((i, j))
-                }
-            }
-        }
-
-        return overlaps
-    }
+    // MARK: - Statistics
 
     /// Calculate replacement statistics
     static func calculateStatistics(

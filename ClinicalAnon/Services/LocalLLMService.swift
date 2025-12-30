@@ -2,12 +2,14 @@
 //  LocalLLMService.swift
 //  Redactor
 //
-//  Purpose: Local LLM integration via Ollama for PII review
+//  Purpose: Local LLM integration via MLX Swift for PII review
 //  Organization: 3 Big Things
 //
 
 import Foundation
 import AppKit
+import MLXLLM
+import MLXLMCommon
 
 // MARK: - PII Finding
 
@@ -16,6 +18,15 @@ struct PIIFinding {
     let suggestedType: EntityType
     let reason: String
     let confidence: Double
+}
+
+// MARK: - Model Info
+
+struct LocalLLMModelInfo: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let size: String
+    let description: String
 }
 
 // MARK: - Local LLM Service
@@ -27,24 +38,52 @@ class LocalLLMService: ObservableObject {
 
     static let shared = LocalLLMService()
 
+    // MARK: - Available Models
+
+    static let availableModels: [LocalLLMModelInfo] = [
+        LocalLLMModelInfo(
+            id: "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
+            name: "Llama 3.1 8B (4-bit)",
+            size: "~4.5 GB",
+            description: "Best quality, recommended"
+        ),
+        LocalLLMModelInfo(
+            id: "mlx-community/Llama-3.2-3B-Instruct-4bit",
+            name: "Llama 3.2 3B (4-bit)",
+            size: "~1.8 GB",
+            description: "Faster, smaller"
+        ),
+        LocalLLMModelInfo(
+            id: "mlx-community/Qwen2.5-7B-Instruct-4bit",
+            name: "Qwen 2.5 7B (4-bit)",
+            size: "~4 GB",
+            description: "Good alternative"
+        )
+    ]
+
     // MARK: - Published Properties
 
     @Published var isAvailable: Bool = false
-    @Published var availableModels: [String] = []
-    @Published var selectedModel: String {
+    @Published var isModelLoaded: Bool = false
+    @Published var isDownloading: Bool = false
+    @Published var downloadProgress: Double = 0
+    @Published var downloadStatus: String = ""
+    @Published var selectedModelId: String {
         didSet {
-            UserDefaults.standard.set(selectedModel, forKey: "localLLMModel")
+            UserDefaults.standard.set(selectedModelId, forKey: "localLLMModelId")
+            // Unload current model when selection changes
+            if isModelLoaded {
+                unloadModel()
+            }
         }
     }
     @Published var isProcessing: Bool = false
     @Published var lastError: String?
-    @Published var isLaunchingOllama: Bool = false
 
     // MARK: - Private Properties
 
-    private let ollamaEndpoint = "http://127.0.0.1:11434"
-    private let defaultModel = "llama3.1:8b"
-    private let requestTimeout: TimeInterval = 300 // 5 minutes
+    private var modelContainer: ModelContainer?
+    private let defaultModelId = "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit"
 
     // MARK: - Prompt
 
@@ -71,108 +110,86 @@ class LocalLLMService: ObservableObject {
     // MARK: - Initialization
 
     private init() {
-        selectedModel = UserDefaults.standard.string(forKey: "localLLMModel") ?? defaultModel
-        Task {
-            await checkAvailability()
-        }
+        selectedModelId = UserDefaults.standard.string(forKey: "localLLMModelId") ?? defaultModelId
+        checkAvailability()
     }
 
     // MARK: - Public Methods
 
-    /// Check if Ollama is running and has models available
-    func checkAvailability() async {
-        print("LocalLLMService: Checking availability at \(ollamaEndpoint)")
+    /// Check if MLX is available (requires Apple Silicon)
+    func checkAvailability() {
+        // MLX requires Apple Silicon
+        #if arch(arm64)
+        isAvailable = true
+        print("LocalLLMService: MLX available on Apple Silicon")
+        #else
+        isAvailable = false
+        lastError = "MLX requires Apple Silicon (M1/M2/M3/M4)"
+        print("LocalLLMService: MLX not available - Intel Mac detected")
+        #endif
+    }
+
+    /// Get the selected model info
+    var selectedModelInfo: LocalLLMModelInfo? {
+        Self.availableModels.first { $0.id == selectedModelId }
+    }
+
+    /// Load the selected model (downloads if needed)
+    func loadModel() async throws {
+        guard isAvailable else {
+            throw LocalLLMError.notAvailable
+        }
+
+        if isModelLoaded && modelContainer != nil {
+            print("LocalLLMService: Model already loaded")
+            return
+        }
+
+        isDownloading = true
+        downloadProgress = 0
+        downloadStatus = "Preparing to download model..."
+        lastError = nil
+
+        defer {
+            isDownloading = false
+            downloadStatus = ""
+        }
+
+        print("LocalLLMService: Loading model: \(selectedModelId)")
+
         do {
-            let models = try await fetchAvailableModels()
-            availableModels = models
-            isAvailable = !models.isEmpty
-            print("LocalLLMService: Found \(models.count) models: \(models)")
+            let modelConfig = ModelConfiguration(id: selectedModelId)
 
-            // If selected model not in list, default to first available or default
-            if !models.contains(selectedModel) {
-                if models.contains(defaultModel) {
-                    selectedModel = defaultModel
-                } else if let first = models.first {
-                    selectedModel = first
+            // Load the model with progress tracking
+            let container = try await LLMModelFactory.shared.loadContainer(
+                configuration: modelConfig
+            ) { progress in
+                Task { @MainActor in
+                    self.downloadProgress = progress.fractionCompleted
+                    if progress.fractionCompleted < 1.0 {
+                        self.downloadStatus = "Downloading: \(Int(progress.fractionCompleted * 100))%"
+                    } else {
+                        self.downloadStatus = "Loading model..."
+                    }
                 }
             }
 
-            lastError = nil
+            self.modelContainer = container
+            self.isModelLoaded = true
+            print("LocalLLMService: Model loaded successfully")
+
         } catch {
-            print("LocalLLMService: Connection failed - \(error)")
-            isAvailable = false
-            availableModels = []
-            lastError = "Ollama not running: \(error.localizedDescription)"
+            print("LocalLLMService: Failed to load model: \(error)")
+            lastError = "Failed to load model: \(error.localizedDescription)"
+            throw LocalLLMError.modelLoadFailed(error.localizedDescription)
         }
     }
 
-    /// Launch Ollama application
-    func launchOllama() async -> Bool {
-        isLaunchingOllama = true
-        defer { isLaunchingOllama = false }
-
-        // Try to find and launch Ollama.app
-        let ollamaAppPaths = [
-            "/Applications/Ollama.app",
-            "\(NSHomeDirectory())/Applications/Ollama.app"
-        ]
-
-        var launched = false
-
-        for path in ollamaAppPaths {
-            let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: path) {
-                do {
-                    try await NSWorkspace.shared.openApplication(
-                        at: url,
-                        configuration: NSWorkspace.OpenConfiguration()
-                    )
-                    launched = true
-                    break
-                } catch {
-                    print("LocalLLMService: Failed to launch Ollama from \(path): \(error)")
-                }
-            }
-        }
-
-        if !launched {
-            // Try launching via bundle identifier
-            if let ollamaURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.ollama.ollama") {
-                do {
-                    try await NSWorkspace.shared.openApplication(
-                        at: ollamaURL,
-                        configuration: NSWorkspace.OpenConfiguration()
-                    )
-                    launched = true
-                } catch {
-                    print("LocalLLMService: Failed to launch Ollama via bundle ID: \(error)")
-                }
-            }
-        }
-
-        if launched {
-            // Wait for Ollama to start (up to 10 seconds)
-            for _ in 0..<20 {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second
-                await checkAvailability()
-                if isAvailable {
-                    return true
-                }
-            }
-        }
-
-        lastError = "Could not start Ollama. Please install it from ollama.com"
-        return false
-    }
-
-    /// Check if Ollama is installed
-    var isOllamaInstalled: Bool {
-        let paths = [
-            "/Applications/Ollama.app",
-            "\(NSHomeDirectory())/Applications/Ollama.app"
-        ]
-        return paths.contains { FileManager.default.fileExists(atPath: $0) }
-            || NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.ollama.ollama") != nil
+    /// Unload the current model to free memory
+    func unloadModel() {
+        modelContainer = nil
+        isModelLoaded = false
+        print("LocalLLMService: Model unloaded")
     }
 
     /// Review redacted text for missed PII
@@ -181,91 +198,72 @@ class LocalLLMService: ObservableObject {
             throw LocalLLMError.notAvailable
         }
 
+        // Load model if not already loaded
+        if !isModelLoaded {
+            try await loadModel()
+        }
+
+        guard let container = modelContainer else {
+            throw LocalLLMError.modelNotLoaded
+        }
+
         isProcessing = true
         defer { isProcessing = false }
 
         let fullPrompt = piiReviewPrompt + "\n\n" + text
         print("LocalLLMService: Starting PII review, prompt length: \(fullPrompt.count) chars")
-        print("LocalLLMService: Using model: \(selectedModel)")
+        print("LocalLLMService: Using model: \(selectedModelId)")
 
         let startTime = Date()
-        let response = try await sendPrompt(fullPrompt)
-        let elapsed = Date().timeIntervalSince(startTime)
-        print("LocalLLMService: Got response in \(String(format: "%.1f", elapsed))s, length: \(response.count) chars")
 
-        let findings = parseFindings(response: response)
-        print("LocalLLMService: Parsed \(findings.count) findings")
-        return findings
+        do {
+            // Create user input with chat messages
+            let messages: [Chat.Message] = [
+                .system("You are a PII detection assistant. Analyze text and report any personal identifiable information that was missed during redaction."),
+                .user(fullPrompt)
+            ]
+
+            let userInput = UserInput(prompt: .chat(messages))
+
+            // Generate response using the container
+            let responseText = try await container.perform { context in
+                // Prepare input
+                let lmInput = try await context.processor.prepare(input: userInput)
+
+                // Generate with parameters
+                let params = GenerateParameters(
+                    maxTokens: 2000,
+                    temperature: 0.1,
+                    topP: 0.9
+                )
+
+                var outputTokens = [Int]()
+                let result = try generate(
+                    input: lmInput,
+                    parameters: params,
+                    context: context
+                ) { tokens in
+                    outputTokens = tokens
+                    return .more
+                }
+
+                return result.output
+            }
+
+            let elapsed = Date().timeIntervalSince(startTime)
+            print("LocalLLMService: Got response in \(String(format: "%.1f", elapsed))s, length: \(responseText.count) chars")
+
+            let findings = parseFindings(response: responseText)
+            print("LocalLLMService: Parsed \(findings.count) findings")
+            return findings
+
+        } catch {
+            print("LocalLLMService: Generation failed: \(error)")
+            throw LocalLLMError.generationFailed(error.localizedDescription)
+        }
     }
 
     // MARK: - Private Methods
-
-    /// Fetch list of available models from Ollama
-    private func fetchAvailableModels() async throws -> [String] {
-        guard let url = URL(string: "\(ollamaEndpoint)/api/tags") else {
-            throw LocalLLMError.invalidURL
-        }
-
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw LocalLLMError.connectionFailed
-        }
-
-        struct ModelsResponse: Codable {
-            struct Model: Codable {
-                let name: String
-            }
-            let models: [Model]
-        }
-
-        let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
-        return decoded.models.map { $0.name }
-    }
-
-    /// Send prompt to Ollama and get response
-    private func sendPrompt(_ prompt: String) async throws -> String {
-        guard let url = URL(string: "\(ollamaEndpoint)/api/generate") else {
-            throw LocalLLMError.invalidURL
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = requestTimeout
-
-        struct GenerateRequest: Codable {
-            let model: String
-            let prompt: String
-            let stream: Bool
-        }
-
-        let requestBody = GenerateRequest(
-            model: selectedModel,
-            prompt: prompt,
-            stream: false
-        )
-
-        request.httpBody = try JSONEncoder().encode(requestBody)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw LocalLLMError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            throw LocalLLMError.requestFailed(statusCode: httpResponse.statusCode)
-        }
-
-        struct GenerateResponse: Codable {
-            let response: String
-        }
-
-        let decoded = try JSONDecoder().decode(GenerateResponse.self, from: data)
-        return decoded.response
-    }
 
     /// Parse LLM response into structured findings
     private func parseFindings(response: String) -> [PIIFinding] {
@@ -328,26 +326,20 @@ class LocalLLMService: ObservableObject {
 
 enum LocalLLMError: LocalizedError {
     case notAvailable
-    case invalidURL
-    case connectionFailed
-    case invalidResponse
-    case requestFailed(statusCode: Int)
-    case timeout
+    case modelNotLoaded
+    case modelLoadFailed(String)
+    case generationFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .notAvailable:
-            return "Local LLM is not available. Please start Ollama."
-        case .invalidURL:
-            return "Invalid Ollama endpoint URL."
-        case .connectionFailed:
-            return "Could not connect to Ollama. Is it running?"
-        case .invalidResponse:
-            return "Invalid response from Ollama."
-        case .requestFailed(let statusCode):
-            return "Request failed with status code: \(statusCode)"
-        case .timeout:
-            return "Request timed out. The model may be loading."
+            return "Local LLM requires Apple Silicon (M1/M2/M3/M4)."
+        case .modelNotLoaded:
+            return "Model is not loaded. Please load the model first."
+        case .modelLoadFailed(let reason):
+            return "Failed to load model: \(reason)"
+        case .generationFailed(let reason):
+            return "Text generation failed: \(reason)"
         }
     }
 }
