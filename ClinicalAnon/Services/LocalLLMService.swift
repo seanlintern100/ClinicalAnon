@@ -270,6 +270,8 @@ class LocalLLMService: ObservableObject {
 
             Your task: Find ONLY plain text PII that was MISSED - names, emails, phones, addresses that appear WITHOUT brackets.
 
+            Include international names (European, Asian, Māori) and multi-part surnames like "de Groot", "van der Berg".
+
             Format: TYPE|exact text|reason
             If all PII is already redacted: NO_ISSUES_FOUND
 
