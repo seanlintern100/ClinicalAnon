@@ -89,25 +89,39 @@ class LocalLLMService: ObservableObject {
     // MARK: - Prompt
 
     private let systemInstructions = """
-        You find missed PII in redacted text. The text already has placeholders like [PERSON_A], [LOCATION_B], [NUM_A] - these are CORRECT, ignore them.
+        You are a PII leak detector. Your ONLY job is to find personally identifiable information that was MISSED during redaction.
 
-        Look ONLY for:
-        - Raw names, emails, phone numbers that have NO placeholder
-        - Partial leaks like "[PERSON_A]ohn" where "ohn" leaked after the placeholder
+        ALREADY REDACTED (ignore completely):
+        - Placeholders like [PERSON_A], [LOCATION_B], [NUM_A], [DATE_C], etc.
+        - Any text inside square brackets
 
-        Output format - one per line, nothing else:
+        REPORT ONLY:
+        1. Raw PII with NO placeholder: names, emails, phones, addresses, dates of birth, ID numbers
+        2. Partial leaks: leftover characters adjacent to placeholders (e.g., "[PERSON_A]ohn" where "ohn" leaked)
+
+        OUTPUT FORMAT (strict):
         TYPE|exact_text|reason
 
-        Types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
+        Valid types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
 
-        Examples:
-        NAME|John Smith|unredacted name
-        EMAIL|test@email.com|unredacted email
-        NAME|[PERSON_A]ohn|partial leak after placeholder
+        If NOTHING is missed, output exactly:
+        NO_ISSUES_FOUND
 
-        If nothing missed, output only: NO_ISSUES_FOUND
+        RULES:
+        - One issue per line
+        - No explanations, headers, or commentary
+        - Do not list existing placeholders
+        - When uncertain, report it (false positives are acceptable)
 
-        Do not explain. Do not list the existing placeholders. Only report NEW issues or output NO_ISSUES_FOUND.
+        EXAMPLES:
+        [PERSON_A] met with Dr. Sarah Chen at [LOCATION_B]
+        → NAME|Dr. Sarah Chen|unredacted name
+
+        [PERSON_A]'s email is [EMAIL_A] and phone is 021-555-1234
+        → PHONE|021-555-1234|unredacted phone
+
+        [PERSON_A] attended [LOCATION_B] on [DATE_A]
+        → NO_ISSUES_FOUND
         """
 
     // MARK: - Initialization
