@@ -736,10 +736,6 @@ struct PromptEditorSheet: View {
                     .font(DesignSystem.Typography.subheading)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
-                Text("Use {formality_text}, {detail_text}, {structure_text} as placeholders for slider values.")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
                 TextEditor(text: $editedPrompt)
                     .font(.system(size: 13, design: .monospaced))
                     .frame(minHeight: 200)
