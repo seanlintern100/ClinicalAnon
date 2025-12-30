@@ -24,6 +24,10 @@ struct ClinicalAnonApp: App {
         WindowGroup {
             MainContentView()
                 .environmentObject(viewModel)
+                .task {
+                    // Pre-load LLM model in background (only if already cached)
+                    await LocalLLMService.shared.preloadIfCached()
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 700)

@@ -151,6 +151,32 @@ class LocalLLMService: ObservableObject {
         Self.availableModels.first { $0.id == selectedModelId }
     }
 
+    /// Check if the selected model is cached on disk (without loading it)
+    var isModelCached: Bool {
+        // MLX models are cached in HuggingFace Hub cache directory
+        let cacheDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/huggingface/hub")
+
+        // Model ID like "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit"
+        // becomes folder like "models--mlx-community--Meta-Llama-3.1-8B-Instruct-4bit"
+        let modelFolderName = "models--\(selectedModelId.replacingOccurrences(of: "/", with: "--"))"
+        let modelPath = cacheDir.appendingPathComponent(modelFolderName)
+
+        return FileManager.default.fileExists(atPath: modelPath.path)
+    }
+
+    /// Pre-load model in background (only if cached, won't trigger download)
+    func preloadIfCached() async {
+        guard isAvailable, isModelCached, !isModelLoaded else { return }
+
+        do {
+            try await loadModel()
+            print("LocalLLMService: Model pre-loaded successfully")
+        } catch {
+            print("LocalLLMService: Pre-load failed: \(error.localizedDescription)")
+        }
+    }
+
     /// Load the selected model (downloads if needed)
     func loadModel() async throws {
         guard isAvailable else {
