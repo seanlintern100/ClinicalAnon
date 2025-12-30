@@ -501,40 +501,47 @@ private struct HighlightedDocument: View {
     let text: String
     let changedLineIndices: Set<Int>
 
+    // Pre-compute lines once
+    private var lines: [(index: Int, content: String)] {
+        text.components(separatedBy: .newlines).enumerated().map { ($0.offset, $0.element) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(text.components(separatedBy: .newlines).enumerated()), id: \.offset) { index, line in
-                let isChanged = changedLineIndices.contains(index)
-
-                if let attributedString = try? AttributedString(markdown: line.isEmpty ? " " : line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-                    Text(attributedString)
-                        .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(
-                            isChanged
-                                ? DesignSystem.Colors.primaryTeal.opacity(0.15)
-                                : Color.clear
-                        )
-                        .cornerRadius(2)
-                } else {
-                    Text(line.isEmpty ? " " : line)
-                        .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(
-                            isChanged
-                                ? DesignSystem.Colors.primaryTeal.opacity(0.15)
-                                : Color.clear
-                        )
-                        .cornerRadius(2)
-                }
+            ForEach(lines, id: \.index) { index, line in
+                HighlightedLine(
+                    line: line,
+                    isChanged: changedLineIndices.contains(index)
+                )
             }
         }
+    }
+}
+
+// Separate view for each line to minimize re-renders
+private struct HighlightedLine: View {
+    let line: String
+    let isChanged: Bool
+
+    var body: some View {
+        Group {
+            if let attributedString = try? AttributedString(markdown: line.isEmpty ? " " : line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                Text(attributedString)
+            } else {
+                Text(line.isEmpty ? " " : line)
+            }
+        }
+        .font(.system(size: 14))
+        .foregroundColor(DesignSystem.Colors.textPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(
+            isChanged
+                ? DesignSystem.Colors.primaryTeal.opacity(0.15)
+                : Color.clear
+        )
+        .cornerRadius(2)
     }
 }
 
