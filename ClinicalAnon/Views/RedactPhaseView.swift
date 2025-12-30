@@ -82,26 +82,6 @@ struct RedactPhaseView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
-
-                // MARK: - LLM TEST FEATURE (can be deleted)
-                Button(action: { Task { await viewModel.analyzeWithLLMTest() } }) {
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        if viewModel.isLLMTesting {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .frame(width: 14, height: 14)
-                        } else {
-                            Image(systemName: "brain")
-                                .frame(width: 14, height: 14)
-                        }
-                        Text(viewModel.isLLMTesting ? "Testing..." : "LLM Test")
-                            .frame(minWidth: 60)
-                    }
-                    .font(DesignSystem.Typography.caption)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .disabled(viewModel.inputText.isEmpty || viewModel.isLLMTesting)
             }
             .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)
@@ -276,6 +256,24 @@ struct RedactPhaseView: View {
                             .help("Scan for missed PII using local AI")
                         }
 
+                        // Deep Scan button (always available after analysis)
+                        Button(action: { Task { await viewModel.runDeepScan() } }) {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                if viewModel.isRunningDeepScan {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .frame(width: 14, height: 14)
+                                } else {
+                                    Image(systemName: "globe")
+                                }
+                                Text("Deep Scan")
+                            }
+                            .font(DesignSystem.Typography.body)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(viewModel.isRunningDeepScan)
+                        .help("Scan for foreign names and hard-to-capture terms")
+
                         Button(action: { viewModel.continueToNextPhase() }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
                                 Text("Continue")
@@ -354,6 +352,18 @@ private struct RedactEntitySidebar: View {
                             )
                         }
 
+                        // Show Deep Scan section if there are deep scan findings
+                        if !viewModel.deepScanFindings.isEmpty {
+                            EntityTypeSection(
+                                title: "Deep Scan Findings",
+                                icon: "globe",
+                                color: .purple,
+                                entities: viewModel.deepScanFindings,
+                                viewModel: viewModel,
+                                isAISection: true  // Reuse AI section styling
+                            )
+                        }
+
                         // Group entities by type
                         ForEach(groupedEntityTypes, id: \.self) { entityType in
                             let entities = entitiesForType(entityType)
@@ -398,10 +408,11 @@ private struct RedactEntitySidebar: View {
         [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
     }
 
-    /// Get entities for a specific type (excluding AI findings to avoid duplicates)
+    /// Get entities for a specific type (excluding AI and Deep Scan findings to avoid duplicates)
     private func entitiesForType(_ type: EntityType) -> [Entity] {
         let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
-        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) }
+        let deepScanIds = Set(viewModel.deepScanFindings.map { $0.id })
+        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) && !deepScanIds.contains($0.id) }
     }
 }
 

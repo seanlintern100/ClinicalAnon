@@ -39,6 +39,11 @@ class RedactPhaseState: ObservableObject {
     @Published var piiReviewError: String?
     private var entitiesToRemove: Set<UUID> = []
 
+    // Deep scan for foreign names
+    @Published var deepScanFindings: [Entity] = []
+    @Published var isRunningDeepScan: Bool = false
+    @Published var deepScanError: String?
+
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
     @Published var hasPendingChanges: Bool = false
@@ -74,11 +79,11 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review findings)
+    /// All entities (detected + custom + PII review + deep scan findings)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings }
+        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings }
         let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings
+        return baseEntities + customEntities + piiReviewFindings + deepScanFindings
     }
 
     /// Only active entities (not excluded)
@@ -159,9 +164,12 @@ class RedactPhaseState: ObservableObject {
         _excludedIds.removeAll()
         customEntities.removeAll()
         piiReviewFindings.removeAll()
+        deepScanFindings.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
+        isRunningDeepScan = false
+        deepScanError = nil
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -375,6 +383,89 @@ class RedactPhaseState: ObservableObject {
             }
         }
         return nil
+    }
+
+    // MARK: - Deep Scan
+
+    /// Run aggressive NER to catch foreign names and hard-to-capture terms
+    func runDeepScan() async {
+        guard let result = result else {
+            deepScanError = "Please analyze text first"
+            return
+        }
+
+        isRunningDeepScan = true
+        deepScanError = nil
+        successMessage = "Running deep scan for foreign names..."
+
+        // Run on background thread to avoid blocking UI
+        let originalText = result.originalText
+        let existingTexts = Set(allEntities.map { $0.originalText.lowercased() })
+
+        let findings = await Task.detached(priority: .userInitiated) {
+            let recognizer = DeepScanRecognizer()
+            return recognizer.recognize(in: originalText)
+        }.value
+
+        await MainActor.run {
+            processDeepScanFindings(findings, originalText: originalText, existingTexts: existingTexts)
+            isRunningDeepScan = false
+
+            if deepScanFindings.isEmpty {
+                successMessage = "Deep scan complete - no additional names found"
+            } else {
+                successMessage = "Deep scan found \(deepScanFindings.count) potential name(s)"
+            }
+            autoHideSuccess()
+            redactedTextNeedsUpdate = true
+        }
+    }
+
+    private func processDeepScanFindings(_ findings: [Entity], originalText: String, existingTexts: Set<String>) {
+        var newEntities: [Entity] = []
+
+        for finding in findings {
+            // Skip if text already exists in current entities
+            guard !existingTexts.contains(finding.originalText.lowercased()) else {
+                continue
+            }
+
+            // Skip if already added in this batch
+            guard !newEntities.contains(where: { $0.originalText.lowercased() == finding.originalText.lowercased() }) else {
+                continue
+            }
+
+            // Skip if text is substring of existing entity or vice versa
+            var isSubstring = false
+            for existingText in existingTexts {
+                if finding.originalText.lowercased().contains(existingText) ||
+                   existingText.contains(finding.originalText.lowercased()) {
+                    isSubstring = true
+                    break
+                }
+            }
+            guard !isSubstring else { continue }
+
+            // Find all occurrences in original text
+            let positions = findAllOccurrences(of: finding.originalText, in: originalText)
+            guard !positions.isEmpty else { continue }
+
+            // Get next available replacement code
+            let existingCount = allEntities.filter { $0.type == finding.type }.count + newEntities.filter { $0.type == finding.type }.count
+            let code = finding.type.replacementCode(for: existingCount)
+
+            let entity = Entity(
+                originalText: finding.originalText,
+                replacementCode: code,
+                type: finding.type,
+                positions: positions,
+                confidence: finding.confidence
+            )
+
+            newEntities.append(entity)
+        }
+
+        deepScanFindings = newEntities
     }
 
     // MARK: - Copy Actions
