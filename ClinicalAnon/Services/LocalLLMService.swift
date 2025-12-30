@@ -42,7 +42,7 @@ class LocalLLMService: ObservableObject {
 
     // MARK: - Private Properties
 
-    private let ollamaEndpoint = "http://localhost:11434"
+    private let ollamaEndpoint = "http://127.0.0.1:11434"
     private let defaultModel = "llama3.1:8b"
     private let requestTimeout: TimeInterval = 180 // 3 minutes
 
@@ -81,10 +81,12 @@ class LocalLLMService: ObservableObject {
 
     /// Check if Ollama is running and has models available
     func checkAvailability() async {
+        print("LocalLLMService: Checking availability at \(ollamaEndpoint)")
         do {
             let models = try await fetchAvailableModels()
             availableModels = models
             isAvailable = !models.isEmpty
+            print("LocalLLMService: Found \(models.count) models: \(models)")
 
             // If selected model not in list, default to first available or default
             if !models.contains(selectedModel) {
@@ -97,9 +99,10 @@ class LocalLLMService: ObservableObject {
 
             lastError = nil
         } catch {
+            print("LocalLLMService: Connection failed - \(error)")
             isAvailable = false
             availableModels = []
-            lastError = "Ollama not running"
+            lastError = "Ollama not running: \(error.localizedDescription)"
         }
     }
 
