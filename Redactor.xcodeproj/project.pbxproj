@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		047A4256A36B91FEE8806193 /* SourceSans3-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */; };
 		0688AF41B2C3D4E5F6A7B8C9 /* AllNumbersRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */; };
+		0699BF52C3D4E5F6A7B8C9D1 /* EmailRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */; };
 		0703EA34A5DE292DBF3FF3D5 /* NZMedicalIDRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EE4A37A7BD54B6C0B78ECE /* NZMedicalIDRecognizer.swift */; };
 		07D7D707919079AFA4C8F51B /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA72D874BD6FB4834486B29F /* MainContentView.swift */; };
 		09AB519352E1961CF8BF9C2D /* RelationshipNameExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8438D6480E77924BABFCA894 /* RelationshipNameExtractor.swift */; };
@@ -79,6 +80,7 @@
 /* Begin PBXFileReference section */
 		01915D69A51DDDEA81FD955A /* EntityType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityType.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllNumbersRecognizer.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailRecognizer.swift; sourceTree = "<group>"; };
 		06463A5E2CDA5C7A80638837 /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
 		0930F3E57AF670171CFA140C /* DateRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateRecognizer.swift; sourceTree = "<group>"; };
 		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */,
 				DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */,
 				0930F3E57AF670171CFA140C /* DateRecognizer.swift */,
+				B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */,
 				AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */,
 				39842730A81E3E5F5BF42B6C /* NZAddressRecognizer.swift */,
 				E8EE4A37A7BD54B6C0B78ECE /* NZMedicalIDRecognizer.swift */,
@@ -432,6 +435,7 @@
 				FD5A5AA7FF1DD4EB05258D63 /* AIAssistantService.swift in Sources */,
 				9094D00F5F346077DEADC784 /* AISettingsView.swift in Sources */,
 				0688AF41B2C3D4E5F6A7B8C9 /* AllNumbersRecognizer.swift in Sources */,
+				0699BF52C3D4E5F6A7B8C9D1 /* EmailRecognizer.swift in Sources */,
 				9E144935796D58A6F68EAF3D /* AWSCredentialsManager.swift in Sources */,
 				534A7B988D2B0102C9515806 /* ActionBar.swift in Sources */,
 				2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */,

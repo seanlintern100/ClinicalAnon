@@ -31,7 +31,8 @@ class SwiftNERService {
             NZPhoneRecognizer(),           // NZ phone numbers
             NZMedicalIDRecognizer(),       // NHI, ACC case numbers
             NZAddressRecognizer(),         // NZ addresses and suburbs
-            DateRecognizer()               // Date patterns
+            DateRecognizer(),              // Date patterns
+            EmailRecognizer()              // Email addresses
         ]
 
         // Add catch-all number recognizer if enabled (default: ON)
