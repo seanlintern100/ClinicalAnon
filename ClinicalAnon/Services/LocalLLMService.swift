@@ -271,22 +271,27 @@ class LocalLLMService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        // Prompt without concrete examples (prevents hallucination of example names)
+        // Clear prompt that distinguishes placeholders from real PII
         let prompt = """
-            Review this redacted text for any PII that was missed. The text uses placeholders like [PERSON_A], [LOCATION_B], etc.
+            TASK: Find any UNREDACTED personal information in this text.
 
-            Look for:
-            - Unredacted names, emails, phone numbers, addresses
-            - Partial leaks where text appears after a placeholder
+            ALREADY REDACTED (IGNORE THESE):
+            - Anything in square brackets like [PERSON_A], [LOCATION_B], [DATE_C] - these are fine
+            - Do NOT report placeholders - they are already anonymized
 
-            For each issue found, output one line:
-            TYPE|the exact text|brief reason
+            FIND ONLY:
+            - Real names like "John Smith" or "Sarah" that are NOT in brackets
+            - Real emails like "name@domain.com"
+            - Real phone numbers, addresses, dates that are NOT in brackets
 
-            Valid types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
+            OUTPUT FORMAT (one per line):
+            TYPE|exact unredacted text|reason
 
-            If nothing was missed, respond with only: NO_ISSUES_FOUND
+            Types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
 
-            Text:
+            If everything is properly redacted, respond: NO_ISSUES_FOUND
+
+            TEXT TO REVIEW:
             \(text)
             """
         print("LocalLLMService: Starting PII review, prompt length: \(prompt.count) chars")
