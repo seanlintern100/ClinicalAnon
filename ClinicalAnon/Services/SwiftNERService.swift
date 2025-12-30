@@ -136,7 +136,7 @@ class SwiftNERService {
     /// Scan text for all occurrences of detected name entities
     /// Ensures names detected in one context are replaced everywhere (e.g., "Mark:" headings)
     private func scanForAllOccurrences(_ entities: [Entity], in text: String) -> [Entity] {
-        return entities.map { entity in
+        var result = entities.map { entity -> Entity in
             // Only scan for person name types
             guard entity.type == .personClient ||
                   entity.type == .personProvider ||
@@ -170,6 +170,153 @@ class SwiftNERService {
 
             return entity
         }
+
+        // Extend person names with following surnames at all positions
+        let extendedNames = extendNamesWithSurnames(result, in: text)
+        result.append(contentsOf: extendedNames)
+
+        return result
+    }
+
+    // MARK: - Surname Extension
+
+    /// Extend person name entities with following surnames at each position
+    /// Handles cases where "Hayden" is found but "Hooper" follows and wasn't joined
+    private func extendNamesWithSurnames(_ entities: [Entity], in text: String) -> [Entity] {
+        var newEntities: [Entity] = []
+
+        // Collect all existing full names to avoid duplicates
+        let existingNames = Set(entities.map { $0.originalText.lowercased() })
+
+        for entity in entities {
+            // Only extend person names
+            guard entity.type == .personOther ||
+                  entity.type == .personClient ||
+                  entity.type == .personProvider else { continue }
+
+            // Check each position for a following surname
+            for position in entity.positions {
+                guard position.count >= 2 else { continue }
+                let endIdx = position[1]
+
+                if let surname = findFollowingSurname(after: endIdx, in: text) {
+                    let fullName = entity.originalText + " " + surname
+
+                    // Only add if no entity already covers this full name
+                    guard !existingNames.contains(fullName.lowercased()) else { continue }
+
+                    // Check we haven't already added this full name
+                    guard !newEntities.contains(where: { $0.originalText.lowercased() == fullName.lowercased() }) else { continue }
+
+                    // Find ALL occurrences of this full name in text
+                    var fullNamePositions: [[Int]] = []
+                    var searchStart = text.startIndex
+
+                    while let range = text.range(of: fullName, range: searchStart..<text.endIndex) {
+                        let start = text.distance(from: text.startIndex, to: range.lowerBound)
+                        let end = text.distance(from: text.startIndex, to: range.upperBound)
+                        fullNamePositions.append([start, end])
+                        searchStart = range.upperBound
+                    }
+
+                    guard !fullNamePositions.isEmpty else { continue }
+
+                    newEntities.append(Entity(
+                        originalText: fullName,
+                        replacementCode: "",
+                        type: entity.type,
+                        positions: fullNamePositions,
+                        confidence: entity.confidence ?? 0.7
+                    ))
+
+                    #if DEBUG
+                    print("  ✓ Extended '\(entity.originalText)' to '\(fullName)' (\(fullNamePositions.count) occurrences)")
+                    #endif
+                }
+            }
+        }
+
+        return newEntities
+    }
+
+    /// Find a surname following a name at the given position
+    private func findFollowingSurname(after endIndex: Int, in text: String) -> String? {
+        guard endIndex < text.count else { return nil }
+
+        let startIdx = text.index(text.startIndex, offsetBy: endIndex)
+
+        // Check if followed by whitespace (space or tab)
+        guard startIdx < text.endIndex, text[startIdx].isWhitespace else { return nil }
+
+        // Skip whitespace to get to the next word
+        var afterWhitespace = text.index(after: startIdx)
+        while afterWhitespace < text.endIndex && text[afterWhitespace].isWhitespace {
+            afterWhitespace = text.index(after: afterWhitespace)
+        }
+        guard afterWhitespace < text.endIndex else { return nil }
+
+        // Find the end of the next word
+        var wordEnd = afterWhitespace
+        while wordEnd < text.endIndex && text[wordEnd].isLetter {
+            wordEnd = text.index(after: wordEnd)
+        }
+
+        guard wordEnd > afterWhitespace else { return nil }
+
+        let nextWord = String(text[afterWhitespace..<wordEnd])
+
+        // Check if it looks like a surname:
+        // - Starts with uppercase
+        // - At least 2 characters
+        // - Not a common word or clinical term
+        guard nextWord.count >= 2,
+              nextWord.first?.isUppercase == true,
+              !isCommonWord(nextWord),
+              !isClinicalTerm(nextWord) else {
+            return nil
+        }
+
+        return nextWord
+    }
+
+    /// Check if a word is a common English word (not a name)
+    private func isCommonWord(_ word: String) -> Bool {
+        let commonWords: Set<String> = [
+            "the", "a", "an", "and", "but", "or", "nor", "for", "yet", "so",
+            "in", "on", "at", "to", "from", "with", "by", "of", "about",
+            "he", "she", "it", "they", "we", "you", "i",
+            "him", "her", "them", "us", "me",
+            "his", "its", "their", "our", "your", "my",
+            "is", "was", "are", "were", "be", "been", "being",
+            "have", "has", "had", "do", "does", "did",
+            "this", "that", "these", "those",
+            "when", "where", "what", "which", "who", "why", "how",
+            "patient", "treatment", "therapy", "care", "health",
+            "medical", "clinical", "hospital", "clinic", "doctor",
+            "mother", "father", "sister", "brother", "son", "daughter",
+            "wife", "husband", "partner", "friend", "family", "whanau"
+        ]
+        return commonWords.contains(word.lowercased())
+    }
+
+    /// Check if a word is a clinical term to exclude
+    private func isClinicalTerm(_ word: String) -> Bool {
+        let clinicalTerms: Set<String> = [
+            "GP", "MDT", "AOD", "ACC", "DHB", "ED", "ICU", "OT", "PT",
+            "CBT", "DBT", "ACT", "EMDR", "MI", "MH", "MHA", "MOH",
+            "ADHD", "ADD", "ASD", "OCD", "PTSD", "GAD", "MDD", "BPD",
+            "DSM", "ICD", "Dx", "Rx", "Tx", "Hx", "Sx", "PRN",
+            "TBI", "CVA", "MS", "CP", "LD", "ID", "ABI",
+            "NGO", "MOE", "MSD", "WINZ", "CYF",
+            "NZ", "USA", "UK", "AU",
+            "Client", "Supplier", "Provider", "Participant", "Claimant",
+            "Referrer", "Coordinator", "Author", "Reviewer", "Approver",
+            "Name", "Address", "Phone", "Email", "Contact", "Details",
+            "Number", "Date", "Claim", "Reference", "Report", "File",
+            "Current", "Background", "History", "Plan", "Goals", "Progress",
+            "Summary", "Recommendations", "Actions", "Notes", "Comments"
+        ]
+        return clinicalTerms.contains(word) || clinicalTerms.contains(word.uppercased())
     }
 
     // MARK: - Overlap Removal
