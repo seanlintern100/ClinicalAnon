@@ -84,6 +84,71 @@ struct DocumentType: Identifiable, Codable, Equatable {
         return prompt
     }
 
+    // MARK: - Template Editing Helpers
+
+    /// The style block that gets injected into templates (controlled by sliders)
+    static let styleBlockTemplate = """
+        Tone: {formality_text}
+        Detail: {detail_text}
+        Structure: {structure_text}
+        """
+
+    /// Strip the style block from a template for display in editor
+    /// Users shouldn't edit these lines as they're controlled by sliders
+    static func stripStyleBlock(from template: String) -> String {
+        var lines = template.components(separatedBy: "\n")
+
+        // Find and remove the style lines
+        lines = lines.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.hasPrefix("Tone: {formality_text}") &&
+                   !trimmed.hasPrefix("Detail: {detail_text}") &&
+                   !trimmed.hasPrefix("Structure: {structure_text}")
+        }
+
+        // Clean up any resulting double blank lines
+        var result: [String] = []
+        var lastWasBlank = false
+        for line in lines {
+            let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
+            if isBlank && lastWasBlank {
+                continue // Skip consecutive blank lines
+            }
+            result.append(line)
+            lastWasBlank = isBlank
+        }
+
+        return result.joined(separator: "\n")
+    }
+
+    /// Inject the style block back into a template after editing
+    /// Inserts after the first line (the role statement)
+    static func injectStyleBlock(into template: String) -> String {
+        var lines = template.components(separatedBy: "\n")
+
+        // Find insertion point - after first non-empty line
+        var insertIndex = 1
+        for (index, line) in lines.enumerated() {
+            if !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                insertIndex = index + 1
+                break
+            }
+        }
+
+        // Insert blank line, style block, blank line
+        let styleLines = [
+            "",
+            "Tone: {formality_text}",
+            "Detail: {detail_text}",
+            "Structure: {structure_text}",
+            ""
+        ]
+
+        lines.insert(contentsOf: styleLines, at: min(insertIndex, lines.count))
+
+        return lines.joined(separator: "\n")
+    }
+
     // MARK: - Built-in Types
 
     static let notes = DocumentType(

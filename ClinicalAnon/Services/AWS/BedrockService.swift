@@ -15,36 +15,111 @@ class BedrockService: ObservableObject {
 
     // MARK: - Proxy Configuration
 
-    /// Lambda proxy endpoint - API key provides authentication
+    /// Lambda proxy endpoint for Bedrock calls
     private let proxyEndpoint = "https://h9zrh24qaj.execute-api.ap-southeast-2.amazonaws.com/prod/invoke"
-    private let apiKey = "hDHmW8hx8CGc7pibLcHkaOGBMzRRE6v2UAJnwfT7"
+
+    /// Endpoint to fetch current API key (rotates weekly)
+    private let getKeyEndpoint = "https://h9zrh24qaj.execute-api.ap-southeast-2.amazonaws.com/prod/get-api-key"
+
+    /// Bundle ID sent to validate app identity
+    private let bundleId = Bundle.main.bundleIdentifier ?? "com.3bigthings.Redactor"
 
     // MARK: - Properties
 
-    @Published var isConfigured: Bool = true  // Always configured with proxy
+    @Published var isConfigured: Bool = false
     @Published var lastError: BedrockError?
+
+    /// Cached API key (fetched on init)
+    private var apiKey: String?
 
     // MARK: - Initialization
 
     init() {
-        // No configuration needed - proxy handles AWS auth
+        // Fetch API key on initialization
+        Task {
+            await fetchApiKey()
+        }
+    }
+
+    // MARK: - API Key Fetching
+
+    /// Fetch the current API key from the secure endpoint
+    private func fetchApiKey() async {
+        guard let url = URL(string: getKeyEndpoint) else {
+            lastError = .configurationFailed("Invalid get-key URL")
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id")
+        request.timeoutInterval = 10
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                lastError = .configurationFailed("Invalid response")
+                return
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                lastError = .configurationFailed("Failed to fetch API key: \(httpResponse.statusCode)")
+                return
+            }
+
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let key = json["apiKey"] as? String else {
+                lastError = .configurationFailed("Invalid API key response")
+                return
+            }
+
+            apiKey = key
+            isConfigured = true
+            lastError = nil
+
+        } catch {
+            lastError = .configurationFailed("Network error: \(error.localizedDescription)")
+        }
+    }
+
+    /// Manually refresh the API key (if needed)
+    func refreshApiKey() async {
+        await fetchApiKey()
     }
 
     // MARK: - Configuration (kept for API compatibility)
 
     /// Configure the service - no-op with proxy, kept for compatibility
     func configure(with credentials: AWSCredentials) async throws {
-        // No configuration needed with proxy
-        isConfigured = true
+        // Ensure we have an API key
+        if apiKey == nil {
+            await fetchApiKey()
+        }
+
+        if apiKey == nil {
+            throw BedrockError.notConfigured
+        }
     }
 
     /// Test the connection with a simple request
     func testConnection() async throws -> Bool {
+        // Ensure we have an API key first
+        if apiKey == nil {
+            await fetchApiKey()
+        }
+
+        guard apiKey != nil else {
+            throw BedrockError.notConfigured
+        }
+
         let testMessages = [["role": "user", "content": "Say 'ok'"]]
 
         do {
+            // Use Sonnet 4 for connection test (Haiku may have access restrictions)
             let _ = try await callProxy(
-                model: "apac.anthropic.claude-3-5-haiku-20241022-v1:0",
+                model: "apac.anthropic.claude-sonnet-4-20250514-v1:0",
                 messages: testMessages,
                 systemPrompt: nil,
                 maxTokens: 10
@@ -80,6 +155,15 @@ class BedrockService: ObservableObject {
         model: String,
         maxTokens: Int = 4096
     ) async throws -> String {
+
+        // Ensure we have an API key
+        if apiKey == nil {
+            await fetchApiKey()
+        }
+
+        guard apiKey != nil else {
+            throw BedrockError.notConfigured
+        }
 
         // Convert ChatMessage array to dictionary array for JSON
         let messageArray = messages.map { ["role": $0.role.rawValue, "content": $0.content] }
@@ -131,6 +215,16 @@ class BedrockService: ObservableObject {
         AsyncThrowingStream { continuation in
             Task {
                 do {
+                    // Ensure we have an API key
+                    if self.apiKey == nil {
+                        await self.fetchApiKey()
+                    }
+
+                    guard self.apiKey != nil else {
+                        continuation.finish(throwing: BedrockError.notConfigured)
+                        return
+                    }
+
                     // Convert ChatMessage array to dictionary array
                     let messageArray = messages.map { ["role": $0.role.rawValue, "content": $0.content] }
 
@@ -164,6 +258,10 @@ class BedrockService: ObservableObject {
         stream: Bool = false
     ) async throws -> String {
 
+        guard let currentApiKey = apiKey else {
+            throw BedrockError.notConfigured
+        }
+
         guard let url = URL(string: proxyEndpoint) else {
             throw BedrockError.configurationFailed("Invalid proxy URL")
         }
@@ -171,7 +269,7 @@ class BedrockService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(currentApiKey, forHTTPHeaderField: "x-api-key")
         request.timeoutInterval = 120  // 2 minute timeout for long responses
 
         // Build request body
@@ -206,6 +304,8 @@ class BedrockService: ObservableObject {
             case 429:
                 throw BedrockError.throttled
             case 403:
+                // API key might have rotated - try refreshing
+                await fetchApiKey()
                 throw BedrockError.accessDenied
             default:
                 throw BedrockError.invocationFailed(error)
@@ -238,7 +338,7 @@ enum BedrockError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Bedrock service is not configured."
+            return "AI service is not configured. Please check your network connection."
         case .configurationFailed(let message):
             return "Failed to configure: \(message)"
         case .connectionFailed(let message):

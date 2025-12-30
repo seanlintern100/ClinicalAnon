@@ -45,9 +45,8 @@ class AWSCredentialsManager: ObservableObject {
     // MARK: - Available Models
 
     static let availableModels: [(id: String, name: String)] = [
-        ("apac.anthropic.claude-sonnet-4-20250514-v1:0", "Claude Sonnet 4 (Default)"),
-        ("apac.anthropic.claude-3-5-sonnet-20241022-v2:0", "Claude 3.5 Sonnet v2"),
-        ("apac.anthropic.claude-3-5-haiku-20241022-v1:0", "Claude 3.5 Haiku (Fast)")
+        ("apac.anthropic.claude-sonnet-4-20250514-v1:0", "Claude Sonnet 4 (Recommended)"),
+        ("apac.anthropic.claude-3-5-sonnet-20241022-v2:0", "Claude 3.5 Sonnet v2")
     ]
 
     // MARK: - Initialization

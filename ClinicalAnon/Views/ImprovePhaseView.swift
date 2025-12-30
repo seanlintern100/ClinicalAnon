@@ -510,16 +510,9 @@ private struct MarkdownText: View {
     }
 
     var body: some View {
-        if let attributedString = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-            Text(attributedString)
-                .font(.system(size: 14))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-        } else {
-            // Fallback to plain text if markdown parsing fails
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-        }
+        // Use custom MarkdownParser for proper heading support (## headers)
+        Text(MarkdownParser.parseToAttributedString(text))
+            .foregroundColor(DesignSystem.Colors.textPrimary)
     }
 }
 
@@ -710,7 +703,9 @@ struct PromptEditorSheet: View {
                     Button("Reset to Default") {
                         documentTypeManager.resetPromptTemplate(for: documentType.id)
                         documentTypeManager.resetSliders(for: documentType.id)
-                        editedPrompt = DocumentType.defaultPromptTemplate(for: documentType.id) ?? ""
+                        // Strip style block for display
+                        let defaultTemplate = DocumentType.defaultPromptTemplate(for: documentType.id) ?? ""
+                        editedPrompt = DocumentType.stripStyleBlock(from: defaultTemplate)
                         editedSliders = DocumentType.defaultSliders(for: documentType.id) ?? SliderSettings()
                         hasChanges = false
                     }
@@ -777,12 +772,17 @@ struct PromptEditorSheet: View {
 
                 TextEditor(text: $editedPrompt)
                     .font(.system(size: 13, design: .monospaced))
-                    .frame(minHeight: 200)
+                    .scrollContentBackground(.hidden)
+                    .padding(DesignSystem.Spacing.small)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .frame(minHeight: 250, maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
                     .overlay(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
                             .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
                     )
             }
+            .frame(maxHeight: .infinity)
 
             // Buttons
             HStack {
@@ -794,7 +794,9 @@ struct PromptEditorSheet: View {
                 .buttonStyle(SecondaryButtonStyle())
 
                 Button("Save") {
-                    documentTypeManager.updatePromptTemplate(for: documentType.id, newTemplate: editedPrompt)
+                    // Re-inject style block before saving (it was stripped for display)
+                    let fullTemplate = DocumentType.injectStyleBlock(into: editedPrompt)
+                    documentTypeManager.updatePromptTemplate(for: documentType.id, newTemplate: fullTemplate)
                     documentTypeManager.updateSliders(for: documentType.id, sliders: editedSliders)
                     if isCustomType {
                         documentTypeManager.updateCustomInstructions(for: documentType.id, instructions: editedCustomInstructions)
@@ -805,9 +807,10 @@ struct PromptEditorSheet: View {
             }
         }
         .padding(DesignSystem.Spacing.large)
-        .frame(width: 700, height: isCustomType ? 650 : 580)
+        .frame(minWidth: 700, maxWidth: 700, minHeight: isCustomType ? 700 : 650, maxHeight: 900)
         .onAppear {
-            editedPrompt = documentType.promptTemplate
+            // Strip style block for display - it's controlled by sliders above
+            editedPrompt = DocumentType.stripStyleBlock(from: documentType.promptTemplate)
             editedSliders = documentTypeManager.getSliders(for: documentType.id)
             editedCustomInstructions = documentTypeManager.getCustomInstructions(for: documentType.id)
         }
@@ -819,7 +822,8 @@ struct PromptEditorSheet: View {
     private func updateHasChanges() {
         let originalSliders = documentTypeManager.getSliders(for: documentType.id)
         let originalCustomInstructions = documentTypeManager.getCustomInstructions(for: documentType.id)
-        hasChanges = editedPrompt != documentType.promptTemplate ||
+        let strippedOriginal = DocumentType.stripStyleBlock(from: documentType.promptTemplate)
+        hasChanges = editedPrompt != strippedOriginal ||
                      editedSliders != originalSliders ||
                      (isCustomType && editedCustomInstructions != originalCustomInstructions)
     }
@@ -835,12 +839,9 @@ struct AddAnalysisTypeSheet: View {
 
     @State private var name: String = ""
     @State private var sliders: SliderSettings = SliderSettings()
+    // Style block is hidden from editor - controlled by sliders above
     @State private var promptTemplate: String = """
         You are a clinical writing assistant.
-
-        Tone: {formality_text}
-        Detail: {detail_text}
-        Structure: {structure_text}
 
         [Your instructions here]
 
@@ -923,12 +924,17 @@ struct AddAnalysisTypeSheet: View {
 
                 TextEditor(text: $promptTemplate)
                     .font(.system(size: 13, design: .monospaced))
-                    .frame(minHeight: 180)
+                    .scrollContentBackground(.hidden)
+                    .padding(DesignSystem.Spacing.small)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .frame(minHeight: 200, maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
                     .overlay(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
                             .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
                     )
             }
+            .frame(maxHeight: .infinity)
 
             // Buttons
             HStack {
@@ -941,9 +947,11 @@ struct AddAnalysisTypeSheet: View {
 
                 Button("Create") {
                     let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Re-inject style block before saving (it was hidden from editor)
+                    let fullTemplate = DocumentType.injectStyleBlock(into: promptTemplate)
                     let newType = documentTypeManager.createAnalysisType(
                         name: trimmedName,
-                        promptTemplate: promptTemplate,
+                        promptTemplate: fullTemplate,
                         sliders: sliders
                     )
                     onCreated(newType)
@@ -953,7 +961,7 @@ struct AddAnalysisTypeSheet: View {
             }
         }
         .padding(DesignSystem.Spacing.large)
-        .frame(width: 700, height: 580)
+        .frame(minWidth: 700, maxWidth: 700, minHeight: 650, maxHeight: 900)
     }
 }
 

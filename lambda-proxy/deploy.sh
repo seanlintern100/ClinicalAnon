@@ -1,6 +1,6 @@
 #!/bin/bash
-# Bedrock Proxy Deployment Script
-# Purpose: Deploy Lambda + API Gateway for secure Bedrock access
+# Bedrock Proxy Deployment Script with API Key Rotation
+# Purpose: Deploy Lambda + API Gateway + Secrets Manager for secure Bedrock access
 # Organization: 3 Big Things
 
 set -e  # Exit on error
@@ -8,13 +8,16 @@ set -e  # Exit on error
 # Configuration
 REGION="ap-southeast-2"
 FUNCTION_NAME="redactor-bedrock-proxy"
+GET_KEY_FUNCTION="redactor-get-api-key"
+ROTATE_KEY_FUNCTION="redactor-rotate-api-key"
 ROLE_NAME="redactor-bedrock-proxy-role"
 API_NAME="redactor-bedrock-api"
 STAGE_NAME="prod"
+SECRET_NAME="redactor/api-key"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 echo "=========================================="
-echo "Deploying Bedrock Proxy"
+echo "Deploying Bedrock Proxy with Key Rotation"
 echo "Region: $REGION"
 echo "Account: $ACCOUNT_ID"
 echo "=========================================="
@@ -63,45 +66,147 @@ aws iam attach-role-policy \
     --role-name $ROLE_NAME \
     --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/BedrockAccessPolicy 2>/dev/null || true
 
+# Create inline policy for Secrets Manager and API Gateway
+echo "Adding Secrets Manager and API Gateway permissions..."
+cat > /tmp/rotation-policy.json << EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:PutSecretValue",
+                "secretsmanager:CreateSecret",
+                "secretsmanager:UpdateSecret"
+            ],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:redactor/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:GET",
+                "apigateway:POST",
+                "apigateway:DELETE"
+            ],
+            "Resource": [
+                "arn:aws:apigateway:${REGION}::/apikeys",
+                "arn:aws:apigateway:${REGION}::/apikeys/*",
+                "arn:aws:apigateway:${REGION}::/usageplans",
+                "arn:aws:apigateway:${REGION}::/usageplans/*"
+            ]
+        }
+    ]
+}
+EOF
+
+aws iam put-role-policy \
+    --role-name $ROLE_NAME \
+    --policy-name RedactorRotationPolicy \
+    --policy-document file:///tmp/rotation-policy.json
+
 # Wait for role to propagate
 echo "Waiting for role to propagate..."
 sleep 10
 
-# Step 2: Package and Deploy Lambda Function
+# Step 2: Create Secrets Manager Secret
 echo ""
-echo "Step 2: Deploying Lambda Function..."
+echo "Step 2: Setting up Secrets Manager..."
+
+# Check if secret exists
+if aws secretsmanager describe-secret --secret-id $SECRET_NAME --region $REGION 2>/dev/null; then
+    echo "Secret $SECRET_NAME already exists"
+else
+    # Create secret with placeholder (will be updated by rotation)
+    aws secretsmanager create-secret \
+        --name $SECRET_NAME \
+        --description "Redactor API Gateway key" \
+        --secret-string '{"api_key": "pending-rotation", "key_id": "pending"}' \
+        --region $REGION
+    echo "Created secret $SECRET_NAME"
+fi
+
+# Step 3: Package and Deploy Lambda Functions
+echo ""
+echo "Step 3: Deploying Lambda Functions..."
 
 cd "$(dirname "$0")"
-zip -j /tmp/lambda-function.zip lambda_function.py
 
-# Check if function exists
+# Deploy main Bedrock proxy function
+zip -j /tmp/lambda-function.zip lambda_function.py
 if aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>/dev/null; then
-    echo "Updating existing function..."
+    echo "Updating $FUNCTION_NAME..."
     aws lambda update-function-code \
         --function-name $FUNCTION_NAME \
         --zip-file fileb:///tmp/lambda-function.zip \
-        --region $REGION
+        --region $REGION > /dev/null
 else
-    echo "Creating new function..."
+    echo "Creating $FUNCTION_NAME..."
     aws lambda create-function \
         --function-name $FUNCTION_NAME \
         --runtime python3.12 \
         --role arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME} \
         --handler lambda_function.lambda_handler \
         --zip-file fileb:///tmp/lambda-function.zip \
-        --timeout 60 \
+        --timeout 120 \
         --memory-size 256 \
         --region $REGION \
-        --description "Secure proxy for Bedrock API calls"
+        --description "Secure proxy for Bedrock API calls" > /dev/null
 fi
 
-# Wait for function to be active
-echo "Waiting for function to be active..."
-aws lambda wait function-active --function-name $FUNCTION_NAME --region $REGION
+# Deploy get-api-key function
+zip -j /tmp/get-api-key.zip get_api_key.py
+if aws lambda get-function --function-name $GET_KEY_FUNCTION --region $REGION 2>/dev/null; then
+    echo "Updating $GET_KEY_FUNCTION..."
+    aws lambda update-function-code \
+        --function-name $GET_KEY_FUNCTION \
+        --zip-file fileb:///tmp/get-api-key.zip \
+        --region $REGION > /dev/null
+else
+    echo "Creating $GET_KEY_FUNCTION..."
+    aws lambda create-function \
+        --function-name $GET_KEY_FUNCTION \
+        --runtime python3.12 \
+        --role arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME} \
+        --handler get_api_key.lambda_handler \
+        --zip-file fileb:///tmp/get-api-key.zip \
+        --timeout 10 \
+        --memory-size 128 \
+        --region $REGION \
+        --description "Return current API key from Secrets Manager" > /dev/null
+fi
 
-# Step 3: Create API Gateway
+# Deploy rotate-api-key function
+zip -j /tmp/rotate-api-key.zip rotate_api_key.py
+if aws lambda get-function --function-name $ROTATE_KEY_FUNCTION --region $REGION 2>/dev/null; then
+    echo "Updating $ROTATE_KEY_FUNCTION..."
+    aws lambda update-function-code \
+        --function-name $ROTATE_KEY_FUNCTION \
+        --zip-file fileb:///tmp/rotate-api-key.zip \
+        --region $REGION > /dev/null
+else
+    echo "Creating $ROTATE_KEY_FUNCTION..."
+    aws lambda create-function \
+        --function-name $ROTATE_KEY_FUNCTION \
+        --runtime python3.12 \
+        --role arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME} \
+        --handler rotate_api_key.lambda_handler \
+        --zip-file fileb:///tmp/rotate-api-key.zip \
+        --timeout 30 \
+        --memory-size 128 \
+        --region $REGION \
+        --description "Rotate API Gateway key weekly" > /dev/null
+fi
+
+# Wait for functions to be active
+echo "Waiting for functions to be active..."
+aws lambda wait function-active --function-name $FUNCTION_NAME --region $REGION
+aws lambda wait function-active --function-name $GET_KEY_FUNCTION --region $REGION
+aws lambda wait function-active --function-name $ROTATE_KEY_FUNCTION --region $REGION
+
+# Step 4: Create API Gateway
 echo ""
-echo "Step 3: Creating API Gateway..."
+echo "Step 4: Creating API Gateway..."
 
 # Check if API exists
 EXISTING_API=$(aws apigateway get-rest-apis --region $REGION --query "items[?name=='$API_NAME'].id" --output text)
@@ -122,9 +227,8 @@ fi
 # Get root resource ID
 ROOT_ID=$(aws apigateway get-resources --rest-api-id $API_ID --region $REGION --query "items[?path=='/'].id" --output text)
 
-# Create /invoke resource if it doesn't exist
+# Create /invoke resource (Bedrock proxy)
 INVOKE_RESOURCE=$(aws apigateway get-resources --rest-api-id $API_ID --region $REGION --query "items[?path=='/invoke'].id" --output text)
-
 if [ -z "$INVOKE_RESOURCE" ]; then
     INVOKE_RESOURCE=$(aws apigateway create-resource \
         --rest-api-id $API_ID \
@@ -135,8 +239,20 @@ if [ -z "$INVOKE_RESOURCE" ]; then
     echo "Created /invoke resource"
 fi
 
-# Create POST method with API key required
-echo "Configuring POST method..."
+# Create /get-api-key resource
+GET_KEY_RESOURCE=$(aws apigateway get-resources --rest-api-id $API_ID --region $REGION --query "items[?path=='/get-api-key'].id" --output text)
+if [ -z "$GET_KEY_RESOURCE" ]; then
+    GET_KEY_RESOURCE=$(aws apigateway create-resource \
+        --rest-api-id $API_ID \
+        --parent-id $ROOT_ID \
+        --path-part "get-api-key" \
+        --region $REGION \
+        --query 'id' --output text)
+    echo "Created /get-api-key resource"
+fi
+
+# Configure /invoke POST method (requires API key)
+echo "Configuring /invoke endpoint..."
 aws apigateway put-method \
     --rest-api-id $API_ID \
     --resource-id $INVOKE_RESOURCE \
@@ -145,10 +261,7 @@ aws apigateway put-method \
     --api-key-required \
     --region $REGION 2>/dev/null || true
 
-# Set up Lambda integration
-echo "Setting up Lambda integration..."
 LAMBDA_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${FUNCTION_NAME}"
-
 aws apigateway put-integration \
     --rest-api-id $API_ID \
     --resource-id $INVOKE_RESOURCE \
@@ -158,11 +271,39 @@ aws apigateway put-integration \
     --uri "arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${LAMBDA_ARN}/invocations" \
     --region $REGION
 
-# Add Lambda permission for API Gateway
-echo "Adding Lambda permission..."
+# Configure /get-api-key POST method (no API key required, uses bundle ID)
+echo "Configuring /get-api-key endpoint..."
+aws apigateway put-method \
+    --rest-api-id $API_ID \
+    --resource-id $GET_KEY_RESOURCE \
+    --http-method POST \
+    --authorization-type NONE \
+    --api-key-required false \
+    --region $REGION 2>/dev/null || true
+
+GET_KEY_LAMBDA_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${GET_KEY_FUNCTION}"
+aws apigateway put-integration \
+    --rest-api-id $API_ID \
+    --resource-id $GET_KEY_RESOURCE \
+    --http-method POST \
+    --type AWS_PROXY \
+    --integration-http-method POST \
+    --uri "arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${GET_KEY_LAMBDA_ARN}/invocations" \
+    --region $REGION
+
+# Add Lambda permissions for API Gateway
+echo "Adding Lambda permissions..."
 aws lambda add-permission \
     --function-name $FUNCTION_NAME \
     --statement-id apigateway-invoke \
+    --action lambda:InvokeFunction \
+    --principal apigateway.amazonaws.com \
+    --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*/*/*" \
+    --region $REGION 2>/dev/null || true
+
+aws lambda add-permission \
+    --function-name $GET_KEY_FUNCTION \
+    --statement-id apigateway-get-key \
     --action lambda:InvokeFunction \
     --principal apigateway.amazonaws.com \
     --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*/*/*" \
@@ -173,13 +314,12 @@ echo "Deploying API to $STAGE_NAME stage..."
 aws apigateway create-deployment \
     --rest-api-id $API_ID \
     --stage-name $STAGE_NAME \
-    --region $REGION
+    --region $REGION > /dev/null
 
-# Step 4: Create API Key and Usage Plan
+# Step 5: Create API Key and Usage Plan
 echo ""
-echo "Step 4: Creating API Key and Usage Plan..."
+echo "Step 5: Creating API Key and Usage Plan..."
 
-# Create usage plan if it doesn't exist
 USAGE_PLAN_NAME="redactor-usage-plan"
 USAGE_PLAN_ID=$(aws apigateway get-usage-plans --region $REGION --query "items[?name=='$USAGE_PLAN_NAME'].id" --output text)
 
@@ -197,58 +337,75 @@ else
     echo "Using existing usage plan: $USAGE_PLAN_ID"
 fi
 
-# Create API key
-API_KEY_NAME="redactor-api-key"
-EXISTING_KEY=$(aws apigateway get-api-keys --region $REGION --query "items[?name=='$API_KEY_NAME'].id" --output text)
+# Step 6: Create EventBridge Rule for Weekly Rotation
+echo ""
+echo "Step 6: Setting up weekly key rotation..."
 
-if [ -n "$EXISTING_KEY" ]; then
-    API_KEY_ID=$EXISTING_KEY
-    echo "Using existing API key"
-else
-    API_KEY_ID=$(aws apigateway create-api-key \
-        --name $API_KEY_NAME \
-        --description "API key for Redactor app" \
-        --enabled \
-        --region $REGION \
-        --query 'id' --output text)
-    echo "Created API key: $API_KEY_ID"
+RULE_NAME="redactor-key-rotation"
 
-    # Associate key with usage plan
-    aws apigateway create-usage-plan-key \
-        --usage-plan-id $USAGE_PLAN_ID \
-        --key-id $API_KEY_ID \
-        --key-type API_KEY \
-        --region $REGION
-fi
+# Create rule (every Sunday at 2am AEST = 4pm Saturday UTC)
+aws events put-rule \
+    --name $RULE_NAME \
+    --schedule-expression "cron(0 16 ? * SAT *)" \
+    --description "Weekly API key rotation for Redactor" \
+    --state ENABLED \
+    --region $REGION > /dev/null
 
-# Get the actual API key value
-API_KEY_VALUE=$(aws apigateway get-api-key --api-key $API_KEY_ID --include-value --region $REGION --query 'value' --output text)
+# Add permission for EventBridge to invoke Lambda
+aws lambda add-permission \
+    --function-name $ROTATE_KEY_FUNCTION \
+    --statement-id eventbridge-rotation \
+    --action lambda:InvokeFunction \
+    --principal events.amazonaws.com \
+    --source-arn "arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/${RULE_NAME}" \
+    --region $REGION 2>/dev/null || true
 
-# Step 5: Output results
+# Add Lambda as target
+aws events put-targets \
+    --rule $RULE_NAME \
+    --targets "Id"="1","Arn"="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${ROTATE_KEY_FUNCTION}" \
+    --region $REGION > /dev/null
+
+echo "Weekly rotation scheduled: Sundays at 2am AEST"
+
+# Step 7: Run Initial Key Rotation
+echo ""
+echo "Step 7: Running initial key rotation..."
+
+aws lambda invoke \
+    --function-name $ROTATE_KEY_FUNCTION \
+    --region $REGION \
+    /tmp/rotation-result.json > /dev/null
+
+ROTATION_RESULT=$(cat /tmp/rotation-result.json)
+echo "Rotation result: $ROTATION_RESULT"
+
+# Step 8: Output results
 echo ""
 echo "=========================================="
 echo "DEPLOYMENT COMPLETE"
 echo "=========================================="
 echo ""
-echo "API Endpoint:"
-echo "  https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/invoke"
+echo "Endpoints:"
+echo "  Invoke:      https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/invoke"
+echo "  Get API Key: https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/get-api-key"
 echo ""
-echo "API Key:"
-echo "  $API_KEY_VALUE"
+echo "Key Rotation:"
+echo "  Schedule: Weekly (Sundays 2am AEST)"
+echo "  Secret:   $SECRET_NAME"
 echo ""
-echo "Usage:"
+echo "Test get-api-key:"
 echo "  curl -X POST \\"
 echo "    -H 'Content-Type: application/json' \\"
-echo "    -H 'x-api-key: ${API_KEY_VALUE}' \\"
-echo "    -d '{\"model\":\"apac.anthropic.claude-3-5-haiku-20241022-v1:0\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}],\"max_tokens\":100}' \\"
-echo "    https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/invoke"
+echo "    -H 'X-Bundle-Id: com.3bigthings.Redactor' \\"
+echo "    https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/get-api-key"
 echo ""
-echo "Save these values - you'll need them for the app configuration!"
 echo "=========================================="
 
-# Save to file for reference
+# Save config
 cat > /tmp/redactor-proxy-config.txt << EOF
 API_ENDPOINT=https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/invoke
-API_KEY=$API_KEY_VALUE
+GET_KEY_ENDPOINT=https://${API_ID}.execute-api.${REGION}.amazonaws.com/${STAGE_NAME}/get-api-key
+SECRET_NAME=$SECRET_NAME
 EOF
 echo "Configuration saved to /tmp/redactor-proxy-config.txt"

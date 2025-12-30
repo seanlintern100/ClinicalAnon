@@ -102,12 +102,17 @@ class SwiftNERService {
         if validated.count < deduplicated.count {
             print("⚠️ Filtered out \(deduplicated.count - validated.count) entities with invalid positions")
         }
+        #endif
 
+        // Scan for all occurrences of detected names (catches "Mark:" headings etc.)
+        let withAllOccurrences = scanForAllOccurrences(validated, in: text)
+
+        #if DEBUG
         let elapsed = Date().timeIntervalSince(startTime)
         print("✅ SwiftNER: Completed in \(String(format: "%.2f", elapsed))s")
         #endif
 
-        return validated
+        return withAllOccurrences
     }
 
     // MARK: - Position Validation
@@ -142,6 +147,50 @@ class SwiftNERService {
                     replacementCode: entity.replacementCode,
                     type: entity.type,
                     positions: validPositions,
+                    confidence: entity.confidence
+                )
+            }
+
+            return entity
+        }
+    }
+
+    // MARK: - All Occurrences Scan
+
+    /// Scan text for all occurrences of detected name entities
+    /// Ensures names detected in one context are replaced everywhere (e.g., "Mark:" headings)
+    private func scanForAllOccurrences(_ entities: [Entity], in text: String) -> [Entity] {
+        return entities.map { entity in
+            // Only scan for person name types
+            guard entity.type == .personClient ||
+                  entity.type == .personProvider ||
+                  entity.type == .personOther else {
+                return entity
+            }
+
+            // Find all occurrences of this name in text
+            var allPositions: [[Int]] = []
+            var searchStart = text.startIndex
+
+            while let range = text.range(of: entity.originalText,
+                                          range: searchStart..<text.endIndex) {
+                let start = text.distance(from: text.startIndex, to: range.lowerBound)
+                let end = text.distance(from: text.startIndex, to: range.upperBound)
+                allPositions.append([start, end])
+                searchStart = range.upperBound
+            }
+
+            // If we found more occurrences than originally detected, update the entity
+            if allPositions.count > entity.positions.count {
+                #if DEBUG
+                print("📍 Found \(allPositions.count) occurrences of '\(entity.originalText)' (was \(entity.positions.count))")
+                #endif
+                return Entity(
+                    id: entity.id,
+                    originalText: entity.originalText,
+                    replacementCode: entity.replacementCode,
+                    type: entity.type,
+                    positions: allPositions,
                     confidence: entity.confidence
                 )
             }

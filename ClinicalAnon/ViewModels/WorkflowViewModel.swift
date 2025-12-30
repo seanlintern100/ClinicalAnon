@@ -695,9 +695,10 @@ class WorkflowViewModel: ObservableObject {
     }
 
     /// Copy the current document to clipboard (used by ImprovePhaseView)
+    /// Uses formatted copy to preserve markdown heading formatting
     func copyCurrentDocument() {
         guard !currentDocument.isEmpty else { return }
-        copyToClipboard(currentDocument)
+        copyFormattedToClipboard(currentDocument)
     }
 
     func dismissError() {
@@ -918,22 +919,49 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Document Diff Helpers
 
     /// Compute which lines changed between old and new document
+    /// Uses normalized comparison to avoid false positives from whitespace differences
     private func computeChangedLines(from oldDoc: String, to newDoc: String) -> Set<Int> {
         let oldLines = oldDoc.components(separatedBy: .newlines)
         let newLines = newDoc.components(separatedBy: .newlines)
 
         var changedIndices = Set<Int>()
 
+        // Build a set of normalized old lines for quick lookup
+        // This helps detect lines that moved vs lines that actually changed
+        let normalizedOldLines = Set(oldLines.map { normalizeLine($0) })
+
         for (index, newLine) in newLines.enumerated() {
+            let normalizedNew = normalizeLine(newLine)
+
+            // Skip empty lines - don't highlight blank line differences
+            if normalizedNew.isEmpty {
+                continue
+            }
+
             if index >= oldLines.count {
-                // New line added
-                changedIndices.insert(index)
-            } else if oldLines[index] != newLine {
-                // Line changed
-                changedIndices.insert(index)
+                // New line added - but only if content is genuinely new
+                if !normalizedOldLines.contains(normalizedNew) {
+                    changedIndices.insert(index)
+                }
+            } else {
+                let normalizedOld = normalizeLine(oldLines[index])
+                // Line changed - compare normalized versions
+                if normalizedOld != normalizedNew {
+                    // Only mark as changed if the content didn't exist elsewhere in old doc
+                    // (handles reordering without marking everything as changed)
+                    if !normalizedOldLines.contains(normalizedNew) {
+                        changedIndices.insert(index)
+                    }
+                }
             }
         }
 
         return changedIndices
+    }
+
+    /// Normalize a line for comparison - trims whitespace and reduces multiple spaces
+    private func normalizeLine(_ line: String) -> String {
+        line.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 }
