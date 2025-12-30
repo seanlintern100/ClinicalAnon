@@ -134,6 +134,71 @@ class TextReplacer {
         return Array(codes).sorted()
     }
 
+    // MARK: - Partial Leak Fix
+
+    /// Fix partial leaks like [PERSON_P]rray by extending entities
+    /// - Parameters:
+    ///   - text: The text after initial replacement
+    ///   - entities: The entities that were replaced
+    ///   - originalText: The original unredacted text
+    /// - Returns: Fixed text and any extended entities
+    static func fixPartialLeaks(
+        in text: String,
+        entities: [Entity],
+        originalText: String
+    ) -> (String, [Entity]) {
+
+        // Pattern: placeholder followed by letters (partial leak)
+        let pattern = "\\[([A-Z_]+)\\]([a-zA-Z]+)"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return (text, [])
+        }
+
+        var fixedText = text
+        var extendedEntities: [Entity] = []
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range).reversed()
+
+        for match in matches {
+            guard let placeholderRange = Range(match.range(at: 0), in: text),
+                  let codeRange = Range(match.range(at: 1), in: text),
+                  let leakedRange = Range(match.range(at: 2), in: text) else { continue }
+
+            let fullMatch = String(text[placeholderRange])  // [PERSON_P]rray
+            let code = String(text[codeRange])               // PERSON_P
+            let leaked = String(text[leakedRange])           // rray
+
+            // Find the original entity this placeholder came from
+            if let entity = entities.first(where: { $0.replacementCode == "[\(code)]" }) {
+                // Build the full original text: original + leaked
+                let fullOriginal = entity.originalText + leaked
+
+                // Verify it exists in original text (case-insensitive)
+                if originalText.range(of: fullOriginal, options: .caseInsensitive) != nil {
+                    // Replace partial leak with the same placeholder
+                    fixedText = fixedText.replacingOccurrences(
+                        of: fullMatch,
+                        with: entity.replacementCode
+                    )
+
+                    // Create extended entity for tracking
+                    let extended = Entity(
+                        originalText: fullOriginal,
+                        replacementCode: entity.replacementCode,
+                        type: entity.type,
+                        positions: [],
+                        confidence: entity.confidence
+                    )
+                    extendedEntities.append(extended)
+
+                    print("🔧 Fixed partial leak: '\(fullMatch)' → '\(entity.replacementCode)' (full: '\(fullOriginal)')")
+                }
+            }
+        }
+
+        return (fixedText, extendedEntities)
+    }
+
     // MARK: - Statistics
 
     /// Calculate replacement statistics

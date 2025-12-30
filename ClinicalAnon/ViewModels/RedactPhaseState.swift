@@ -252,16 +252,25 @@ class RedactPhaseState: ObservableObject {
             return
         }
 
-        if !LocalLLMService.shared.isModelLoaded {
-            successMessage = "Loading model..."
-        }
-
         isReviewingPII = true
         piiReviewError = nil
 
+        // Show appropriate status message
+        if !LocalLLMService.shared.isModelLoaded {
+            successMessage = "Loading model..."
+        } else {
+            successMessage = "Analyzing text (this may take several minutes)..."
+        }
+
         do {
+            // Update message once model is loaded and analysis starts
             let findings = try await LocalLLMService.shared.reviewForMissedPII(
-                text: cachedRedactedText
+                text: cachedRedactedText,
+                onAnalysisStarted: { [weak self] in
+                    Task { @MainActor in
+                        self?.successMessage = "Analyzing text (this may take several minutes)..."
+                    }
+                }
             )
 
             await MainActor.run {
@@ -301,7 +310,10 @@ class RedactPhaseState: ObservableObject {
     private func processPIIFindings(_ findings: [PIIFinding], originalText: String) {
         var newEntities: [Entity] = []
 
+        print("DEBUG processPIIFindings: Received \(findings.count) findings")
         for finding in findings {
+            print("DEBUG processPIIFindings: Processing '\(finding.text)' type=\(finding.suggestedType)")
+
             if let (matchedEntity, leakedPart) = findPartialMatch(finding.text) {
                 let fullOriginal = matchedEntity.originalText + leakedPart
                 let positions = findAllOccurrences(of: fullOriginal, in: originalText)
@@ -320,10 +332,17 @@ class RedactPhaseState: ObservableObject {
                 }
             } else {
                 let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
-                if alreadyExists { continue }
+                if alreadyExists {
+                    print("DEBUG processPIIFindings: '\(finding.text)' already exists, skipping")
+                    continue
+                }
 
                 let positions = findAllOccurrences(of: finding.text, in: originalText)
-                if positions.isEmpty { continue }
+                if positions.isEmpty {
+                    print("DEBUG processPIIFindings: '\(finding.text)' not found in original text, skipping")
+                    continue
+                }
+                print("DEBUG processPIIFindings: '\(finding.text)' found at \(positions.count) positions, adding")
 
                 let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count + newEntities.filter { $0.type == finding.suggestedType }.count
                 let code = finding.suggestedType.replacementCode(for: existingCount)
@@ -427,13 +446,21 @@ class RedactPhaseState: ObservableObject {
     }
 
     private func findAllOccurrences(of searchText: String, in text: String) -> [[Int]] {
-        var positions: [[Int]] = []
-        var searchStartIndex = text.startIndex
+        // Normalize apostrophes for matching (curly ' and straight ')
+        let normalizedSearch = searchText
+            .replacingOccurrences(of: "'", with: "'")
+            .replacingOccurrences(of: "'", with: "'")
+        let normalizedText = text
+            .replacingOccurrences(of: "'", with: "'")
+            .replacingOccurrences(of: "'", with: "'")
 
-        while searchStartIndex < text.endIndex {
-            if let range = text.range(of: searchText, options: .caseInsensitive, range: searchStartIndex..<text.endIndex) {
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
+        var positions: [[Int]] = []
+        var searchStartIndex = normalizedText.startIndex
+
+        while searchStartIndex < normalizedText.endIndex {
+            if let range = normalizedText.range(of: normalizedSearch, options: .caseInsensitive, range: searchStartIndex..<normalizedText.endIndex) {
+                let start = normalizedText.distance(from: normalizedText.startIndex, to: range.lowerBound)
+                let end = normalizedText.distance(from: normalizedText.startIndex, to: range.upperBound)
                 positions.append([start, end])
                 searchStartIndex = range.upperBound
             } else {

@@ -169,6 +169,13 @@ class AnonymizationEngine: ObservableObject {
 
         let anonymizedText = try TextReplacer.replaceEntities(in: originalText, with: mappedEntities)
 
+        // Step 5b: Fix any partial leaks (e.g., [PERSON_P]rray → [PERSON_P])
+        let (fixedText, _) = TextReplacer.fixPartialLeaks(
+            in: anonymizedText,
+            entities: mappedEntities,
+            originalText: originalText
+        )
+
         // Step 6: Validate positions
         statusMessage = "Validating results..."
 
@@ -200,7 +207,7 @@ class AnonymizationEngine: ObservableObject {
 
         let result = AnonymizationResult(
             originalText: originalText,
-            anonymizedText: anonymizedText,
+            anonymizedText: fixedText,
             entities: mappedEntities,
             metadata: metadata
         )

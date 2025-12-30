@@ -89,39 +89,7 @@ class LocalLLMService: ObservableObject {
     // MARK: - Prompt
 
     private let systemInstructions = """
-        You are a PII leak detector. Your ONLY job is to find personally identifiable information that was MISSED during redaction.
-
-        ALREADY REDACTED (ignore completely):
-        - Placeholders like [PERSON_A], [LOCATION_B], [NUM_A], [DATE_C], etc.
-        - Any text inside square brackets
-
-        REPORT ONLY:
-        1. Raw PII with NO placeholder: names, emails, phones, addresses, dates of birth, ID numbers
-        2. Partial leaks: leftover characters adjacent to placeholders (e.g., "[PERSON_A]ohn" where "ohn" leaked)
-
-        OUTPUT FORMAT (strict):
-        TYPE|exact_text|reason
-
-        Valid types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
-
-        If NOTHING is missed, output exactly:
-        NO_ISSUES_FOUND
-
-        RULES:
-        - One issue per line
-        - No explanations, headers, or commentary
-        - Do not list existing placeholders
-        - When uncertain, report it (false positives are acceptable)
-
-        EXAMPLES:
-        [PERSON_A] met with Dr. Sarah Chen at [LOCATION_B]
-        → NAME|Dr. Sarah Chen|unredacted name
-
-        [PERSON_A]'s email is [EMAIL_A] and phone is 021-555-1234
-        → PHONE|021-555-1234|unredacted phone
-
-        [PERSON_A] attended [LOCATION_B] on [DATE_A]
-        → NO_ISSUES_FOUND
+        You are a PII detection assistant. Follow the user's instructions exactly. Output only in the format requested.
         """
 
     // MARK: - Initialization
@@ -152,29 +120,61 @@ class LocalLLMService: ObservableObject {
     }
 
     /// Check if the selected model is cached on disk (without loading it)
+    /// Note: MLX-LM cache location is not reliably detectable, so this uses a heuristic
     var isModelCached: Bool {
-        // MLX models are cached in HuggingFace Hub cache directory
-        let cacheDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cache/huggingface/hub")
+        // Check multiple possible cache locations
+        let possibleCacheDirs: [URL] = [
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/huggingface/hub"),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/mlx"),
+            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        ].compactMap { $0 }
 
-        // Model ID like "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit"
-        // becomes folder like "models--mlx-community--Meta-Llama-3.1-8B-Instruct-4bit"
         let modelFolderName = "models--\(selectedModelId.replacingOccurrences(of: "/", with: "--"))"
-        let modelPath = cacheDir.appendingPathComponent(modelFolderName)
 
-        return FileManager.default.fileExists(atPath: modelPath.path)
+        for cacheDir in possibleCacheDirs {
+            let modelPath = cacheDir.appendingPathComponent(modelFolderName)
+            if FileManager.default.fileExists(atPath: modelPath.path) {
+                return true
+            }
+        }
+
+        // Also check for any folder containing the model name parts
+        let modelNameParts = selectedModelId.components(separatedBy: "/")
+        if let lastPart = modelNameParts.last {
+            for cacheDir in possibleCacheDirs {
+                if let contents = try? FileManager.default.contentsOfDirectory(atPath: cacheDir.path) {
+                    if contents.contains(where: { $0.contains(lastPart) }) {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
     }
 
     /// Pre-load model in background (only if cached, won't trigger download)
     func preloadIfCached() async {
-        guard isAvailable, isModelCached, !isModelLoaded else { return }
+        print("LocalLLMService: Checking pre-load conditions...")
+        print("  - isAvailable: \(isAvailable)")
+        print("  - isModelCached: \(isModelCached)")
+        print("  - isModelLoaded: \(isModelLoaded)")
 
-        do {
-            try await loadModel()
-            print("LocalLLMService: Model pre-loaded successfully")
-        } catch {
-            print("LocalLLMService: Pre-load failed: \(error.localizedDescription)")
+        guard isAvailable else {
+            print("LocalLLMService: Pre-load skipped - MLX not available")
+            return
         }
+
+        guard !isModelLoaded else {
+            print("LocalLLMService: Pre-load skipped - model already loaded")
+            return
+        }
+
+        // Note: We can't reliably detect if the model is cached without attempting to load it.
+        // MLX-LM stores models in a location that varies by version.
+        // For now, skip pre-loading to avoid triggering unexpected downloads.
+        // The model will load on first "Review PII" use.
+        print("LocalLLMService: Pre-load disabled - model will load on first use")
     }
 
     /// Load the selected model (downloads if needed)
@@ -248,7 +248,10 @@ class LocalLLMService: ObservableObject {
     }
 
     /// Review redacted text for missed PII
-    func reviewForMissedPII(text: String) async throws -> [PIIFinding] {
+    /// - Parameters:
+    ///   - text: The redacted text to analyze
+    ///   - onAnalysisStarted: Optional callback invoked when model is loaded and analysis begins
+    func reviewForMissedPII(text: String, onAnalysisStarted: (() -> Void)? = nil) async throws -> [PIIFinding] {
         guard isAvailable else {
             throw AppError.localLLMNotAvailable
         }
@@ -258,6 +261,9 @@ class LocalLLMService: ObservableObject {
             try await loadModel()
         }
 
+        // Notify caller that analysis is starting (model is now loaded)
+        onAnalysisStarted?()
+
         guard let session = chatSession else {
             throw AppError.localLLMModelNotLoaded
         }
@@ -265,7 +271,24 @@ class LocalLLMService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        let prompt = "Analyze this text for missed PII:\n\n\(text)"
+        // Prompt without concrete examples (prevents hallucination of example names)
+        let prompt = """
+            Review this redacted text for any PII that was missed. The text uses placeholders like [PERSON_A], [LOCATION_B], etc.
+
+            Look for:
+            - Unredacted names, emails, phone numbers, addresses
+            - Partial leaks where text appears after a placeholder
+
+            For each issue found, output one line:
+            TYPE|the exact text|brief reason
+
+            Valid types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
+
+            If nothing was missed, respond with only: NO_ISSUES_FOUND
+
+            Text:
+            \(text)
+            """
         print("LocalLLMService: Starting PII review, prompt length: \(prompt.count) chars")
         print("LocalLLMService: Using model: \(selectedModelId)")
 

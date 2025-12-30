@@ -46,7 +46,7 @@ class BedrockService: ObservableObject {
     /// Fetch the current API key from the secure endpoint
     private func fetchApiKey() async {
         guard let url = URL(string: getKeyEndpoint) else {
-            lastError = .configurationFailed("Invalid get-key URL")
+            lastError = .awsConfigurationFailed("Invalid get-key URL")
             return
         }
 
@@ -60,18 +60,18 @@ class BedrockService: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                lastError = .configurationFailed("Invalid response")
+                lastError = .awsConfigurationFailed("Invalid response")
                 return
             }
 
             guard httpResponse.statusCode == 200 else {
-                lastError = .configurationFailed("Failed to fetch API key: \(httpResponse.statusCode)")
+                lastError = .awsConfigurationFailed("Failed to fetch API key: \(httpResponse.statusCode)")
                 return
             }
 
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let key = json["apiKey"] as? String else {
-                lastError = .configurationFailed("Invalid API key response")
+                lastError = .awsConfigurationFailed("Invalid API key response")
                 return
             }
 
@@ -80,7 +80,7 @@ class BedrockService: ObservableObject {
             lastError = nil
 
         } catch {
-            lastError = .configurationFailed("Network error: \(error.localizedDescription)")
+            lastError = .awsConfigurationFailed("Network error: \(error.localizedDescription)")
         }
     }
 

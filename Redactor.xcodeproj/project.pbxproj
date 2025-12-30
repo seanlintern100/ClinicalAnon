@@ -39,6 +39,8 @@
 		7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06463A5E2CDA5C7A80638837 /* StatusBar.swift */; };
 		7C5A704EC04D2A4F500805EA /* PhaseIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A33EEDA9994E6071CE026BF /* PhaseIndicator.swift */; };
 		83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD141C928FBD98682F47FE2 /* DesignSystem.swift */; };
+		SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */; };
+		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
 		8A4431B706F76840302FA1D9 /* RestorePhaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF78870AD7D55BAC5C43447 /* RestorePhaseView.swift */; };
 		9094D00F5F346077DEADC784 /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D0C9224315FD3A09A4F7B6 /* AISettingsView.swift */; };
 		913A43814EBACCC657047706 /* TextEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */; };
@@ -140,6 +142,8 @@
 		EFD141C928FBD98682F47FE2 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		F110215B1181B8B98076418E /* TextReplacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReplacer.swift; sourceTree = "<group>"; };
 		F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
+		SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
+		STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtensions.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMSettingsView.swift; sourceTree = "<group>"; };
 		F3A4B5C6D7E8F9A0B1C2D3E4 /* RedactPhaseState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactPhaseState.swift; sourceTree = "<group>"; };
@@ -204,6 +208,8 @@
 				846F1B468F8E9926702E98A0 /* AppError.swift */,
 				EFD141C928FBD98682F47FE2 /* DesignSystem.swift */,
 				F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */,
+				SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */,
+				STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -464,6 +470,8 @@
 				FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */,
 				77070C1F6D2F5E7C93827F34 /* DateRecognizer.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
+				SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */,
+				STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */,
 				18974210AB121C12F0E50917 /* DocumentType.swift in Sources */,
 				FF5E346E1B05C0B073598613 /* DocumentTypeManager.swift in Sources */,
 				7BD00CACD935BCBBCFF9FC97 /* Entity.swift in Sources */,
