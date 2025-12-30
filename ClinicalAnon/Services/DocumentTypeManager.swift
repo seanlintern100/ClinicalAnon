@@ -22,13 +22,6 @@ class DocumentTypeManager: ObservableObject {
     /// All available document types (built-in only for now)
     @Published private(set) var documentTypes: [DocumentType] = []
 
-    // MARK: - UserDefaults Keys
-
-    private let sliderOverridesKey = "sliderOverrides"
-    private let promptOverridesKey = "promptTemplateOverrides"
-    private let customInstructionsKey = "customInstructions"
-    private let userCreatedTypesKey = "userCreatedTypes"
-
     // MARK: - Custom Type ID (for session-only behavior)
 
     private let customTypeId = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
@@ -218,7 +211,7 @@ class DocumentTypeManager: ObservableObject {
     // MARK: - Private Persistence
 
     private func loadSliderOverrides() -> [String: SliderSettings] {
-        guard let data = UserDefaults.standard.data(forKey: sliderOverridesKey) else {
+        guard let data = UserDefaults.standard.data(forKey: SettingsKeys.sliderOverrides) else {
             return [:]
         }
         do {
@@ -232,30 +225,30 @@ class DocumentTypeManager: ObservableObject {
     private func saveSliderOverrides(_ overrides: [String: SliderSettings]) {
         do {
             let data = try JSONEncoder().encode(overrides)
-            UserDefaults.standard.set(data, forKey: sliderOverridesKey)
+            UserDefaults.standard.set(data, forKey: SettingsKeys.sliderOverrides)
         } catch {
             print("Failed to encode slider overrides: \(error)")
         }
     }
 
     private func loadPromptOverrides() -> [String: String] {
-        UserDefaults.standard.dictionary(forKey: promptOverridesKey) as? [String: String] ?? [:]
+        UserDefaults.standard.dictionary(forKey: SettingsKeys.promptOverrides) as? [String: String] ?? [:]
     }
 
     private func savePromptOverrides(_ overrides: [String: String]) {
-        UserDefaults.standard.set(overrides, forKey: promptOverridesKey)
+        UserDefaults.standard.set(overrides, forKey: SettingsKeys.promptOverrides)
     }
 
     private func loadCustomInstructions() -> [String: String] {
-        UserDefaults.standard.dictionary(forKey: customInstructionsKey) as? [String: String] ?? [:]
+        UserDefaults.standard.dictionary(forKey: SettingsKeys.customInstructions) as? [String: String] ?? [:]
     }
 
     private func saveCustomInstructions(_ instructions: [String: String]) {
-        UserDefaults.standard.set(instructions, forKey: customInstructionsKey)
+        UserDefaults.standard.set(instructions, forKey: SettingsKeys.customInstructions)
     }
 
     private func loadUserCreatedTypes() -> [DocumentType] {
-        guard let data = UserDefaults.standard.data(forKey: userCreatedTypesKey) else {
+        guard let data = UserDefaults.standard.data(forKey: SettingsKeys.userCreatedTypes) else {
             return []
         }
         do {
@@ -269,7 +262,7 @@ class DocumentTypeManager: ObservableObject {
     private func saveUserCreatedTypes(_ types: [DocumentType]) {
         do {
             let data = try JSONEncoder().encode(types)
-            UserDefaults.standard.set(data, forKey: userCreatedTypesKey)
+            UserDefaults.standard.set(data, forKey: SettingsKeys.userCreatedTypes)
         } catch {
             print("Failed to encode user-created types: \(error)")
         }

@@ -47,13 +47,10 @@ class EntityDetector {
         }
 
         #if DEBUG
-        // DEBUG: Print parsed entities
-        print("🔍 DEBUG - Parsed \(llmResponse.entities.count) entities:")
+        // DEBUG: Print parsed entity count (no PII)
+        print("🔍 DEBUG - Parsed \(llmResponse.entities.count) entities")
         for (index, entity) in llmResponse.entities.enumerated() {
-            print("  [\(index)] original: '\(entity.original)'")
-            print("      replacement: '\(entity.replacement)'")
-            print("      type: '\(entity.type)'")
-            print("      positions: \(entity.positions)")
+            print("  [\(index)] type: '\(entity.type)' → '\(entity.replacement)'")
         }
         #endif
 
@@ -110,7 +107,7 @@ class EntityDetector {
             if llmEntity.original.isEmpty || llmEntity.replacement.isEmpty || llmEntity.type.isEmpty {
                 skippedCount += 1
                 #if DEBUG
-                print("⚠️  Skipping entity with empty fields: '\(llmEntity.original)'")
+                print("⚠️  Skipping entity with empty fields")
                 #endif
                 continue
             }
@@ -118,7 +115,7 @@ class EntityDetector {
             // Convert type string to EntityType
             guard let entityType = mapLLMType(llmEntity.type) else {
                 #if DEBUG
-                print("⚠️  Skipping entity with unknown type '\(llmEntity.type)': '\(llmEntity.original)'")
+                print("⚠️  Skipping entity with unknown type '\(llmEntity.type)'")
                 #endif
                 skippedCount += 1
                 continue
@@ -127,7 +124,7 @@ class EntityDetector {
             // Validate positions (optional - we don't use them anymore)
             #if DEBUG
             if llmEntity.positions.isEmpty {
-                print("⚠️  Entity '\(llmEntity.original)' has no positions (will still process)")
+                print("⚠️  Entity '\(llmEntity.replacement)' has no positions (will still process)")
             }
             #endif
 

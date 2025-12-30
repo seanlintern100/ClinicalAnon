@@ -12,15 +12,27 @@ import Foundation
 
 enum AppError: LocalizedError {
 
-    // MARK: - Setup Errors
+    // MARK: - AI Service Errors
 
-    case homebrewNotInstalled
-    case ollamaNotInstalled
-    case ollamaNotRunning
-    case modelNotDownloaded
-    case ollamaInstallFailed
-    case modelDownloadFailed
-    case ollamaStartFailed
+    case aiNotConfigured
+    case aiProcessingFailed(String)
+    case aiCancelled
+    case aiThrottled
+    case aiAccessDenied
+
+    // MARK: - Local LLM Errors
+
+    case localLLMNotAvailable
+    case localLLMModelNotLoaded
+    case localLLMModelLoadFailed(String)
+    case localLLMGenerationFailed(String)
+
+    // MARK: - AWS/Bedrock Errors
+
+    case awsConfigurationFailed(String)
+    case awsConnectionFailed(String)
+    case awsInvocationFailed(String)
+    case awsStreamingFailed(String)
 
     // MARK: - Network Errors
 
@@ -53,37 +65,57 @@ enum AppError: LocalizedError {
     var errorDescription: String? {
         switch self {
 
-        // Setup Errors
-        case .homebrewNotInstalled:
-            return "Homebrew is not installed on this system."
+        // AI Service Errors
+        case .aiNotConfigured:
+            return "AI service is not configured. Please add AWS credentials in Settings."
 
-        case .ollamaNotInstalled:
-            return "Ollama is not installed. Please install it to continue."
+        case .aiProcessingFailed(let message):
+            return "AI processing failed: \(message)"
 
-        case .ollamaNotRunning:
-            return "Ollama service is not running. Please start Ollama."
+        case .aiCancelled:
+            return "Operation was cancelled."
 
-        case .modelNotDownloaded:
-            return "The Llama 3.1 8B model is not downloaded. Please download it to continue."
+        case .aiThrottled:
+            return "Request was throttled. Please try again in a moment."
 
-        case .ollamaInstallFailed:
-            return "Failed to install Ollama. Please try manual installation."
+        case .aiAccessDenied:
+            return "Access denied to AI service. Please check your credentials."
 
-        case .modelDownloadFailed:
-            return "Failed to download the AI model. Please check your internet connection and try again."
+        // Local LLM Errors
+        case .localLLMNotAvailable:
+            return "Local LLM requires Apple Silicon (M1/M2/M3/M4)."
 
-        case .ollamaStartFailed:
-            return "Failed to start Ollama service. Please try starting it manually."
+        case .localLLMModelNotLoaded:
+            return "Model is not loaded. Please wait for the model to load."
+
+        case .localLLMModelLoadFailed(let reason):
+            return "Failed to load model: \(reason)"
+
+        case .localLLMGenerationFailed(let reason):
+            return "Text generation failed: \(reason)"
+
+        // AWS/Bedrock Errors
+        case .awsConfigurationFailed(let message):
+            return "AWS configuration failed: \(message)"
+
+        case .awsConnectionFailed(let message):
+            return "AWS connection failed: \(message)"
+
+        case .awsInvocationFailed(let message):
+            return "AI request failed: \(message)"
+
+        case .awsStreamingFailed(let message):
+            return "Streaming failed: \(message)"
 
         // Network Errors
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
 
         case .connectionFailed:
-            return "Could not connect to Ollama. Please ensure Ollama is running."
+            return "Could not connect to the service. Please check your connection."
 
         case .timeoutError:
-            return "The request timed out. Please try again with shorter text or check your system performance."
+            return "The request timed out. Please try again."
 
         case .invalidURL:
             return "Invalid server URL. Please check your configuration."
@@ -125,20 +157,17 @@ enum AppError: LocalizedError {
 
     var failureReason: String? {
         switch self {
-        case .homebrewNotInstalled:
-            return "Homebrew package manager is required to install Ollama."
+        case .aiNotConfigured:
+            return "AWS credentials are required for AI processing."
 
-        case .ollamaNotInstalled:
-            return "Ollama is the local AI engine that powers anonymization."
+        case .localLLMNotAvailable:
+            return "This feature requires Apple Silicon hardware."
 
-        case .ollamaNotRunning:
-            return "The Ollama service must be running to process text."
-
-        case .modelNotDownloaded:
-            return "The AI model performs the entity detection."
+        case .localLLMModelNotLoaded, .localLLMModelLoadFailed:
+            return "The local AI model is not ready."
 
         case .networkError, .connectionFailed:
-            return "Cannot communicate with the Ollama service."
+            return "Cannot communicate with the service."
 
         case .timeoutError:
             return "The AI took too long to respond."
@@ -149,6 +178,9 @@ enum AppError: LocalizedError {
         case .textTooLong:
             return "Processing very long texts can cause performance issues."
 
+        case .aiThrottled:
+            return "Too many requests in a short period."
+
         default:
             return nil
         }
@@ -156,26 +188,29 @@ enum AppError: LocalizedError {
 
     var recoverySuggestion: String? {
         switch self {
-        case .homebrewNotInstalled:
-            return "Install Homebrew from brew.sh, then restart this application."
+        case .aiNotConfigured:
+            return "Go to Settings and add your AWS credentials."
 
-        case .ollamaNotInstalled:
-            return "Use the setup wizard to install Ollama, or install manually with 'brew install ollama'."
+        case .localLLMNotAvailable:
+            return "This feature is only available on Macs with Apple Silicon."
 
-        case .ollamaNotRunning:
-            return "The app will attempt to start Ollama automatically. If this fails, run 'ollama serve' in Terminal."
+        case .localLLMModelNotLoaded:
+            return "Please wait for the model to finish loading."
 
-        case .modelNotDownloaded:
-            return "Click 'Download Model' to get the Llama 3.1 8B model (~4.7 GB)."
+        case .localLLMModelLoadFailed:
+            return "Try restarting the application."
 
         case .connectionFailed:
-            return "Ensure Ollama is running. Try running 'ollama serve' in Terminal."
+            return "Check your internet connection and try again."
 
         case .timeoutError:
             return "Try breaking your text into smaller sections, or wait a moment and try again."
 
+        case .aiThrottled:
+            return "Wait a few seconds and try again."
+
         case .invalidResponse, .parsingError, .malformedJSON:
-            return "Try running the analysis again. If the problem persists, try restarting Ollama."
+            return "Try running the analysis again."
 
         case .textTooLong(let maxLength):
             return "Please reduce the text to under \(maxLength) characters and try again."
@@ -197,17 +232,19 @@ enum AppError: LocalizedError {
             return true
         case .invalidResponse, .emptyResponse, .parsingError, .malformedJSON:
             return true
+        case .aiThrottled, .aiCancelled:
+            return true
         default:
             return false
         }
     }
 
-    /// Returns true if this is a setup-related error
-    var isSetupError: Bool {
+    /// Returns true if this is a configuration error
+    var isConfigurationError: Bool {
         switch self {
-        case .homebrewNotInstalled, .ollamaNotInstalled, .ollamaNotRunning,
-             .modelNotDownloaded, .ollamaInstallFailed, .modelDownloadFailed,
-             .ollamaStartFailed:
+        case .aiNotConfigured, .awsConfigurationFailed:
+            return true
+        case .localLLMNotAvailable, .localLLMModelNotLoaded, .localLLMModelLoadFailed:
             return true
         default:
             return false
@@ -217,7 +254,7 @@ enum AppError: LocalizedError {
     /// Returns true if user action is required
     var requiresUserAction: Bool {
         switch self {
-        case .homebrewNotInstalled, .ollamaNotInstalled, .modelNotDownloaded:
+        case .aiNotConfigured:
             return true
         case .emptyText, .textTooLong:
             return true
@@ -259,12 +296,13 @@ extension AppError {
     /// Sample errors for testing UI
     static var samples: [AppError] {
         return [
-            .ollamaNotInstalled,
+            .aiNotConfigured,
             .connectionFailed,
             .timeoutError,
             .emptyText,
             .textTooLong(maxLength: 10000),
             .parsingError("Invalid JSON structure"),
+            .localLLMNotAvailable,
             .unknownError(NSError(domain: "Test", code: -1))
         ]
     }

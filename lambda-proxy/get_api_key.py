@@ -7,6 +7,7 @@ Organization: 3 Big Things
 import json
 import boto3
 from botocore.exceptions import ClientError
+from utils import error_response
 
 # Initialize clients
 secrets_client = boto3.client('secretsmanager', region_name='ap-southeast-2')
@@ -68,15 +69,3 @@ def lambda_handler(event, context):
     except Exception as e:
         print(f'Error: {type(e).__name__}: {str(e)[:100]}')
         return error_response(500, 'Internal error')
-
-
-def error_response(status_code, message):
-    """Generate standardized error response."""
-    return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        'body': json.dumps({'error': message})
-    }

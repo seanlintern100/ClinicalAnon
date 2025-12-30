@@ -17,7 +17,7 @@ class AIAssistantService: ObservableObject {
 
     @Published var isProcessing: Bool = false
     @Published var currentOutput: String = ""
-    @Published var error: AIAssistantError?
+    @Published var error: AppError?
 
     private let bedrockService: BedrockService
     private let credentialsManager: AWSCredentialsManager
@@ -71,7 +71,7 @@ class AIAssistantService: ObservableObject {
 
     private func processInternal(text: String, systemPrompt: String) async throws -> String {
         guard bedrockService.isConfigured else {
-            throw AIAssistantError.notConfigured
+            throw AppError.aiNotConfigured
         }
 
         isProcessing = true
@@ -103,9 +103,9 @@ class AIAssistantService: ObservableObject {
             return result
 
         } catch {
-            let assistantError = AIAssistantError.processingFailed(error.localizedDescription)
-            self.error = assistantError
-            throw assistantError
+            let appError = AppError.aiProcessingFailed(error.localizedDescription)
+            self.error = appError
+            throw appError
         }
     }
 
@@ -113,7 +113,7 @@ class AIAssistantService: ObservableObject {
         AsyncThrowingStream { continuation in
             self.currentTask = Task {
                 guard self.bedrockService.isConfigured else {
-                    continuation.finish(throwing: AIAssistantError.notConfigured)
+                    continuation.finish(throwing: AppError.aiNotConfigured)
                     return
                 }
 
@@ -168,30 +168,11 @@ class AIAssistantService: ObservableObject {
                 } catch {
                     await MainActor.run {
                         self.isProcessing = false
-                        self.error = AIAssistantError.processingFailed(error.localizedDescription)
+                        self.error = AppError.aiProcessingFailed(error.localizedDescription)
                     }
                     continuation.finish(throwing: error)
                 }
             }
-        }
-    }
-}
-
-// MARK: - AI Assistant Errors
-
-enum AIAssistantError: LocalizedError {
-    case notConfigured
-    case processingFailed(String)
-    case cancelled
-
-    var errorDescription: String? {
-        switch self {
-        case .notConfigured:
-            return "AI service is not configured. Please add AWS credentials in Settings."
-        case .processingFailed(let message):
-            return "Processing failed: \(message)"
-        case .cancelled:
-            return "Operation was cancelled."
         }
     }
 }

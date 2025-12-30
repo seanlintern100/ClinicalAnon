@@ -74,13 +74,13 @@ class AWSCredentialsManager: ObservableObject {
     // MARK: - Settings
 
     private func loadSettings() {
-        if let savedModel = UserDefaults.standard.string(forKey: "aws_model") {
+        if let savedModel = UserDefaults.standard.string(forKey: SettingsKeys.awsModel) {
             selectedModel = savedModel
         }
     }
 
     func saveModel(_ modelId: String) {
-        UserDefaults.standard.set(modelId, forKey: "aws_model")
+        UserDefaults.standard.set(modelId, forKey: SettingsKeys.awsModel)
         selectedModel = modelId
     }
 }

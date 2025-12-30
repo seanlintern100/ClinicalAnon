@@ -241,7 +241,7 @@ struct EntityListView_Previews: PreviewProvider {
         Group {
             // With entities
             EntityListView(entities: Entity.samples) { entity in
-                print("Tapped: \(entity.originalText)")
+                print("Tapped: \(entity.replacementCode)")
             }
             .frame(width: 300, height: 400)
             .padding()

@@ -7,6 +7,7 @@ Organization: 3 Big Things
 import json
 import boto3
 from botocore.config import Config
+from utils import error_response
 
 # Configure Bedrock client with retry settings
 bedrock_config = Config(
@@ -160,15 +161,3 @@ def handle_streaming_request(model_id, bedrock_body):
     except Exception as e:
         print(f'Streaming error: {type(e).__name__}: {str(e)[:200]}')
         return error_response(502, 'Bedrock streaming error')
-
-
-def error_response(status_code, message):
-    """Generate standardized error response."""
-    return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        'body': json.dumps({'error': message})
-    }

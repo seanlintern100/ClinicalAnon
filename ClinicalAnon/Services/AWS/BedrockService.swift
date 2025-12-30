@@ -27,7 +27,7 @@ class BedrockService: ObservableObject {
     // MARK: - Properties
 
     @Published var isConfigured: Bool = false
-    @Published var lastError: BedrockError?
+    @Published var lastError: AppError?
 
     /// Cached API key (fetched on init)
     private var apiKey: String?
@@ -99,7 +99,7 @@ class BedrockService: ObservableObject {
         }
 
         if apiKey == nil {
-            throw BedrockError.notConfigured
+            throw AppError.aiNotConfigured
         }
     }
 
@@ -111,7 +111,7 @@ class BedrockService: ObservableObject {
         }
 
         guard apiKey != nil else {
-            throw BedrockError.notConfigured
+            throw AppError.aiNotConfigured
         }
 
         let testMessages = [["role": "user", "content": "Say 'ok'"]]
@@ -126,7 +126,7 @@ class BedrockService: ObservableObject {
             )
             return true
         } catch {
-            throw BedrockError.connectionFailed(error.localizedDescription)
+            throw AppError.awsConnectionFailed(error.localizedDescription)
         }
     }
 
@@ -162,7 +162,7 @@ class BedrockService: ObservableObject {
         }
 
         guard apiKey != nil else {
-            throw BedrockError.notConfigured
+            throw AppError.aiNotConfigured
         }
 
         // Convert ChatMessage array to dictionary array for JSON
@@ -176,13 +176,13 @@ class BedrockService: ObservableObject {
                 maxTokens: maxTokens
             )
             return response
-        } catch let error as BedrockError {
+        } catch let error as AppError {
             lastError = error
             throw error
         } catch {
-            let bedrockError = BedrockError.invocationFailed(error.localizedDescription)
-            lastError = bedrockError
-            throw bedrockError
+            let appError = AppError.awsInvocationFailed(error.localizedDescription)
+            lastError = appError
+            throw appError
         }
     }
 
@@ -221,7 +221,7 @@ class BedrockService: ObservableObject {
                     }
 
                     guard self.apiKey != nil else {
-                        continuation.finish(throwing: BedrockError.notConfigured)
+                        continuation.finish(throwing: AppError.aiNotConfigured)
                         return
                     }
 
@@ -242,7 +242,7 @@ class BedrockService: ObservableObject {
                     continuation.finish()
 
                 } catch {
-                    continuation.finish(throwing: BedrockError.streamingFailed(error.localizedDescription))
+                    continuation.finish(throwing: AppError.awsStreamingFailed(error.localizedDescription))
                 }
             }
         }
@@ -259,11 +259,11 @@ class BedrockService: ObservableObject {
     ) async throws -> String {
 
         guard let currentApiKey = apiKey else {
-            throw BedrockError.notConfigured
+            throw AppError.aiNotConfigured
         }
 
         guard let url = URL(string: proxyEndpoint) else {
-            throw BedrockError.configurationFailed("Invalid proxy URL")
+            throw AppError.awsConfigurationFailed("Invalid proxy URL")
         }
 
         var request = URLRequest(url: url)
@@ -290,25 +290,25 @@ class BedrockService: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw BedrockError.invocationFailed("Invalid response")
+            throw AppError.awsInvocationFailed("Invalid response")
         }
 
         // Parse response
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw BedrockError.emptyResponse
+            throw AppError.emptyResponse
         }
 
         // Check for error response
         if let error = json["error"] as? String {
             switch httpResponse.statusCode {
             case 429:
-                throw BedrockError.throttled
+                throw AppError.aiThrottled
             case 403:
                 // API key might have rotated - try refreshing
                 await fetchApiKey()
-                throw BedrockError.accessDenied
+                throw AppError.aiAccessDenied
             default:
-                throw BedrockError.invocationFailed(error)
+                throw AppError.awsInvocationFailed(error)
             }
         }
 
@@ -319,40 +319,7 @@ class BedrockService: ObservableObject {
             return text
         }
 
-        throw BedrockError.emptyResponse
+        throw AppError.emptyResponse
     }
 }
 
-// MARK: - Bedrock Errors
-
-enum BedrockError: LocalizedError {
-    case notConfigured
-    case configurationFailed(String)
-    case connectionFailed(String)
-    case invocationFailed(String)
-    case streamingFailed(String)
-    case emptyResponse
-    case throttled
-    case accessDenied
-
-    var errorDescription: String? {
-        switch self {
-        case .notConfigured:
-            return "AI service is not configured. Please check your network connection."
-        case .configurationFailed(let message):
-            return "Failed to configure: \(message)"
-        case .connectionFailed(let message):
-            return "Connection failed: \(message)"
-        case .invocationFailed(let message):
-            return "AI request failed: \(message)"
-        case .streamingFailed(let message):
-            return "Streaming failed: \(message)"
-        case .emptyResponse:
-            return "Received empty response from AI"
-        case .throttled:
-            return "Request was throttled. Please try again in a moment."
-        case .accessDenied:
-            return "Access denied to AI service."
-        }
-    }
-}

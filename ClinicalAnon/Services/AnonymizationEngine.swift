@@ -62,14 +62,14 @@ class AnonymizationEngine: ObservableObject {
     @Published var detectionMode: DetectionMode = .aiModel {
         didSet {
             // Save to UserDefaults
-            UserDefaults.standard.set(detectionMode.rawValue, forKey: "detectionMode")
+            UserDefaults.standard.set(detectionMode.rawValue, forKey: SettingsKeys.detectionMode)
         }
     }
     #else
     @Published var detectionMode: DetectionMode = .patterns {
         didSet {
             // Save to UserDefaults
-            UserDefaults.standard.set(detectionMode.rawValue, forKey: "detectionMode")
+            UserDefaults.standard.set(detectionMode.rawValue, forKey: SettingsKeys.detectionMode)
         }
     }
     #endif
@@ -92,7 +92,7 @@ class AnonymizationEngine: ObservableObject {
         self.entityMapping = entityMapping ?? EntityMapping()
 
         // Load saved detection mode from UserDefaults
-        if let savedMode = UserDefaults.standard.string(forKey: "detectionMode"),
+        if let savedMode = UserDefaults.standard.string(forKey: SettingsKeys.detectionMode),
            let mode = DetectionMode(rawValue: savedMode) {
             self.detectionMode = mode
         }

@@ -22,7 +22,6 @@ class UserExclusionManager: ObservableObject {
     /// Words the user has explicitly excluded from detection
     @Published private(set) var excludedWords: Set<String> = []
 
-    private let userDefaultsKey = "userExcludedWords"
 
     // MARK: - Initialization
 
@@ -79,11 +78,11 @@ class UserExclusionManager: ObservableObject {
 
     private func save() {
         let array = Array(excludedWords)
-        UserDefaults.standard.set(array, forKey: userDefaultsKey)
+        UserDefaults.standard.set(array, forKey: SettingsKeys.userExclusions)
     }
 
     private func load() {
-        if let array = UserDefaults.standard.stringArray(forKey: userDefaultsKey) {
+        if let array = UserDefaults.standard.stringArray(forKey: SettingsKeys.userExclusions) {
             excludedWords = Set(array)
         }
     }

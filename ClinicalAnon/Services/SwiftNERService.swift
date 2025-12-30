@@ -36,7 +36,7 @@ class SwiftNERService {
         ]
 
         // Add catch-all number recognizer if enabled (default: ON)
-        let redactAllNumbers = UserDefaults.standard.object(forKey: "redactAllNumbers") as? Bool ?? true
+        let redactAllNumbers = UserDefaults.standard.object(forKey: SettingsKeys.redactAllNumbers) as? Bool ?? true
         if redactAllNumbers {
             allRecognizers.append(AllNumbersRecognizer())
         }

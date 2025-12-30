@@ -70,7 +70,7 @@ class LocalLLMService: ObservableObject {
     @Published var downloadStatus: String = ""
     @Published var selectedModelId: String {
         didSet {
-            UserDefaults.standard.set(selectedModelId, forKey: "localLLMModelId")
+            UserDefaults.standard.set(selectedModelId, forKey: SettingsKeys.localLLMModelId)
             // Unload current model when selection changes
             if isModelLoaded {
                 unloadModel()
@@ -113,7 +113,7 @@ class LocalLLMService: ObservableObject {
     // MARK: - Initialization
 
     private init() {
-        selectedModelId = UserDefaults.standard.string(forKey: "localLLMModelId") ?? defaultModelId
+        selectedModelId = UserDefaults.standard.string(forKey: SettingsKeys.localLLMModelId) ?? defaultModelId
         checkAvailability()
     }
 
@@ -140,7 +140,7 @@ class LocalLLMService: ObservableObject {
     /// Load the selected model (downloads if needed)
     func loadModel() async throws {
         guard isAvailable else {
-            throw LocalLLMError.notAvailable
+            throw AppError.localLLMNotAvailable
         }
 
         if isModelLoaded && modelContext != nil {
@@ -195,7 +195,7 @@ class LocalLLMService: ObservableObject {
             downloadStatus = ""
             print("LocalLLMService: Failed to load model: \(error)")
             lastError = "Failed to load model: \(error.localizedDescription)"
-            throw LocalLLMError.modelLoadFailed(error.localizedDescription)
+            throw AppError.localLLMModelLoadFailed(error.localizedDescription)
         }
     }
 
@@ -210,7 +210,7 @@ class LocalLLMService: ObservableObject {
     /// Review redacted text for missed PII
     func reviewForMissedPII(text: String) async throws -> [PIIFinding] {
         guard isAvailable else {
-            throw LocalLLMError.notAvailable
+            throw AppError.localLLMNotAvailable
         }
 
         // Load model if not already loaded
@@ -219,7 +219,7 @@ class LocalLLMService: ObservableObject {
         }
 
         guard let session = chatSession else {
-            throw LocalLLMError.modelNotLoaded
+            throw AppError.localLLMModelNotLoaded
         }
 
         isProcessing = true
@@ -245,15 +245,16 @@ class LocalLLMService: ObservableObject {
 
         } catch {
             print("LocalLLMService: Generation failed: \(error)")
-            throw LocalLLMError.generationFailed(error.localizedDescription)
+            throw AppError.localLLMGenerationFailed(error.localizedDescription)
         }
     }
 
     // MARK: - Private Methods
 
-    /// Parse LLM response into structured findings
+    /// Parse LLM response into structured findings (handles both pipe and markdown formats)
     private func parseFindings(response: String) -> [PIIFinding] {
         var findings: [PIIFinding] = []
+        var currentType: String? = nil
 
         let lines = response.components(separatedBy: .newlines)
 
@@ -265,28 +266,118 @@ class LocalLLMService: ObservableObject {
                 continue
             }
 
-            // Parse TYPE|text|reason format
-            let parts = trimmed.components(separatedBy: "|")
-            guard parts.count >= 2 else { continue }
+            // Try pipe format first: TYPE|text|reason
+            let pipeParts = trimmed.components(separatedBy: "|")
+            if pipeParts.count >= 2 {
+                let typeStr = pipeParts[0].trimmingCharacters(in: .whitespaces).uppercased()
+                let text = pipeParts[1].trimmingCharacters(in: .whitespaces)
+                let reason = pipeParts.count > 2 ? pipeParts[2].trimmingCharacters(in: .whitespaces) : "Potential PII detected"
 
-            let typeStr = parts[0].trimmingCharacters(in: .whitespaces).uppercased()
-            let text = parts[1].trimmingCharacters(in: .whitespaces)
-            let reason = parts.count > 2 ? parts[2].trimmingCharacters(in: .whitespaces) : "Potential PII detected"
+                if text.count > 1 && !containsPlaceholder(text) {
+                    findings.append(PIIFinding(
+                        text: text,
+                        suggestedType: mapTypeToEntityType(typeStr),
+                        reason: reason,
+                        confidence: 0.8
+                    ))
+                }
+                continue
+            }
 
-            // Skip if text is too short or looks like a placeholder itself
-            guard text.count > 1 else { continue }
+            // Detect section headers like "**Names**:" or "1. **Names**:"
+            if let typeMatch = extractSectionType(from: trimmed) {
+                currentType = typeMatch
+                continue
+            }
 
-            let entityType = mapTypeToEntityType(typeStr)
-
-            findings.append(PIIFinding(
-                text: text,
-                suggestedType: entityType,
-                reason: reason,
-                confidence: 0.8 // Default confidence for LLM findings
-            ))
+            // Parse bullet items like "- Hayden (patient)" or "- sean@email.com"
+            if trimmed.hasPrefix("-") || trimmed.hasPrefix("•") {
+                if let finding = parseBulletItem(trimmed, currentType: currentType) {
+                    findings.append(finding)
+                }
+            }
         }
 
-        return findings
+        return filterValidFindings(findings)
+    }
+
+    /// Check if text contains an existing placeholder (anything in square brackets)
+    private func containsPlaceholder(_ text: String) -> Bool {
+        // Skip any text that contains [something]
+        let regex = try? NSRegularExpression(pattern: "\\[[^\\]]+\\]", options: [])
+        let range = NSRange(text.startIndex..., in: text)
+        return regex?.firstMatch(in: text, options: [], range: range) != nil
+    }
+
+    /// Extract section type from headers like "**Names**:" or "1. **Names**:"
+    private func extractSectionType(from line: String) -> String? {
+        let patterns: [(String, String)] = [
+            ("name", "NAME"), ("email", "EMAIL"), ("phone", "PHONE"),
+            ("location", "LOCATION"), ("date", "DATE"), ("organization", "OTHER"),
+            ("address", "LOCATION"), ("medical", "OTHER")
+        ]
+        let lower = line.lowercased()
+        for (key, type) in patterns {
+            if lower.contains(key) { return type }
+        }
+        return nil
+    }
+
+    /// Parse a bullet item like "- Hayden (patient)" into a PIIFinding
+    private func parseBulletItem(_ line: String, currentType: String?) -> PIIFinding? {
+        var text = line.trimmingCharacters(in: .whitespaces)
+        if text.hasPrefix("-") || text.hasPrefix("•") {
+            text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+        }
+
+        // Skip any line containing a placeholder - these are already redacted
+        if containsPlaceholder(text) { return nil }
+
+        // Extract text before parenthetical description
+        var piiText = text
+        var reason = "Detected by LLM"
+
+        if let parenRange = text.range(of: " (") {
+            piiText = String(text[..<parenRange.lowerBound])
+            let afterParen = text[parenRange.upperBound...]
+            if let closeRange = afterParen.range(of: ")") {
+                reason = String(afterParen[..<closeRange.lowerBound])
+            }
+        }
+
+        // Skip placeholders, short text, and text with underscores
+        guard piiText.count > 1,
+              !piiText.hasPrefix("["),
+              !piiText.contains("_") else { return nil }
+
+        let entityType = mapTypeToEntityType(currentType ?? inferType(from: piiText))
+
+        return PIIFinding(
+            text: piiText,
+            suggestedType: entityType,
+            reason: reason,
+            confidence: 0.8
+        )
+    }
+
+    /// Infer type from content
+    private func inferType(from text: String) -> String {
+        if text.contains("@") { return "EMAIL" }
+        if text.allSatisfy({ $0.isNumber || $0 == "-" || $0 == " " || $0 == "(" || $0 == ")" }) { return "PHONE" }
+        return "NAME"
+    }
+
+    /// Filter out duplicates and invalid findings
+    private func filterValidFindings(_ findings: [PIIFinding]) -> [PIIFinding] {
+        var seen = Set<String>()
+        return findings.filter { finding in
+            let key = finding.text.lowercased()
+            guard !seen.contains(key),
+                  !finding.text.hasPrefix("["),
+                  finding.text.count > 1 else { return false }
+            seen.insert(key)
+            return true
+        }
     }
 
     /// Map string type to EntityType
@@ -304,28 +395,6 @@ class LocalLLMService: ObservableObject {
             return .identifier
         default:
             return .personOther
-        }
-    }
-}
-
-// MARK: - Errors
-
-enum LocalLLMError: LocalizedError {
-    case notAvailable
-    case modelNotLoaded
-    case modelLoadFailed(String)
-    case generationFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .notAvailable:
-            return "Local LLM requires Apple Silicon (M1/M2/M3/M4)."
-        case .modelNotLoaded:
-            return "Model is not loaded. Please load the model first."
-        case .modelLoadFailed(let reason):
-            return "Failed to load model: \(reason)"
-        case .generationFailed(let reason):
-            return "Text generation failed: \(reason)"
         }
     }
 }
