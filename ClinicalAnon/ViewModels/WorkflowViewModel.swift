@@ -258,19 +258,10 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Redact Phase Actions
 
     func analyze() async {
-        print("DEBUG: WorkflowViewModel.analyze() called")
         await redactState.analyze()
 
-        print("DEBUG: redactState.analyze() completed")
-        print("DEBUG: redactState.result is \(redactState.result == nil ? "nil" : "set")")
-
-        // Ensure cache is rebuilt using our strong reference to cacheManager
-        // Pass values directly to avoid any computed property timing issues
+        // Rebuild cache using strong reference to cacheManager
         if let result = redactState.result {
-            print("DEBUG: result.originalText length = \(result.originalText.count)")
-            print("DEBUG: allEntities count = \(redactState.allEntities.count)")
-            print("DEBUG: Calling cacheManager.rebuildAllCaches()")
-
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
                 allEntities: redactState.allEntities,
@@ -279,11 +270,6 @@ class WorkflowViewModel: ObservableObject {
                 redactedText: redactState.displayedRedactedText,
                 restoredText: nil
             )
-
-            print("DEBUG: After rebuild - cachedOriginalAttributed is \(cacheManager.cachedOriginalAttributed == nil ? "nil" : "set")")
-            print("DEBUG: After rebuild - cachedRedactedAttributed is \(cacheManager.cachedRedactedAttributed == nil ? "nil" : "set")")
-        } else {
-            print("DEBUG: result is nil, skipping cache rebuild")
         }
     }
 
@@ -362,18 +348,23 @@ class WorkflowViewModel: ObservableObject {
 
     func sendRefinement() {
         improveState.sendRefinement()
+        refinementInput = ""  // Clear the bound property
     }
 
     func exitRefinementMode() {
         improveState.exitRefinementMode()
+        refinementInput = ""
     }
 
     func regenerateAIOutput() {
         improveState.regenerateAIOutput()
+        refinementInput = ""
     }
 
     func startOverAI() {
         improveState.startOver()
+        refinementInput = ""
+        customInstructions = ""
     }
 
     func cancelAIRequest() {

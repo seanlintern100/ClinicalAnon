@@ -1723,6 +1723,17 @@ struct InteractiveTextView: NSViewRepresentable {
         // Update the attributed text
         textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
 
+        // Reconfigure text container with actual dimensions
+        let contentWidth = max(scrollView.contentSize.width, 100)
+        textView.textContainer?.containerSize = NSSize(width: contentWidth, height: .greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+
+        // Ensure proper frame
+        textView.minSize = NSSize(width: contentWidth, height: 0)
+        textView.maxSize = NSSize(width: contentWidth, height: .greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+
         // Update the coordinator's callback
         context.coordinator.onDoubleClick = onDoubleClick
     }

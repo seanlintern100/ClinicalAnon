@@ -253,7 +253,7 @@ class RedactPhaseState: ObservableObject {
         }
 
         if !LocalLLMService.shared.isModelLoaded {
-            successMessage = "Downloading model (first time only)..."
+            successMessage = "Loading model..."
         }
 
         isReviewingPII = true

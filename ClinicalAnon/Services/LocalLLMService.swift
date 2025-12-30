@@ -89,23 +89,25 @@ class LocalLLMService: ObservableObject {
     // MARK: - Prompt
 
     private let systemInstructions = """
-        You are a PII detection assistant. Analyze redacted text and report any personal identifiable information that was missed.
+        You find missed PII in redacted text. The text already has placeholders like [PERSON_A], [LOCATION_B], [NUM_A] - these are CORRECT, ignore them.
 
-        The text has been redacted with placeholders like [PERSON_A], [LOCATION_B], etc. Find any PII that was missed or partially redacted:
-        - Unredacted names, emails, phone numbers, addresses
-        - Malformed placeholders (e.g., [PERSON_X]ohn where part of the name leaked)
-        - Any identifiable information
+        Look ONLY for:
+        - Raw names, emails, phone numbers that have NO placeholder
+        - Partial leaks like "[PERSON_A]ohn" where "ohn" leaked after the placeholder
 
-        Return each issue on its own line in this exact format:
-        TYPE|exact text found|reason
+        Output format - one per line, nothing else:
+        TYPE|exact_text|reason
 
-        Valid TYPEs: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
+        Types: NAME, EMAIL, PHONE, LOCATION, DATE, ID, OTHER
 
-        Example output:
-        EMAIL|john@example.com|unredacted email address
-        NAME|[PERSON_V]eaver|partial name leak - 'eaver' visible after placeholder
+        Examples:
+        NAME|John Smith|unredacted name
+        EMAIL|test@email.com|unredacted email
+        NAME|[PERSON_A]ohn|partial leak after placeholder
 
-        If no issues found, respond with: NO_ISSUES_FOUND
+        If nothing missed, output only: NO_ISSUES_FOUND
+
+        Do not explain. Do not list the existing placeholders. Only report NEW issues or output NO_ISSUES_FOUND.
         """
 
     // MARK: - Initialization

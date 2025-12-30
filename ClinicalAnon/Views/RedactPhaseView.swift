@@ -90,12 +90,12 @@ struct RedactPhaseView: View {
 
             // Text content
             if let result = viewModel.result, let cachedOriginal = viewModel.cachedOriginalAttributed {
-                InteractiveTextView(
-                    attributedText: cachedOriginal,
-                    onDoubleClick: { word in
-                        viewModel.openAddCustomEntity(withText: word)
-                    }
-                )
+                ScrollView {
+                    Text(cachedOriginal)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DesignSystem.Spacing.medium)
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
             } else {
