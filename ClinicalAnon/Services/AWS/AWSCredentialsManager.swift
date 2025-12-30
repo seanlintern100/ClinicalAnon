@@ -37,10 +37,14 @@ class AWSCredentialsManager: ObservableObject {
     @Published var region: String = AWSCredentials.defaultRegion
     @Published var selectedModel: String = "apac.anthropic.claude-sonnet-4-20250514-v1:0"
 
-    // MARK: - Built-in Credentials (internal use only)
+    // MARK: - Credentials from Environment
 
-    private let builtInAccessKey = "PLACEHOLDER_ACCESS_KEY"
-    private let builtInSecretKey = "PLACEHOLDER_SECRET_KEY"
+    private var builtInAccessKey: String {
+        ProcessInfo.processInfo.environment["AWS_ACCESS_KEY_ID"] ?? ""
+    }
+    private var builtInSecretKey: String {
+        ProcessInfo.processInfo.environment["AWS_SECRET_ACCESS_KEY"] ?? ""
+    }
     private let builtInRegion = "ap-southeast-2"
 
     // MARK: - Defaults
