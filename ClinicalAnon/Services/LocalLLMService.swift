@@ -376,12 +376,15 @@ class LocalLLMService: ObservableObject {
                 let reason = pipeParts.count > 2 ? pipeParts[2].trimmingCharacters(in: .whitespaces) : "Potential PII detected"
 
                 if text.count > 1 && !containsPlaceholder(text) {
-                    findings.append(PIIFinding(
-                        text: text,
-                        suggestedType: mapTypeToEntityType(typeStr),
-                        reason: reason,
-                        confidence: 0.8
-                    ))
+                    // Skip if type maps to nil (e.g., TITLE)
+                    if let entityType = mapTypeToEntityType(typeStr) {
+                        findings.append(PIIFinding(
+                            text: text,
+                            suggestedType: entityType,
+                            reason: reason,
+                            confidence: 0.8
+                        ))
+                    }
                 }
                 continue
             }
@@ -452,7 +455,10 @@ class LocalLLMService: ObservableObject {
               !piiText.hasPrefix("["),
               !piiText.contains("_") else { return nil }
 
-        let entityType = mapTypeToEntityType(currentType ?? inferType(from: piiText))
+        // Skip if type maps to nil (e.g., TITLE)
+        guard let entityType = mapTypeToEntityType(currentType ?? inferType(from: piiText)) else {
+            return nil
+        }
 
         return PIIFinding(
             text: piiText,
@@ -482,12 +488,12 @@ class LocalLLMService: ObservableObject {
         }
     }
 
-    /// Map string type to EntityType
-    private func mapTypeToEntityType(_ typeStr: String) -> EntityType {
+    /// Map string type to EntityType (returns nil for types to skip)
+    private func mapTypeToEntityType(_ typeStr: String) -> EntityType? {
         switch typeStr {
-        case "NAME", "PERSON":
+        case "NAME", "PERSON", "RELATIONSHIP":
             return .personOther
-        case "EMAIL", "PHONE", "CONTACT":
+        case "EMAIL", "PHONE", "PHONE_NUMBER", "CONTACT":
             return .contact
         case "LOCATION", "ADDRESS":
             return .location
@@ -495,6 +501,11 @@ class LocalLLMService: ObservableObject {
             return .date
         case "ID", "IDENTIFIER":
             return .identifier
+        case "ORGANIZATION", "ORG":
+            return .organization
+        case "TITLE":
+            // Skip job titles - not PII
+            return nil
         default:
             return .personOther
         }
