@@ -8,6 +8,7 @@
 
 import Foundation
 import AppKit
+import Hub
 import MLXLLM
 import MLXLMCommon
 
@@ -120,37 +121,20 @@ class LocalLLMService: ObservableObject {
     }
 
     /// Check if the selected model is cached on disk (without loading it)
-    /// Note: MLX-LM cache location is not reliably detectable, so this uses a heuristic
+    /// Uses the Hub library's path calculation to find the correct cache location
     var isModelCached: Bool {
-        // Check multiple possible cache locations
-        let possibleCacheDirs: [URL] = [
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/huggingface/hub"),
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/mlx"),
-            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        ].compactMap { $0 }
+        let modelPath = cachedModelPath
+        let exists = FileManager.default.fileExists(atPath: modelPath.path)
+        print("LocalLLMService: Cache check - path: \(modelPath.path), exists: \(exists)")
+        return exists
+    }
 
-        let modelFolderName = "models--\(selectedModelId.replacingOccurrences(of: "/", with: "--"))"
-
-        for cacheDir in possibleCacheDirs {
-            let modelPath = cacheDir.appendingPathComponent(modelFolderName)
-            if FileManager.default.fileExists(atPath: modelPath.path) {
-                return true
-            }
-        }
-
-        // Also check for any folder containing the model name parts
-        let modelNameParts = selectedModelId.components(separatedBy: "/")
-        if let lastPart = modelNameParts.last {
-            for cacheDir in possibleCacheDirs {
-                if let contents = try? FileManager.default.contentsOfDirectory(atPath: cacheDir.path) {
-                    if contents.contains(where: { $0.contains(lastPart) }) {
-                        return true
-                    }
-                }
-            }
-        }
-
-        return false
+    /// Get the path where the model would be cached
+    /// Uses the same path calculation as the Hub library
+    var cachedModelPath: URL {
+        let hub = HubApi()
+        let repo = Hub.Repo(id: selectedModelId)
+        return hub.localRepoLocation(repo)
     }
 
     /// Pre-load model in background (only if cached, won't trigger download)
@@ -170,11 +154,18 @@ class LocalLLMService: ObservableObject {
             return
         }
 
-        // Note: We can't reliably detect if the model is cached without attempting to load it.
-        // MLX-LM stores models in a location that varies by version.
-        // For now, skip pre-loading to avoid triggering unexpected downloads.
-        // The model will load on first "Review PII" use.
-        print("LocalLLMService: Pre-load disabled - model will load on first use")
+        guard isModelCached else {
+            print("LocalLLMService: Pre-load skipped - model not cached, will download on first use")
+            return
+        }
+
+        print("LocalLLMService: Starting background pre-load...")
+        do {
+            try await loadModel()
+            print("LocalLLMService: Model pre-loaded successfully")
+        } catch {
+            print("LocalLLMService: Pre-load failed: \(error.localizedDescription)")
+        }
     }
 
     /// Load the selected model (downloads if needed)
