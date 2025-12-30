@@ -520,10 +520,6 @@ struct CompactHeaderView: View {
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
-            Text("Redactor")
-                .font(DesignSystem.Typography.heading)
-                .foregroundColor(DesignSystem.Colors.primaryTeal)
-
             Spacer()
 
             #if ENABLE_AI_FEATURES

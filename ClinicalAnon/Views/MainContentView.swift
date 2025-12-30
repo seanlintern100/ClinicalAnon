@@ -37,29 +37,24 @@ struct MainContentView: View {
     // MARK: - Header View
 
     private var headerView: some View {
-        HStack {
-            // App title
-            Text("Redactor")
-                .font(DesignSystem.Typography.heading)
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-
-            Spacer()
-
+        ZStack {
             // Phase indicator centered
             PhaseIndicator(viewModel: viewModel)
 
-            Spacer()
+            // Right-aligned buttons
+            HStack {
+                Spacer()
 
-            // Clear/New button - always visible when there's content
-            if viewModel.result != nil || viewModel.hasGeneratedOutput {
-                Button(action: { viewModel.clearAll() }) {
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: "arrow.counterclockwise")
-                        Text("Start Over")
+                if viewModel.result != nil || viewModel.hasGeneratedOutput {
+                    Button(action: { viewModel.clearAll() }) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Start Over")
+                        }
+                        .font(DesignSystem.Typography.caption)
                     }
-                    .font(DesignSystem.Typography.caption)
+                    .buttonStyle(SecondaryButtonStyle())
                 }
-                .buttonStyle(SecondaryButtonStyle())
             }
         }
         .padding(.horizontal, DesignSystem.Spacing.large)

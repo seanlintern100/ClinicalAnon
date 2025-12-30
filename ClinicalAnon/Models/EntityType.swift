@@ -50,6 +50,11 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
     /// Phone numbers, email addresses, URLs
     case contact = "contact"
 
+    // MARK: - Numeric (Catch-All)
+
+    /// All numeric values not caught by specific recognizers
+    case numericAll = "numeric_all"
+
     // MARK: - Computed Properties
 
     var id: String { rawValue }
@@ -73,6 +78,8 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
             return "Identifier"
         case .contact:
             return "Contact Info"
+        case .numericAll:
+            return "Number"
         }
     }
 
@@ -95,6 +102,8 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
             return "ID"
         case .contact:
             return "CONTACT"
+        case .numericAll:
+            return "NUM"
         }
     }
 
@@ -117,6 +126,8 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
             return "Medical record numbers, case IDs, or other identifying numbers"
         case .contact:
             return "Phone numbers, email addresses, or other contact information"
+        case .numericAll:
+            return "Any numeric values (amounts, reference numbers, counts, etc.)"
         }
     }
 
@@ -139,6 +150,8 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
             return "number.circle.fill"
         case .contact:
             return "phone.fill"
+        case .numericAll:
+            return "textformat.123"
         }
     }
 
@@ -156,6 +169,8 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
         case .contact:
             return DesignSystem.Colors.highlightContact
         case .identifier:
+            return DesignSystem.Colors.highlightIdentifier
+        case .numericAll:
             return DesignSystem.Colors.highlightIdentifier
         }
     }

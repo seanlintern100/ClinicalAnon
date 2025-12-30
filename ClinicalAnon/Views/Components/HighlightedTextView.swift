@@ -96,6 +96,8 @@ struct HighlightedTextView: View {
             return Color.red
         case .contact:
             return Color.pink
+        case .numericAll:
+            return Color.orange
         }
     }
 }
@@ -190,6 +192,8 @@ struct LegendItem: View {
             return Color.red
         case .contact:
             return Color.pink
+        case .numericAll:
+            return Color.orange
         }
     }
 }

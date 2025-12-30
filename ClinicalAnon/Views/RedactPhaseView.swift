@@ -26,13 +26,19 @@ struct RedactPhaseView: View {
                 RedactEntitySidebar(viewModel: viewModel)
             }
 
-            // Two-pane content: Original | Redacted
-            HStack(spacing: 0) {
-                // LEFT: Original Text
-                originalTextPane
+            // Two-pane content: Original | Redacted (equal widths)
+            GeometryReader { geometry in
+                let paneWidth = (geometry.size.width) / 2
 
-                // RIGHT: Redacted Text
-                redactedTextPane
+                HStack(spacing: 0) {
+                    // LEFT: Original Text
+                    originalTextPane
+                        .frame(width: paneWidth)
+
+                    // RIGHT: Redacted Text
+                    redactedTextPane
+                        .frame(width: paneWidth)
+                }
             }
         }
         .sheet(isPresented: $viewModel.showingAddCustom) {
@@ -121,7 +127,6 @@ struct RedactPhaseView: View {
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
-        .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Redacted Text Pane
@@ -187,22 +192,80 @@ struct RedactPhaseView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            // Continue button at bottom
+            // Review PII and Continue buttons at bottom
             if viewModel.result != nil {
                 Divider().opacity(0.15)
 
-                HStack {
-                    Spacer()
-
-                    Button(action: { viewModel.continueToNextPhase() }) {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            Text("Continue")
-                            Image(systemName: "arrow.right")
+                VStack(spacing: DesignSystem.Spacing.small) {
+                    // Status messages
+                    if let error = viewModel.errorMessage {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text(error)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(.red)
+                            Spacer()
+                            Button(action: { viewModel.errorMessage = nil }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .font(DesignSystem.Typography.body)
+                        .padding(DesignSystem.Spacing.small)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(6)
                     }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(!viewModel.canContinueFromRedact)
+
+                    if let success = viewModel.successMessage {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text(success)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(.green)
+                            Spacer()
+                        }
+                        .padding(DesignSystem.Spacing.small)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+
+                    // Buttons
+                    HStack {
+                        Spacer()
+
+                        // Review PII button (if local LLM available)
+                        if LocalLLMService.shared.isAvailable {
+                            Button(action: { Task { await viewModel.runLocalPIIReview() } }) {
+                                HStack(spacing: DesignSystem.Spacing.xs) {
+                                    if viewModel.isReviewingPII {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .frame(width: 14, height: 14)
+                                    } else {
+                                        Image(systemName: "magnifyingglass")
+                                    }
+                                    Text("Review PII")
+                                }
+                                .font(DesignSystem.Typography.body)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(viewModel.isReviewingPII)
+                            .help("Scan for missed PII using local AI")
+                        }
+
+                        Button(action: { viewModel.continueToNextPhase() }) {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                Text("Continue")
+                                Image(systemName: "arrow.right")
+                            }
+                            .font(DesignSystem.Typography.body)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(!viewModel.canContinueFromRedact)
+                    }
                 }
                 .padding(DesignSystem.Spacing.medium)
             }
@@ -213,7 +276,6 @@ struct RedactPhaseView: View {
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
-        .frame(minWidth: 350, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -260,10 +322,26 @@ private struct RedactEntitySidebar: View {
                 // Entity list
                 ScrollView {
                     LazyVStack(spacing: DesignSystem.Spacing.xs) {
+                        // Show AI Review section header if there are AI findings
+                        if !viewModel.piiReviewFindings.isEmpty {
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.orange)
+                                Text("AI Review Findings")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.orange)
+                                Spacer()
+                            }
+                            .padding(.horizontal, DesignSystem.Spacing.xs)
+                            .padding(.top, DesignSystem.Spacing.xs)
+                        }
+
                         ForEach(viewModel.allEntities) { entity in
                             RedactEntityRow(
                                 entity: entity,
                                 isExcluded: viewModel.isEntityExcluded(entity),
+                                isFromAIReview: viewModel.piiReviewFindings.contains(where: { $0.id == entity.id }),
                                 onToggle: { viewModel.toggleEntity(entity) }
                             )
                         }
@@ -285,7 +363,7 @@ private struct RedactEntitySidebar: View {
                 }
             }
         }
-        .frame(width: isCollapsed ? 40 : 180)
+        .frame(width: isCollapsed ? 40 : 270)
         .background(DesignSystem.Colors.surface)
         .animation(.easeInOut(duration: 0.2), value: isCollapsed)
     }
@@ -297,6 +375,7 @@ private struct RedactEntityRow: View {
 
     let entity: Entity
     let isExcluded: Bool
+    let isFromAIReview: Bool
     let onToggle: () -> Void
 
     var body: some View {
@@ -308,11 +387,23 @@ private struct RedactEntityRow: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(entity.originalText)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(isExcluded ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
-                    .lineLimit(1)
-                    .strikethrough(isExcluded)
+                HStack(spacing: 4) {
+                    Text(entity.originalText)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(isExcluded ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+                        .strikethrough(isExcluded)
+
+                    if isFromAIReview {
+                        Text("AI")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.orange)
+                            .cornerRadius(3)
+                    }
+                }
 
                 Text("→ \(entity.replacementCode)")
                     .font(.system(size: 10))
@@ -325,7 +416,7 @@ private struct RedactEntityRow: View {
         .padding(.horizontal, DesignSystem.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(isExcluded ? Color.clear : entity.type.highlightColor.opacity(0.1))
+                .fill(isExcluded ? Color.clear : (isFromAIReview ? Color.orange.opacity(0.1) : entity.type.highlightColor.opacity(0.1)))
         )
     }
 }

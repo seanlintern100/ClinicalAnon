@@ -42,6 +42,12 @@ class WorkflowViewModel: ObservableObject {
     @Published var excludedEntityIds: Set<UUID> = []
     @Published var customEntities: [Entity] = []
 
+    // Local LLM PII review
+    @Published var piiReviewFindings: [Entity] = []
+    @Published var isReviewingPII: Bool = false
+    @Published var piiReviewError: String?
+    private var entitiesToRemove: Set<UUID> = []  // For merging partial entities
+
     // Performance: Cached redacted text
     @Published private(set) var cachedRedactedText: String = ""
     private var redactedTextNeedsUpdate: Bool = true
@@ -142,10 +148,12 @@ class WorkflowViewModel: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom)
+    /// All entities (detected + custom + PII review findings)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities }
-        return result.entities + customEntities
+        guard let result = result else { return customEntities + piiReviewFindings }
+        // Filter out entities marked for removal (replaced by merged entities)
+        let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
+        return baseEntities + customEntities + piiReviewFindings
     }
 
     /// Only active entities (not excluded)
@@ -286,6 +294,10 @@ class WorkflowViewModel: ObservableObject {
         excludedEntityIds.removeAll()
         _excludedIds.removeAll()
         customEntities.removeAll()
+        piiReviewFindings.removeAll()
+        entitiesToRemove.removeAll()
+        isReviewingPII = false
+        piiReviewError = nil
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -385,6 +397,145 @@ class WorkflowViewModel: ObservableObject {
 
         successMessage = "Added custom redaction: \(code) (\(positions.count) occurrences)"
         autoHideSuccess()
+    }
+
+    // MARK: - Local LLM PII Review
+
+    /// Run local LLM review to find missed PII
+    func runLocalPIIReview() async {
+        guard let result = result else {
+            piiReviewError = "Please analyze text first"
+            return
+        }
+
+        // Re-check Ollama availability before running
+        await LocalLLMService.shared.checkAvailability()
+
+        guard LocalLLMService.shared.isAvailable else {
+            errorMessage = "Ollama not running. Start Ollama and try again."
+            return
+        }
+
+        isReviewingPII = true
+        piiReviewError = nil
+
+        do {
+            let findings = try await LocalLLMService.shared.reviewForMissedPII(
+                text: cachedRedactedText
+            )
+
+            await MainActor.run {
+                processPIIFindings(findings, originalText: result.originalText)
+                isReviewingPII = false
+
+                if piiReviewFindings.isEmpty && entitiesToRemove.isEmpty {
+                    successMessage = "No additional PII detected"
+                    autoHideSuccess()
+                } else {
+                    let newCount = piiReviewFindings.count
+                    let mergedCount = entitiesToRemove.count
+                    var message = ""
+                    if newCount > 0 {
+                        message += "Found \(newCount) potential PII item(s)"
+                    }
+                    if mergedCount > 0 {
+                        message += message.isEmpty ? "" : ". "
+                        message += "Merged \(mergedCount) partial detection(s)"
+                    }
+                    successMessage = message
+                    autoHideSuccess()
+                    redactedTextNeedsUpdate = true
+                    rebuildAllHighlightCaches()
+                }
+            }
+        } catch {
+            await MainActor.run {
+                isReviewingPII = false
+                piiReviewError = error.localizedDescription
+                errorMessage = "PII review failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Process PII findings into entities, merging with existing where applicable
+    private func processPIIFindings(_ findings: [PIIFinding], originalText: String) {
+        var newEntities: [Entity] = []
+
+        for finding in findings {
+            // Check if finding contains an existing placeholder (partial leak)
+            if let (matchedEntity, leakedPart) = findPartialMatch(finding.text) {
+                // Merge: Create new entity with full original text
+                let fullOriginal = matchedEntity.originalText + leakedPart
+
+                // Find all occurrences of the full text
+                let positions = findAllOccurrences(of: fullOriginal, in: originalText)
+
+                if !positions.isEmpty {
+                    let replacement = Entity(
+                        originalText: fullOriginal,
+                        replacementCode: matchedEntity.replacementCode,
+                        type: matchedEntity.type,
+                        positions: positions,
+                        confidence: finding.confidence
+                    )
+
+                    // Mark original for removal and add replacement
+                    entitiesToRemove.insert(matchedEntity.id)
+                    newEntities.append(replacement)
+
+                    #if DEBUG
+                    print("🔄 Merged partial: '\(matchedEntity.originalText)' → '\(fullOriginal)'")
+                    #endif
+                }
+            } else {
+                // Check if this text already exists in our entities
+                let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
+                if alreadyExists {
+                    continue  // Skip duplicate
+                }
+
+                // New PII - create fresh entity
+                let positions = findAllOccurrences(of: finding.text, in: originalText)
+                if positions.isEmpty { continue }
+
+                let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count + newEntities.filter { $0.type == finding.suggestedType }.count
+                let code = finding.suggestedType.replacementCode(for: existingCount)
+
+                let entity = Entity(
+                    originalText: finding.text,
+                    replacementCode: code,
+                    type: finding.suggestedType,
+                    positions: positions,
+                    confidence: finding.confidence
+                )
+
+                newEntities.append(entity)
+
+                #if DEBUG
+                print("➕ New PII: '\(finding.text)' → \(code)")
+                #endif
+            }
+        }
+
+        piiReviewFindings = newEntities
+    }
+
+    /// Find if the finding text contains a placeholder from an existing entity
+    /// Returns the matched entity and the leaked portion
+    private func findPartialMatch(_ findingText: String) -> (Entity, String)? {
+        for entity in allEntities {
+            // Check if the finding contains this entity's replacement code
+            if findingText.contains(entity.replacementCode) {
+                // Extract the leaked part
+                let leaked = findingText.replacingOccurrences(of: entity.replacementCode, with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if !leaked.isEmpty {
+                    return (entity, leaked)
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - Improve Phase Actions

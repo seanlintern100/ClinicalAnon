@@ -20,12 +20,65 @@ struct SettingsContainerView: View {
                     Label("AI Model", systemImage: "cpu")
                 }
 
+            LocalLLMSettingsView()
+                .tabItem {
+                    Label("Local Review", systemImage: "desktopcomputer")
+                }
+
+            DetectionSettingsView()
+                .tabItem {
+                    Label("Detection", systemImage: "magnifyingglass")
+                }
+
             ExclusionSettingsView()
                 .tabItem {
                     Label("Exclusions", systemImage: "eye.slash")
                 }
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 550, height: 450)
+    }
+}
+
+// MARK: - Detection Settings View
+
+struct DetectionSettingsView: View {
+    @AppStorage("redactAllNumbers") private var redactAllNumbers: Bool = true
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $redactAllNumbers) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Redact all numbers")
+                            .font(.body)
+                        Text("Catch any numeric values not detected as dates, phone numbers, or IDs")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+            } header: {
+                Text("Number Detection")
+            } footer: {
+                Text("When enabled, all numbers (amounts, reference numbers, years, etc.) will be flagged for review and redaction.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Dates are detected separately (15/03/2024)", systemImage: "calendar")
+                    Label("Phone numbers are detected separately (021-555-1234)", systemImage: "phone")
+                    Label("Medical IDs are detected separately (NHI, ACC)", systemImage: "number.circle")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            } header: {
+                Text("Specific Detectors")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
     }
 }
 

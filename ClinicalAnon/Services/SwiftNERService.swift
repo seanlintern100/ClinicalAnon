@@ -23,8 +23,8 @@ class SwiftNERService {
 
     init() {
         // Initialize all recognizers
-        // Order matters: more specific recognizers first
-        self.recognizers = [
+        // Order matters: more specific recognizers first, catch-all last
+        var allRecognizers: [EntityRecognizer] = [
             AppleNERRecognizer(),          // Apple's baseline NER
             MaoriNameRecognizer(),         // NZ-specific Māori names
             RelationshipNameExtractor(),   // Extract names from "sister Margaret"
@@ -34,8 +34,16 @@ class SwiftNERService {
             DateRecognizer()               // Date patterns
         ]
 
+        // Add catch-all number recognizer if enabled (default: ON)
+        let redactAllNumbers = UserDefaults.standard.object(forKey: "redactAllNumbers") as? Bool ?? true
+        if redactAllNumbers {
+            allRecognizers.append(AllNumbersRecognizer())
+        }
+
+        self.recognizers = allRecognizers
+
         #if DEBUG
-        print("🔧 Initialized SwiftNERService with \(recognizers.count) recognizers")
+        print("🔧 Initialized SwiftNERService with \(recognizers.count) recognizers (redactAllNumbers: \(redactAllNumbers))")
         #endif
     }
 
@@ -337,7 +345,8 @@ class SwiftNERService {
             .location: 2,
             .organization: 2,
             .identifier: 2,
-            .contact: 3
+            .contact: 3,
+            .numericAll: 1  // Lowest priority - specific detectors take precedence
         ]
 
         var entityMap: [String: Entity] = [:]
