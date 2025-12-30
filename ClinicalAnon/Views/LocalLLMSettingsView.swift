@@ -40,9 +40,13 @@ struct LocalLLMSettingsView: View {
                 Divider()
             }
 
-            // Setup Instructions (if not available)
+            // Setup Instructions or Launch Button
             if !llmService.isAvailable {
-                setupInstructionsSection
+                if llmService.isOllamaInstalled {
+                    launchOllamaSection
+                } else {
+                    setupInstructionsSection
+                }
             }
 
             Spacer()
@@ -121,6 +125,44 @@ struct LocalLLMSettingsView: View {
         }
     }
 
+    // MARK: - Launch Ollama Section
+
+    private var launchOllamaSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+            Text("Ollama Not Running")
+                .font(DesignSystem.Typography.subheading)
+
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                Text("Ollama is installed but not running. Click the button below to start it.")
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+
+            Button(action: launchOllama) {
+                HStack {
+                    if llmService.isLaunchingOllama {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "play.fill")
+                    }
+                    Text(llmService.isLaunchingOllama ? "Starting Ollama..." : "Start Ollama")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(llmService.isLaunchingOllama)
+
+            if let error = llmService.lastError, !llmService.isAvailable {
+                Text(error)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding(DesignSystem.Spacing.medium)
+        .background(DesignSystem.Colors.background)
+        .cornerRadius(DesignSystem.CornerRadius.medium)
+    }
+
     // MARK: - Setup Instructions Section
 
     private var setupInstructionsSection: some View {
@@ -137,7 +179,7 @@ struct LocalLLMSettingsView: View {
                     instructionRow(number: 1, text: "Download Ollama from ollama.com")
                     instructionRow(number: 2, text: "Install the application")
                     instructionRow(number: 3, text: "Open Terminal and run: ollama pull llama3.1:8b")
-                    instructionRow(number: 4, text: "Keep Ollama running in the background")
+                    instructionRow(number: 4, text: "Ollama will start automatically when needed")
                 }
                 .padding(.vertical, DesignSystem.Spacing.small)
             }
@@ -196,6 +238,15 @@ struct LocalLLMSettingsView: View {
                 } else {
                     testResult = "Could not connect to Ollama"
                 }
+            }
+        }
+    }
+
+    private func launchOllama() {
+        Task {
+            let success = await llmService.launchOllama()
+            if success {
+                testResult = "Success! Ollama is now running"
             }
         }
     }

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AppKit
 
 // MARK: - PII Finding
 
@@ -37,6 +38,7 @@ class LocalLLMService: ObservableObject {
     }
     @Published var isProcessing: Bool = false
     @Published var lastError: String?
+    @Published var isLaunchingOllama: Bool = false
 
     // MARK: - Private Properties
 
@@ -99,6 +101,75 @@ class LocalLLMService: ObservableObject {
             availableModels = []
             lastError = "Ollama not running"
         }
+    }
+
+    /// Launch Ollama application
+    func launchOllama() async -> Bool {
+        isLaunchingOllama = true
+        defer { isLaunchingOllama = false }
+
+        // Try to find and launch Ollama.app
+        let ollamaAppPaths = [
+            "/Applications/Ollama.app",
+            "\(NSHomeDirectory())/Applications/Ollama.app"
+        ]
+
+        var launched = false
+
+        for path in ollamaAppPaths {
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.fileExists(atPath: path) {
+                do {
+                    try await NSWorkspace.shared.openApplication(
+                        at: url,
+                        configuration: NSWorkspace.OpenConfiguration()
+                    )
+                    launched = true
+                    break
+                } catch {
+                    print("LocalLLMService: Failed to launch Ollama from \(path): \(error)")
+                }
+            }
+        }
+
+        if !launched {
+            // Try launching via bundle identifier
+            if let ollamaURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.ollama.ollama") {
+                do {
+                    try await NSWorkspace.shared.openApplication(
+                        at: ollamaURL,
+                        configuration: NSWorkspace.OpenConfiguration()
+                    )
+                    launched = true
+                } catch {
+                    print("LocalLLMService: Failed to launch Ollama via bundle ID: \(error)")
+                }
+            }
+        }
+
+        if launched {
+            // Wait for Ollama to start (up to 10 seconds)
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second
+                await checkAvailability()
+                if isAvailable {
+                    return true
+                }
+            }
+        }
+
+        lastError = "Could not start Ollama. Please install it from ollama.com"
+        return false
+    }
+
+    /// Check if Ollama is installed
+    var isOllamaInstalled: Bool {
+        let paths = [
+            "/Applications/Ollama.app",
+            "\(NSHomeDirectory())/Applications/Ollama.app"
+        ]
+        return paths.contains { FileManager.default.fileExists(atPath: $0) }
+            || NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.ollama.ollama") != nil
     }
 
     /// Review redacted text for missed PII

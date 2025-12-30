@@ -408,11 +408,29 @@ class WorkflowViewModel: ObservableObject {
             return
         }
 
-        // Re-check Ollama availability before running
+        // Check Ollama availability
         await LocalLLMService.shared.checkAvailability()
 
+        // If not available, try to auto-launch
+        if !LocalLLMService.shared.isAvailable {
+            if LocalLLMService.shared.isOllamaInstalled {
+                // Try to launch Ollama automatically
+                successMessage = "Starting Ollama..."
+                let launched = await LocalLLMService.shared.launchOllama()
+                if !launched {
+                    errorMessage = "Could not start Ollama. Please start it manually."
+                    successMessage = nil
+                    return
+                }
+                successMessage = nil
+            } else {
+                errorMessage = "Ollama not installed. Go to Settings > Local LLM to set it up."
+                return
+            }
+        }
+
         guard LocalLLMService.shared.isAvailable else {
-            errorMessage = "Ollama not running. Start Ollama and try again."
+            errorMessage = "Ollama not running. Please start Ollama and try again."
             return
         }
 
