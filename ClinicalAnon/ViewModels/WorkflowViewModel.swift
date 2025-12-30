@@ -403,6 +403,7 @@ class WorkflowViewModel: ObservableObject {
 
     /// Run local LLM review to find missed PII
     func runLocalPIIReview() async {
+        print("WorkflowViewModel: runLocalPIIReview started")
         guard let result = result else {
             piiReviewError = "Please analyze text first"
             return
@@ -413,6 +414,7 @@ class WorkflowViewModel: ObservableObject {
 
         // If not available, try to auto-launch
         if !LocalLLMService.shared.isAvailable {
+            print("WorkflowViewModel: Ollama not available, attempting launch")
             if LocalLLMService.shared.isOllamaInstalled {
                 // Try to launch Ollama automatically
                 successMessage = "Starting Ollama..."
@@ -434,6 +436,7 @@ class WorkflowViewModel: ObservableObject {
             return
         }
 
+        print("WorkflowViewModel: Starting PII review, text length: \(cachedRedactedText.count)")
         isReviewingPII = true
         piiReviewError = nil
 

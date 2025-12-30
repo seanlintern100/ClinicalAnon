@@ -44,7 +44,7 @@ class LocalLLMService: ObservableObject {
 
     private let ollamaEndpoint = "http://127.0.0.1:11434"
     private let defaultModel = "llama3.1:8b"
-    private let requestTimeout: TimeInterval = 180 // 3 minutes
+    private let requestTimeout: TimeInterval = 300 // 5 minutes
 
     // MARK: - Prompt
 
@@ -185,10 +185,17 @@ class LocalLLMService: ObservableObject {
         defer { isProcessing = false }
 
         let fullPrompt = piiReviewPrompt + "\n\n" + text
+        print("LocalLLMService: Starting PII review, prompt length: \(fullPrompt.count) chars")
+        print("LocalLLMService: Using model: \(selectedModel)")
 
+        let startTime = Date()
         let response = try await sendPrompt(fullPrompt)
+        let elapsed = Date().timeIntervalSince(startTime)
+        print("LocalLLMService: Got response in \(String(format: "%.1f", elapsed))s, length: \(response.count) chars")
 
-        return parseFindings(response: response)
+        let findings = parseFindings(response: response)
+        print("LocalLLMService: Parsed \(findings.count) findings")
+        return findings
     }
 
     // MARK: - Private Methods
