@@ -264,14 +264,16 @@ class LocalLLMService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        // Minimal prompt - no examples to prevent hallucination
+        // Strong instructions to ignore bracketed content
         let prompt = """
-            Find missed PII in this redacted text. Placeholders in [BRACKETS] are already redacted - ignore them.
+            IMPORTANT: This text has already been partially redacted. Any text in [SQUARE_BRACKETS] like [PERSON_A] or [DATE_1] is ALREADY REDACTED - do NOT report these.
 
-            Report ONLY unredacted names, emails, phones, or addresses. Skip drug names and medical terms.
+            Your task: Find ONLY plain text PII that was MISSED - names, emails, phones, addresses that appear WITHOUT brackets.
 
-            Format: TYPE|text|reason
-            Or if none found: NO_ISSUES_FOUND
+            Format: TYPE|exact text|reason
+            If all PII is already redacted: NO_ISSUES_FOUND
+
+            Skip: drug names, medical terms, symptoms, diagnoses.
 
             \(text)
             """

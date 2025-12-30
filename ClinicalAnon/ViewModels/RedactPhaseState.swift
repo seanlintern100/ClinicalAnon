@@ -429,9 +429,38 @@ class RedactPhaseState: ObservableObject {
             }
         }
 
-        allReplacements.sort { $0.start > $1.start }
+        // Sort by start position (ascending) to detect overlaps
+        allReplacements.sort { $0.start < $1.start }
 
+        // Remove overlapping positions, keeping the longer replacement
+        var nonOverlapping: [(start: Int, end: Int, code: String)] = []
         for replacement in allReplacements {
+            if let last = nonOverlapping.last {
+                // Check if this replacement overlaps with the previous one
+                if replacement.start < last.end {
+                    // Overlapping - keep the longer one
+                    let lastLength = last.end - last.start
+                    let currentLength = replacement.end - replacement.start
+                    if currentLength > lastLength {
+                        // Current is longer, replace the last one
+                        nonOverlapping.removeLast()
+                        nonOverlapping.append(replacement)
+                    }
+                    // Otherwise keep the existing (last) one
+                } else {
+                    // No overlap, add it
+                    nonOverlapping.append(replacement)
+                }
+            } else {
+                // First replacement
+                nonOverlapping.append(replacement)
+            }
+        }
+
+        // Sort in descending order for replacement (process end-to-start)
+        nonOverlapping.sort { $0.start > $1.start }
+
+        for replacement in nonOverlapping {
             guard replacement.start < text.count && replacement.end <= text.count else { continue }
 
             let start = text.index(text.startIndex, offsetBy: replacement.start)

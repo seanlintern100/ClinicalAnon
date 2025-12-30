@@ -164,7 +164,12 @@ extension EntityRecognizer {
             "Timeline", "Formulation", "Assessment", "Intervention",
             // Section headers that get flagged
             "Current", "Background", "History", "Plan", "Goals", "Progress",
-            "Summary", "Recommendations", "Actions", "Notes", "Comments"
+            "Summary", "Recommendations", "Actions", "Notes", "Comments",
+            // Form field labels (not person names)
+            "Client", "Supplier", "Provider", "Participant", "Claimant",
+            "Referrer", "Coordinator", "Author", "Reviewer", "Approver",
+            "Name", "Address", "Phone", "Email", "Contact", "Details",
+            "Number", "Date", "Claim", "Reference", "Report", "File"
         ]
 
         return clinicalTerms.contains(word) || clinicalTerms.contains(word.uppercased())
