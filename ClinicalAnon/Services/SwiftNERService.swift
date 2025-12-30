@@ -23,16 +23,16 @@ class SwiftNERService {
 
     init() {
         // Initialize all recognizers
-        // Order matters: more specific recognizers first, catch-all last
+        // Order matters: emails first (whole units), then specific patterns, names last
         var allRecognizers: [EntityRecognizer] = [
-            AppleNERRecognizer(),          // Apple's baseline NER
-            MaoriNameRecognizer(),         // NZ-specific Māori names
-            RelationshipNameExtractor(),   // Extract names from "sister Margaret"
+            EmailRecognizer(),             // Emails FIRST - whole units, reduces parsing
             NZPhoneRecognizer(),           // NZ phone numbers
             NZMedicalIDRecognizer(),       // NHI, ACC case numbers
-            NZAddressRecognizer(),         // NZ addresses and suburbs
             DateRecognizer(),              // Date patterns
-            EmailRecognizer()              // Email addresses
+            NZAddressRecognizer(),         // NZ addresses and suburbs
+            MaoriNameRecognizer(),         // NZ-specific Māori names
+            RelationshipNameExtractor(),   // Extract names from "sister Margaret"
+            AppleNERRecognizer()           // Apple's baseline NER (names) last
         ]
 
         // Add catch-all number recognizer if enabled (default: ON)
