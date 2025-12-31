@@ -40,6 +40,16 @@ class EntityMapping: ObservableObject {
             return existing.replacement
         }
 
+        // Check if this is a component of an existing mapped name
+        // e.g., "Ronald" is first name of "Ronald Nath" - should share the same code
+        if type.isPerson {
+            if let parentCode = findParentNameCode(for: key, type: type) {
+                // Store mapping with parent's code
+                mappings[key] = (original: originalText, replacement: parentCode)
+                return parentCode
+            }
+        }
+
         // Create new mapping
         let counter = counters[type] ?? 0
         let code = type.replacementCode(for: counter)
@@ -49,6 +59,44 @@ class EntityMapping: ObservableObject {
         counters[type] = counter + 1
 
         return code
+    }
+
+    /// Find if this text is related to an existing mapped name (component or extension)
+    /// Returns the related name's replacement code if found
+    /// Handles both directions:
+    /// - "Ronald" is a component of existing "Ronald Nath" → use same code
+    /// - "Ronald Nath" starts with existing "Ronald" → use same code
+    private func findParentNameCode(for text: String, type: EntityType) -> String? {
+        let searchText = text.lowercased()
+
+        for (existingKey, mapping) in mappings {
+            // Only check person-type mappings
+            guard mapping.replacement.contains("CLIENT") ||
+                  mapping.replacement.contains("PROVIDER") ||
+                  mapping.replacement.contains("NAME") else {
+                continue
+            }
+
+            // Case 1: Existing key is longer - our text is a component
+            // e.g., existing "ronald nath" starts with our "ronald "
+            if existingKey.hasPrefix(searchText + " ") {
+                #if DEBUG
+                print("EntityMapping: '\(text)' is component of '\(existingKey)' → using \(mapping.replacement)")
+                #endif
+                return mapping.replacement
+            }
+
+            // Case 2: Our text is longer - existing key is a component
+            // e.g., our "ronald nath" starts with existing "ronald "
+            if searchText.hasPrefix(existingKey + " ") {
+                #if DEBUG
+                print("EntityMapping: '\(text)' extends '\(existingKey)' → using \(mapping.replacement)")
+                #endif
+                return mapping.replacement
+            }
+        }
+
+        return nil
     }
 
     /// Check if an original text already has a mapping
