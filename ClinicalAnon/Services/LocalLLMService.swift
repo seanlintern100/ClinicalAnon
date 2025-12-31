@@ -364,7 +364,20 @@ class LocalLLMService: ObservableObject {
 
         // Filter out candidates that are already in existing entities
         let existingTexts = Set(existingEntities.map { $0.originalText.lowercased() })
-        let newCandidates = candidates.filter { !existingTexts.contains($0.originalText.lowercased()) }
+        var newCandidates = candidates.filter { !existingTexts.contains($0.originalText.lowercased()) }
+
+        // Pre-filter obvious non-person candidates (save LLM calls)
+        newCandidates = newCandidates.filter { entity in
+            let text = entity.originalText.lowercased()
+
+            // Skip phrases starting with "and " - relationship fragments
+            if text.hasPrefix("and ") { return false }
+
+            // Skip very long phrases (>4 words unlikely to be a name)
+            if text.components(separatedBy: " ").count > 4 { return false }
+
+            return true
+        }
 
         guard !newCandidates.isEmpty else {
             print("LocalLLMService: No new candidates to filter")
