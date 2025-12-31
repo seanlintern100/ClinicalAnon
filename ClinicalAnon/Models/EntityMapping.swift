@@ -73,7 +73,7 @@ class EntityMapping: ObservableObject {
             // Only check person-type mappings
             guard mapping.replacement.contains("CLIENT") ||
                   mapping.replacement.contains("PROVIDER") ||
-                  mapping.replacement.contains("NAME") else {
+                  mapping.replacement.contains("PERSON") else {
                 continue
             }
 
