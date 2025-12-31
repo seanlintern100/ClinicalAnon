@@ -345,6 +345,7 @@ class LocalLLMService: ObservableObject {
 
     /// Filter deep scan candidates using LLM to remove false positives
     /// Much faster than full text analysis - only reviews candidate names with context
+    /// Batches candidates to avoid hitting token limits
     /// - Parameters:
     ///   - candidates: Entities found by deep scan (may include false positives)
     ///   - originalText: The original text for context extraction
@@ -384,59 +385,75 @@ class LocalLLMService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        // Build context snippets for each candidate
-        let candidateList = newCandidates.enumerated().map { index, entity -> String in
-            let context = extractContext(for: entity, in: originalText, windowSize: 40)
-            return "\(index + 1). \"\(entity.originalText)\" in: \"...\(context)...\""
-        }.joined(separator: "\n")
+        // Batch candidates to avoid hitting token limits
+        // Each response line is ~50-70 tokens, with 1000 max tokens we can safely do ~20 per batch
+        let batchSize = 20
+        var allKeptEntities: [Entity] = []
 
-        // Focused prompt for filtering
-        let prompt = """
-            Review these potential names found in clinical text. For each one, determine if it's actually a person's name or a FALSE POSITIVE (common word mistaken for a name).
-
-            CANDIDATES:
-            \(candidateList)
-
-            RULES:
-            - Names are proper nouns referring to specific people
-            - FALSE POSITIVES include: adjectives (notable, remarkable), verbs (checks, report), common nouns
-            - Consider the context - does it make sense as someone's name?
-
-            OUTPUT FORMAT - one line per candidate:
-            1|KEEP|reason (if it's a real name)
-            2|REMOVE|reason (if it's a false positive)
-
-            Review each candidate:
-            """
-
-        print("LocalLLMService: Filtering \(newCandidates.count) deep scan candidates")
-        print("LocalLLMService: Prompt length: \(prompt.count) chars")
-
-        let startTime = Date()
-
-        do {
-            let responseText = try await session.respond(to: prompt)
-
-            let elapsed = Date().timeIntervalSince(startTime)
-            print("LocalLLMService: Filter response in \(String(format: "%.1f", elapsed))s")
-            print("LocalLLMService: Response: \(responseText)")
-
-            // Parse response to determine which candidates to keep
-            let keepIndices = parseFilterResponse(responseText, candidateCount: newCandidates.count)
-            print("LocalLLMService: Keeping \(keepIndices.count) of \(newCandidates.count) candidates")
-
-            // Return only the kept candidates
-            let filtered = keepIndices.compactMap { index -> Entity? in
-                guard index >= 0 && index < newCandidates.count else { return nil }
-                return newCandidates[index]
-            }
-
-            return filtered
-
-        } catch {
-            print("LocalLLMService: Filter failed: \(error)")
-            throw AppError.localLLMGenerationFailed(error.localizedDescription)
+        let batches = stride(from: 0, to: newCandidates.count, by: batchSize).map {
+            Array(newCandidates[$0..<min($0 + batchSize, newCandidates.count)])
         }
+
+        print("LocalLLMService: Filtering \(newCandidates.count) candidates in \(batches.count) batch(es)")
+
+        for (batchIndex, batch) in batches.enumerated() {
+            print("LocalLLMService: Processing batch \(batchIndex + 1)/\(batches.count) with \(batch.count) candidates")
+
+            // Build context snippets for each candidate in this batch
+            let candidateList = batch.enumerated().map { index, entity -> String in
+                let context = extractContext(for: entity, in: originalText, windowSize: 40)
+                return "\(index + 1). \"\(entity.originalText)\" in: \"...\(context)...\""
+            }.joined(separator: "\n")
+
+            // Focused prompt for filtering
+            let prompt = """
+                Review these potential names found in clinical text. For each one, determine if it's actually a person's name or a FALSE POSITIVE (common word mistaken for a name).
+
+                CANDIDATES:
+                \(candidateList)
+
+                RULES:
+                - Names are proper nouns referring to specific people
+                - FALSE POSITIVES include: adjectives (notable, remarkable), verbs (checks, report), common nouns
+                - Consider the context - does it make sense as someone's name?
+
+                OUTPUT FORMAT - one line per candidate:
+                1|KEEP|reason (if it's a real name)
+                2|REMOVE|reason (if it's a false positive)
+
+                Review each candidate:
+                """
+
+            print("LocalLLMService: Batch \(batchIndex + 1) prompt length: \(prompt.count) chars")
+
+            let startTime = Date()
+
+            do {
+                let responseText = try await session.respond(to: prompt)
+
+                let elapsed = Date().timeIntervalSince(startTime)
+                print("LocalLLMService: Batch \(batchIndex + 1) response in \(String(format: "%.1f", elapsed))s")
+                print("LocalLLMService: Response: \(responseText)")
+
+                // Parse response to determine which candidates to keep
+                let keepIndices = parseFilterResponse(responseText, candidateCount: batch.count)
+                print("LocalLLMService: Batch \(batchIndex + 1): Keeping \(keepIndices.count) of \(batch.count) candidates")
+
+                // Add kept candidates from this batch
+                let keptFromBatch = keepIndices.compactMap { index -> Entity? in
+                    guard index >= 0 && index < batch.count else { return nil }
+                    return batch[index]
+                }
+                allKeptEntities.append(contentsOf: keptFromBatch)
+
+            } catch {
+                print("LocalLLMService: Batch \(batchIndex + 1) filter failed: \(error)")
+                throw AppError.localLLMGenerationFailed(error.localizedDescription)
+            }
+        }
+
+        print("LocalLLMService: Total kept: \(allKeptEntities.count) of \(newCandidates.count) candidates")
+        return allKeptEntities
     }
 
     /// Extract context around an entity for LLM review
