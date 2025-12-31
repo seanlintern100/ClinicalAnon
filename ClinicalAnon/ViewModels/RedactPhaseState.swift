@@ -389,7 +389,10 @@ class RedactPhaseState: ObservableObject {
             }
         }
 
-        piiReviewFindings = newEntities
+        // Merge with existing findings, avoiding duplicates
+        let existingPIITexts = Set(piiReviewFindings.map { $0.originalText.lowercased() })
+        let uniqueNewEntities = newEntities.filter { !existingPIITexts.contains($0.originalText.lowercased()) }
+        piiReviewFindings.append(contentsOf: uniqueNewEntities)
     }
 
     private func findPartialMatch(_ findingText: String) -> (Entity, String)? {
@@ -491,7 +494,10 @@ class RedactPhaseState: ObservableObject {
             newEntities.append(entity)
         }
 
-        deepScanFindings = newEntities
+        // Merge with existing findings, avoiding duplicates
+        let existingDeepScanTexts = Set(deepScanFindings.map { $0.originalText.lowercased() })
+        let uniqueNewEntities = newEntities.filter { !existingDeepScanTexts.contains($0.originalText.lowercased()) }
+        deepScanFindings.append(contentsOf: uniqueNewEntities)
     }
 
     // MARK: - Deep Scan with LLM Filter
@@ -585,13 +591,17 @@ class RedactPhaseState: ObservableObject {
             )
 
             await MainActor.run {
-                deepScanFindings = verified
+                // Merge with existing findings, avoiding duplicates
+                let existingDeepScanTexts = Set(deepScanFindings.map { $0.originalText.lowercased() })
+                let uniqueVerified = verified.filter { !existingDeepScanTexts.contains($0.originalText.lowercased()) }
+                deepScanFindings.append(contentsOf: uniqueVerified)
+
                 isRunningDeepScanWithLLM = false
 
-                if verified.isEmpty {
-                    successMessage = "LLM filtered out all candidates (likely false positives)"
+                if uniqueVerified.isEmpty {
+                    successMessage = "No new names found (already detected or false positives)"
                 } else {
-                    successMessage = "Deep Scan + LLM found \(verified.count) verified name(s)"
+                    successMessage = "Deep Scan + LLM found \(uniqueVerified.count) new name(s)"
                 }
                 autoHideSuccess()
                 redactedTextNeedsUpdate = true
