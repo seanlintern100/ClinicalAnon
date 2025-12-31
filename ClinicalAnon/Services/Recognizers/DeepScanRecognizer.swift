@@ -128,7 +128,13 @@ class DeepScanRecognizer: EntityRecognizer {
 
     // MARK: - Entity Recognition
 
-    func recognize(in text: String, knownNames: [String] = []) -> [Entity] {
+    /// Protocol conformance - calls recognize with empty knownNames
+    func recognize(in text: String) -> [Entity] {
+        return recognize(in: text, knownNames: [])
+    }
+
+    /// Full recognition with optional known names for fuzzy matching
+    func recognize(in text: String, knownNames: [String]) -> [Entity] {
         var entities: [Entity] = []
 
         // 1. Unfiltered Apple NER
