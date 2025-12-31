@@ -269,15 +269,26 @@ class LocalLLMService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        // Simple prompt - LLM sees original text, no bracket confusion
+        // Detailed prompt for better name detection
         let prompt = """
-            Find ALL personal information in this clinical text:
-            - Names (including international names, multi-part surnames)
+            Find ALL personal names and contact information in this clinical text.
+
+            NAMES TO LOOK FOR:
+            - Uncommon or non-Western names (Māori, Pacific, Asian, European)
+            - Truncated or misspelled names (e.g., "Meliss" for Melissa, "Joh" for John)
+            - Common nouns used as names, especially when:
+              - Capitalised mid-sentence (e.g., "spoke with Hope about...")
+              - Following patterns like "with [word]", "asked [word]", "[word] said"
+              - Near possessives like "[word]'s mother" or "[word]'s appointment"
+            - Multi-part surnames (de Groot, van der Berg, O'Brien)
+            - Names in professional signatures (e.g., "Dr. Janet Leathem")
+
+            ALSO FIND:
             - Email addresses
             - Phone numbers
             - Physical addresses
 
-            Skip: drug names, medical terms, diagnoses, organization names.
+            SKIP: drug names, medical terms, diagnoses, organization names, place names.
 
             Format: NAME|exact text|reason (or EMAIL|, PHONE|, ADDRESS|)
 
