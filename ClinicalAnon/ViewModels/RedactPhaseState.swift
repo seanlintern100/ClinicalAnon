@@ -396,7 +396,7 @@ class RedactPhaseState: ObservableObject {
 
         isRunningDeepScan = true
         deepScanError = nil
-        successMessage = "Running deep scan for foreign names..."
+        successMessage = "Deep scanning for names, typos, and variants..."
 
         // Run on background thread to avoid blocking UI
         let originalText = result.originalText

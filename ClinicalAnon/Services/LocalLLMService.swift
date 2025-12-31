@@ -348,9 +348,17 @@ class LocalLLMService: ObservableObject {
             // Try pipe format first: TYPE|text|reason
             let pipeParts = trimmed.components(separatedBy: "|")
             if pipeParts.count >= 2 {
-                let typeStr = pipeParts[0].trimmingCharacters(in: .whitespaces).uppercased()
-                let text = pipeParts[1].trimmingCharacters(in: .whitespaces)
+                var typeStr = pipeParts[0].trimmingCharacters(in: .whitespaces).uppercased()
+                var text = pipeParts[1].trimmingCharacters(in: .whitespaces)
                 let reason = pipeParts.count > 2 ? pipeParts[2].trimmingCharacters(in: .whitespaces) : "Potential PII detected"
+
+                // Handle malformed LLM output like "1. **Jo**|exact text|..."
+                // Extract name from first part if it contains ** markers
+                if let nameMatch = typeStr.range(of: "\\*\\*(.+?)\\*\\*", options: .regularExpression) {
+                    let captured = String(typeStr[nameMatch])
+                    text = captured.replacingOccurrences(of: "**", with: "")
+                    typeStr = "NAME"
+                }
 
                 if text.count > 1 && !containsPlaceholder(text) {
                     // Skip if type maps to nil (e.g., TITLE)
