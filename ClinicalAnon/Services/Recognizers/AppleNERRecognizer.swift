@@ -63,10 +63,13 @@ class AppleNERRecognizer: EntityRecognizer {
             return true  // Continue enumeration
         }
 
-        // Extend names with following surnames
-        let extendedEntities = extendWithSurnames(entities, in: text)
+        // Extend names with following surnames (Hayden → Hayden Hooper)
+        let extendedForward = extendWithSurnames(entities, in: text)
 
-        return extendedEntities
+        // Extend names with preceding first names (Fletcher → Sue Fletcher)
+        let extendedBoth = extendWithFirstNames(extendedForward, in: text)
+
+        return extendedBoth
     }
 
     // MARK: - Surname Extension
@@ -148,6 +151,91 @@ class AppleNERRecognizer: EntityRecognizer {
         }
 
         return nextWord
+    }
+
+    // MARK: - First Name Extension (Backward)
+
+    /// Extend detected surnames with preceding first names
+    /// Example: "Fletcher" detected, preceded by "Sue" → extend to "Sue Fletcher"
+    private func extendWithFirstNames(_ entities: [Entity], in text: String) -> [Entity] {
+        var result: [Entity] = []
+
+        for entity in entities {
+            // Only extend person names
+            guard entity.type.isPerson else {
+                result.append(entity)
+                continue
+            }
+
+            guard let position = entity.positions.first,
+                  position.count >= 2 else {
+                result.append(entity)
+                continue
+            }
+
+            let entityStart = position[0]
+
+            // Check if there's a preceding word that could be a first name
+            if let firstName = findPrecedingFirstName(before: entityStart, in: text) {
+                let extendedStart = entityStart - firstName.count - 1 // -1 for space
+                let extendedEntity = Entity(
+                    originalText: firstName + " " + entity.originalText,
+                    replacementCode: "",
+                    type: entity.type,
+                    positions: [[extendedStart, position[1]]],
+                    confidence: entity.confidence
+                )
+                result.append(extendedEntity)
+
+                #if DEBUG
+                print("  ✓ Extended '\(entity.originalText)' backward to '\(firstName) \(entity.originalText)'")
+                #endif
+            } else {
+                result.append(entity)
+            }
+        }
+
+        return result
+    }
+
+    /// Find a first name preceding a surname at the given position
+    private func findPrecedingFirstName(before startIndex: Int, in text: String) -> String? {
+        guard startIndex > 1 else { return nil }
+
+        let idx = text.index(text.startIndex, offsetBy: startIndex)
+
+        // Check if preceded by a space
+        let beforeIdx = text.index(before: idx)
+        guard beforeIdx >= text.startIndex, text[beforeIdx] == " " else { return nil }
+
+        // Find the start of the preceding word by walking backwards
+        var wordStart = beforeIdx
+        while wordStart > text.startIndex {
+            let prevIdx = text.index(before: wordStart)
+            if text[prevIdx].isLetter {
+                wordStart = prevIdx
+            } else {
+                break
+            }
+        }
+
+        guard wordStart < beforeIdx else { return nil }
+
+        let precedingWord = String(text[wordStart..<beforeIdx])
+
+        // Check if it looks like a first name:
+        // - Starts with uppercase
+        // - 2+ characters
+        // - Not a common word, clinical term, or user-excluded
+        guard precedingWord.count >= 2,
+              precedingWord.first?.isUppercase == true,
+              !isCommonWord(precedingWord),
+              !isClinicalTerm(precedingWord),
+              !isUserExcluded(precedingWord) else {
+            return nil
+        }
+
+        return precedingWord
     }
 
     // MARK: - Helper Methods

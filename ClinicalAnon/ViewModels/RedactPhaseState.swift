@@ -44,6 +44,9 @@ class RedactPhaseState: ObservableObject {
     @Published var isRunningDeepScan: Bool = false
     @Published var deepScanError: String?
 
+    // Deep scan with LLM filtering (experimental)
+    @Published var isRunningDeepScanWithLLM: Bool = false
+
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
     @Published var hasPendingChanges: Bool = false
@@ -188,6 +191,24 @@ class RedactPhaseState: ObservableObject {
             _excludedIds.remove(entity.id)
         } else {
             _excludedIds.insert(entity.id)
+        }
+        hasPendingChanges = true
+    }
+
+    /// Toggle all entities in a group - if any are active, exclude all; if all excluded, include all
+    func toggleEntities(_ entities: [Entity]) {
+        let allExcluded = entities.allSatisfy { _excludedIds.contains($0.id) }
+
+        if allExcluded {
+            // Include all
+            for entity in entities {
+                _excludedIds.remove(entity.id)
+            }
+        } else {
+            // Exclude all
+            for entity in entities {
+                _excludedIds.insert(entity.id)
+            }
         }
         hasPendingChanges = true
     }
@@ -471,6 +492,117 @@ class RedactPhaseState: ObservableObject {
         }
 
         deepScanFindings = newEntities
+    }
+
+    // MARK: - Deep Scan with LLM Filter
+
+    /// Run deep scan followed by LLM filtering to remove false positives
+    /// Faster than full LLM analysis - pattern matching for recall, LLM for precision
+    func runDeepScanWithLLM() async {
+        guard let result = result else {
+            deepScanError = "Please analyze text first"
+            return
+        }
+
+        guard LocalLLMService.shared.isAvailable else {
+            errorMessage = "Local LLM requires Apple Silicon (M1/M2/M3/M4)."
+            return
+        }
+
+        isRunningDeepScanWithLLM = true
+        deepScanError = nil
+        successMessage = "Running deep scan..."
+
+        let originalText = result.originalText
+        let existingTexts = Set(allEntities.map { $0.originalText.lowercased() })
+
+        // Get existing person names for fuzzy matching
+        let existingPersonNames = allEntities
+            .filter { $0.type.isPerson }
+            .map { $0.originalText }
+
+        // Step 1: Run deep scan (fast pattern matching)
+        let candidates = await Task.detached(priority: .userInitiated) {
+            let recognizer = DeepScanRecognizer()
+            return recognizer.recognize(in: originalText, knownNames: existingPersonNames)
+        }.value
+
+        // Filter candidates same way as regular deep scan
+        var filteredCandidates: [Entity] = []
+        for finding in candidates {
+            guard !existingTexts.contains(finding.originalText.lowercased()) else { continue }
+            guard !filteredCandidates.contains(where: { $0.originalText.lowercased() == finding.originalText.lowercased() }) else { continue }
+
+            var isSubstring = false
+            for existingText in existingTexts {
+                if finding.originalText.lowercased().contains(existingText) ||
+                   existingText.contains(finding.originalText.lowercased()) {
+                    isSubstring = true
+                    break
+                }
+            }
+            guard !isSubstring else { continue }
+
+            let positions = findAllOccurrences(of: finding.originalText, in: originalText)
+            guard !positions.isEmpty else { continue }
+
+            let existingCount = allEntities.filter { $0.type == finding.type }.count + filteredCandidates.filter { $0.type == finding.type }.count
+            let code = finding.type.replacementCode(for: existingCount)
+
+            filteredCandidates.append(Entity(
+                originalText: finding.originalText,
+                replacementCode: code,
+                type: finding.type,
+                positions: positions,
+                confidence: finding.confidence
+            ))
+        }
+
+        if filteredCandidates.isEmpty {
+            await MainActor.run {
+                isRunningDeepScanWithLLM = false
+                successMessage = "Deep scan found no new candidates"
+                autoHideSuccess()
+            }
+            return
+        }
+
+        await MainActor.run {
+            successMessage = "Found \(filteredCandidates.count) candidates, filtering with LLM..."
+        }
+
+        // Step 2: Filter with LLM
+        do {
+            let verified = try await LocalLLMService.shared.filterDeepScanCandidates(
+                candidates: filteredCandidates,
+                originalText: originalText,
+                existingEntities: allEntities,
+                onAnalysisStarted: { [weak self] in
+                    Task { @MainActor in
+                        self?.successMessage = "LLM filtering candidates..."
+                    }
+                }
+            )
+
+            await MainActor.run {
+                deepScanFindings = verified
+                isRunningDeepScanWithLLM = false
+
+                if verified.isEmpty {
+                    successMessage = "LLM filtered out all candidates (likely false positives)"
+                } else {
+                    successMessage = "Deep Scan + LLM found \(verified.count) verified name(s)"
+                }
+                autoHideSuccess()
+                redactedTextNeedsUpdate = true
+            }
+        } catch {
+            await MainActor.run {
+                isRunningDeepScanWithLLM = false
+                deepScanError = error.localizedDescription
+                errorMessage = "LLM filter failed: \(error.localizedDescription)"
+            }
+        }
     }
 
     // MARK: - Copy Actions

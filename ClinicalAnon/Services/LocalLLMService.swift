@@ -90,7 +90,7 @@ class LocalLLMService: ObservableObject {
     // MARK: - Prompt
 
     private let systemInstructions = """
-        You are a PII detection assistant. Follow the user's instructions exactly. Output only in the format requested.
+        You are a PII extraction assistant. Copy text exactly as it appears. Output only in pipe format, no markdown.
         """
 
     // MARK: - Initialization
@@ -209,7 +209,8 @@ class LocalLLMService: ObservableObject {
             let generateParams = GenerateParameters(
                 maxTokens: 1000,
                 temperature: 0.1,
-                topP: 0.9
+                topP: 0.9,
+                repetitionPenalty: 1.1  // Lowered from 1.2 to avoid suppressing repeated NAME| format
             )
 
             self.chatSession = ChatSession(
@@ -271,7 +272,12 @@ class LocalLLMService: ObservableObject {
 
         // Detailed prompt for better name detection
         let prompt = """
-            Find ALL personal names and contact information in this clinical text.
+            Extract personal names and contact information from this clinical text.
+
+            CRITICAL RULES:
+            1. Copy text EXACTLY as it appears - do not paraphrase or summarize
+            2. Output ONLY in pipe format below - no markdown, no bullets, no headers
+            3. One finding per line, nothing else
 
             NAMES TO LOOK FOR:
             - Uncommon or non-Western names (Māori, Pacific, Asian, European)
@@ -285,17 +291,24 @@ class LocalLLMService: ObservableObject {
 
             ALSO FIND:
             - Email addresses
-            - Phone numbers
-            - Physical addresses
+            - Phone numbers (any format)
+            - Physical/street addresses
 
-            SKIP: drug names, medical terms, diagnoses, organization names, place names.
+            SKIP:
+            - Drug names, medical terms, diagnoses
+            - Organization names, place names, suburbs, cities
+            - Document names (e.g., "Protection Order", "Lawyer for Child report")
+            - Role descriptions without names (e.g., "the psychologist", "client's mother")
 
-            OUTPUT FORMAT - one per line, pipe-separated:
-            NAME|Storm|capitalised noun used as name
+            OUTPUT FORMAT - exactly like this, no other text:
+            NAME|Storm|noun used as name
             NAME|Meihana|Māori name
-            EMAIL|john@example.com|email address
+            PHONE|021 123 4567|phone number
+            EMAIL|john@example.com|email
 
-            List each name/email/phone/address you find:
+            If nothing found, output only: NO_ISSUES_FOUND
+
+            Extract from this text:
 
             \(originalText)
             """
@@ -326,6 +339,150 @@ class LocalLLMService: ObservableObject {
             print("LocalLLMService: Generation failed: \(error)")
             throw AppError.localLLMGenerationFailed(error.localizedDescription)
         }
+    }
+
+    // MARK: - Deep Scan LLM Filter
+
+    /// Filter deep scan candidates using LLM to remove false positives
+    /// Much faster than full text analysis - only reviews candidate names with context
+    /// - Parameters:
+    ///   - candidates: Entities found by deep scan (may include false positives)
+    ///   - originalText: The original text for context extraction
+    ///   - existingEntities: Already confirmed entities to exclude from review
+    ///   - onAnalysisStarted: Optional callback when LLM analysis begins
+    /// - Returns: Filtered list of entities (false positives removed)
+    func filterDeepScanCandidates(
+        candidates: [Entity],
+        originalText: String,
+        existingEntities: [Entity],
+        onAnalysisStarted: (() -> Void)? = nil
+    ) async throws -> [Entity] {
+        guard isAvailable else {
+            throw AppError.localLLMNotAvailable
+        }
+
+        // Filter out candidates that are already in existing entities
+        let existingTexts = Set(existingEntities.map { $0.originalText.lowercased() })
+        let newCandidates = candidates.filter { !existingTexts.contains($0.originalText.lowercased()) }
+
+        guard !newCandidates.isEmpty else {
+            print("LocalLLMService: No new candidates to filter")
+            return []
+        }
+
+        // Load model if not already loaded
+        if !isModelLoaded {
+            try await loadModel()
+        }
+
+        onAnalysisStarted?()
+
+        guard let session = chatSession else {
+            throw AppError.localLLMModelNotLoaded
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        // Build context snippets for each candidate
+        let candidateList = newCandidates.enumerated().map { index, entity -> String in
+            let context = extractContext(for: entity, in: originalText, windowSize: 40)
+            return "\(index + 1). \"\(entity.originalText)\" in: \"...\(context)...\""
+        }.joined(separator: "\n")
+
+        // Focused prompt for filtering
+        let prompt = """
+            Review these potential names found in clinical text. For each one, determine if it's actually a person's name or a FALSE POSITIVE (common word mistaken for a name).
+
+            CANDIDATES:
+            \(candidateList)
+
+            RULES:
+            - Names are proper nouns referring to specific people
+            - FALSE POSITIVES include: adjectives (notable, remarkable), verbs (checks, report), common nouns
+            - Consider the context - does it make sense as someone's name?
+
+            OUTPUT FORMAT - one line per candidate:
+            1|KEEP|reason (if it's a real name)
+            2|REMOVE|reason (if it's a false positive)
+
+            Review each candidate:
+            """
+
+        print("LocalLLMService: Filtering \(newCandidates.count) deep scan candidates")
+        print("LocalLLMService: Prompt length: \(prompt.count) chars")
+
+        let startTime = Date()
+
+        do {
+            let responseText = try await session.respond(to: prompt)
+
+            let elapsed = Date().timeIntervalSince(startTime)
+            print("LocalLLMService: Filter response in \(String(format: "%.1f", elapsed))s")
+            print("LocalLLMService: Response: \(responseText)")
+
+            // Parse response to determine which candidates to keep
+            let keepIndices = parseFilterResponse(responseText, candidateCount: newCandidates.count)
+            print("LocalLLMService: Keeping \(keepIndices.count) of \(newCandidates.count) candidates")
+
+            // Return only the kept candidates
+            let filtered = keepIndices.compactMap { index -> Entity? in
+                guard index >= 0 && index < newCandidates.count else { return nil }
+                return newCandidates[index]
+            }
+
+            return filtered
+
+        } catch {
+            print("LocalLLMService: Filter failed: \(error)")
+            throw AppError.localLLMGenerationFailed(error.localizedDescription)
+        }
+    }
+
+    /// Extract context around an entity for LLM review
+    private func extractContext(for entity: Entity, in text: String, windowSize: Int) -> String {
+        guard let position = entity.positions.first, position.count >= 2 else {
+            return entity.originalText
+        }
+
+        let start = position[0]
+        let end = position[1]
+
+        let contextStart = max(0, start - windowSize)
+        let contextEnd = min(text.count, end + windowSize)
+
+        guard contextStart < contextEnd else { return entity.originalText }
+
+        let startIdx = text.index(text.startIndex, offsetBy: contextStart)
+        let endIdx = text.index(text.startIndex, offsetBy: contextEnd)
+
+        return String(text[startIdx..<endIdx])
+    }
+
+    /// Parse LLM filter response to get indices of candidates to keep
+    private func parseFilterResponse(_ response: String, candidateCount: Int) -> [Int] {
+        var keepIndices: [Int] = []
+
+        let lines = response.components(separatedBy: .newlines)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Look for pattern: "1|KEEP" or "2|REMOVE"
+            let parts = trimmed.components(separatedBy: "|")
+            guard parts.count >= 2 else { continue }
+
+            // Extract the number
+            let numberPart = parts[0].trimmingCharacters(in: .whitespaces)
+            guard let index = Int(numberPart.filter { $0.isNumber }) else { continue }
+
+            // Check if KEEP
+            let decision = parts[1].trimmingCharacters(in: .whitespaces).uppercased()
+            if decision.contains("KEEP") || decision.contains("YES") || decision.contains("NAME") {
+                keepIndices.append(index - 1) // Convert to 0-indexed
+            }
+        }
+
+        return keepIndices
     }
 
     // MARK: - Private Methods
@@ -498,6 +655,21 @@ class LocalLLMService: ObservableObject {
 
     // MARK: - Delta Detection (Span Overlap)
 
+    /// Common title prefixes that LLMs often add but may not be in the original text
+    private let titlePrefixes = ["Dr.", "Dr ", "Mr.", "Mr ", "Mrs.", "Mrs ", "Ms.", "Ms ", "Prof.", "Prof ", "Professor "]
+
+    /// Strip common title prefixes from a name
+    private func stripTitlePrefix(_ text: String) -> String {
+        var result = text
+        for prefix in titlePrefixes {
+            if result.lowercased().hasPrefix(prefix.lowercased()) {
+                result = String(result.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                break
+            }
+        }
+        return result
+    }
+
     /// Filter findings to only those not already covered by existing entities
     /// Uses span/position overlap to handle edge cases like "Bob" vs "Bob's"
     private func filterToDeltas(
@@ -505,13 +677,26 @@ class LocalLLMService: ObservableObject {
         existingEntities: [Entity],
         in text: String
     ) -> [PIIFinding] {
-        return findings.filter { finding in
-            // Find all occurrences of this finding in the text
-            let positions = findAllOccurrences(of: finding.text, in: text)
+        return findings.compactMap { finding -> PIIFinding? in
+            // First try exact match
+            var positions = findAllOccurrences(of: finding.text, in: text)
+            var searchText = finding.text
+
+            // If not found, try stripping title prefix (e.g., "Dr. Janet Leathem" -> "Janet Leathem")
+            if positions.isEmpty {
+                let strippedText = stripTitlePrefix(finding.text)
+                if strippedText != finding.text {
+                    positions = findAllOccurrences(of: strippedText, in: text)
+                    if !positions.isEmpty {
+                        searchText = strippedText
+                        print("LocalLLMService: Found '\(strippedText)' after stripping prefix from '\(finding.text)'")
+                    }
+                }
+            }
 
             guard !positions.isEmpty else {
                 print("LocalLLMService: Finding '\(finding.text)' not found in text, skipping")
-                return false
+                return nil
             }
 
             // Check if ANY occurrence is not covered by existing entities
@@ -520,12 +705,18 @@ class LocalLLMService: ObservableObject {
             }
 
             if hasUncoveredOccurrence {
-                print("LocalLLMService: Delta found - '\(finding.text)' has uncovered occurrence")
+                print("LocalLLMService: Delta found - '\(searchText)' has uncovered occurrence")
+                // Return finding with the text that was actually found in the document
+                return PIIFinding(
+                    text: searchText,
+                    suggestedType: finding.suggestedType,
+                    reason: finding.reason,
+                    confidence: finding.confidence
+                )
             } else {
-                print("LocalLLMService: '\(finding.text)' already covered by NER")
+                print("LocalLLMService: '\(searchText)' already covered by NER")
+                return nil
             }
-
-            return hasUncoveredOccurrence
         }
     }
 

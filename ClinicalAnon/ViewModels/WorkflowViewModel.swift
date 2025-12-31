@@ -159,6 +159,7 @@ class WorkflowViewModel: ObservableObject {
     var deepScanFindings: [Entity] { redactState.deepScanFindings }
     var isRunningDeepScan: Bool { redactState.isRunningDeepScan }
     var deepScanError: String? { redactState.deepScanError }
+    var isRunningDeepScanWithLLM: Bool { redactState.isRunningDeepScanWithLLM }
 
     var cachedRedactedText: String { redactState.cachedRedactedText }
 
@@ -298,6 +299,10 @@ class WorkflowViewModel: ObservableObject {
         redactState.toggleEntity(entity)
     }
 
+    func toggleEntities(_ entities: [Entity]) {
+        redactState.toggleEntities(entities)
+    }
+
     func applyChanges() {
         redactState.applyChanges()
         if let result = redactState.result {
@@ -346,6 +351,20 @@ class WorkflowViewModel: ObservableObject {
 
     func runDeepScan() async {
         await redactState.runDeepScan()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
+    }
+
+    func runDeepScanWithLLM() async {
+        await redactState.runDeepScanWithLLM()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,

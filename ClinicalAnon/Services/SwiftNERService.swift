@@ -176,7 +176,79 @@ class SwiftNERService {
         let extendedNames = extendNamesWithSurnames(result, in: text)
         result.append(contentsOf: extendedNames)
 
+        // Extract first name components from multi-word names
+        // e.g., "Yvonne Murray" → also find standalone "Yvonne"
+        let extractedComponents = extractNameComponents(result, in: text)
+        result.append(contentsOf: extractedComponents)
+
         return result
+    }
+
+    // MARK: - Name Component Extraction
+
+    /// Extract first name components from multi-word person names
+    /// When "Yvonne Murray" is detected, also find standalone "Yvonne"
+    private func extractNameComponents(_ entities: [Entity], in text: String) -> [Entity] {
+        var newEntities: [Entity] = []
+        let existingTexts = Set(entities.map { $0.originalText.lowercased() })
+
+        for entity in entities {
+            // Only process multi-word person names
+            guard entity.type.isPerson else { continue }
+
+            let components = entity.originalText.split(separator: " ")
+            guard components.count >= 2 else { continue }
+
+            // Extract first name (first component)
+            let firstName = String(components[0])
+
+            // Skip if first name already detected as separate entity
+            guard !existingTexts.contains(firstName.lowercased()) else { continue }
+
+            // Skip if already added in this loop
+            guard !newEntities.contains(where: { $0.originalText.lowercased() == firstName.lowercased() }) else { continue }
+
+            // Skip if too short or common word
+            guard firstName.count >= 3, !isCommonWord(firstName) else { continue }
+
+            // Find standalone occurrences of first name
+            var positions: [[Int]] = []
+            var searchStart = text.startIndex
+
+            while let range = text.range(of: firstName,
+                                          options: .caseInsensitive,
+                                          range: searchStart..<text.endIndex) {
+                let start = text.distance(from: text.startIndex, to: range.lowerBound)
+                let end = text.distance(from: text.startIndex, to: range.upperBound)
+
+                // Check this isn't part of the full name (already covered)
+                let isPartOfFullName = entity.positions.contains { pos in
+                    pos.count >= 2 && start >= pos[0] && end <= pos[1]
+                }
+
+                if !isPartOfFullName {
+                    positions.append([start, end])
+                }
+                searchStart = range.upperBound
+            }
+
+            if !positions.isEmpty {
+                // Create entity with same type, linking to same person
+                newEntities.append(Entity(
+                    originalText: firstName,
+                    replacementCode: entity.replacementCode, // Same replacement code!
+                    type: entity.type,
+                    positions: positions,
+                    confidence: entity.confidence
+                ))
+
+                #if DEBUG
+                print("  ✓ Extracted '\(firstName)' from '\(entity.originalText)' (\(positions.count) standalone occurrences)")
+                #endif
+            }
+        }
+
+        return newEntities
     }
 
     // MARK: - Surname Extension

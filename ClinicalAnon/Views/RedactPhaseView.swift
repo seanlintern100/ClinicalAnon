@@ -274,6 +274,26 @@ struct RedactPhaseView: View {
                         .disabled(viewModel.isRunningDeepScan)
                         .help("Scan for foreign names and hard-to-capture terms")
 
+                        // Deep Scan + LLM button (pattern matching filtered by LLM)
+                        if LocalLLMService.shared.isAvailable {
+                            Button(action: { Task { await viewModel.runDeepScanWithLLM() } }) {
+                                HStack(spacing: DesignSystem.Spacing.xs) {
+                                    if viewModel.isRunningDeepScanWithLLM {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .frame(width: 14, height: 14)
+                                    } else {
+                                        Image(systemName: "globe.badge.chevron.backward")
+                                    }
+                                    Text("Deep+LLM")
+                                }
+                                .font(DesignSystem.Typography.body)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(viewModel.isRunningDeepScanWithLLM || viewModel.isRunningDeepScan || viewModel.isReviewingPII)
+                            .help("Deep scan filtered by LLM to reduce false positives")
+                        }
+
                         Button(action: { viewModel.continueToNextPhase() }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
                                 Text("Continue")
@@ -428,36 +448,64 @@ private struct EntityTypeSection: View {
 
     @State private var isExpanded: Bool = true
 
+    /// Check state: all included, all excluded, or mixed
+    private var checkState: CheckState {
+        let excludedCount = entities.filter { viewModel.isEntityExcluded($0) }.count
+        if excludedCount == 0 {
+            return .allIncluded
+        } else if excludedCount == entities.count {
+            return .allExcluded
+        } else {
+            return .mixed
+        }
+    }
+
+    private enum CheckState {
+        case allIncluded, allExcluded, mixed
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Section header
-            Button(action: { withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() } }) {
-                HStack(spacing: 6) {
-                    Image(systemName: icon)
-                        .font(.system(size: 10))
-                        .foregroundColor(color)
-                        .frame(width: 14)
-
-                    Text(title)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(color)
-
-                    Text("(\(entities.count))")
-                        .font(.system(size: 10))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                    Spacer()
-
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+            HStack(spacing: 6) {
+                // Toggle all checkbox
+                Button(action: { viewModel.toggleEntities(entities) }) {
+                    Image(systemName: checkState == .allIncluded ? "checkmark.square.fill" :
+                                      checkState == .mixed ? "minus.square.fill" : "square")
+                        .font(.system(size: 12))
+                        .foregroundColor(checkState == .allExcluded ? DesignSystem.Colors.textSecondary : color)
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, DesignSystem.Spacing.xs)
-                .background(color.opacity(0.08))
-                .cornerRadius(4)
+                .buttonStyle(.plain)
+
+                // Expand/collapse button for rest of header
+                Button(action: { withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() } }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: icon)
+                            .font(.system(size: 10))
+                            .foregroundColor(color)
+                            .frame(width: 14)
+
+                        Text(title)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(color)
+
+                        Text("(\(entities.count))")
+                            .font(.system(size: 10))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                        Spacer()
+
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, 6)
+            .padding(.horizontal, DesignSystem.Spacing.xs)
+            .background(color.opacity(0.08))
+            .cornerRadius(4)
 
             // Entity rows
             if isExpanded {

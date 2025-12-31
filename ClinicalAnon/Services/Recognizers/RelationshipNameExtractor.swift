@@ -43,15 +43,17 @@ class RelationshipNameExtractor: EntityRecognizer {
         var entities: [Entity] = []
 
         for relationship in relationshipWords {
-            // Pattern: relationship word followed by capitalized name(s)
+            // Pattern: relationship word (case-insensitive) followed by capitalized name(s)
             // Matches:
             // - "sister Margaret"
             // - "mother Sofia"
             // - "friend David Smith"
+            // Note: We use (?i) for case-insensitive relationship word only,
+            // but require actual uppercase for names to avoid false positives like "mother checks"
 
-            let pattern = "\\b\(relationship)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)"
+            let pattern = "(?i)\\b\(relationship)(?-i)\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)"
 
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
                 continue
             }
 
@@ -98,11 +100,12 @@ class RelationshipNameExtractor: EntityRecognizer {
 
         // Pattern for lists: "relationship Name, relationship Name, and relationship Name"
         // More complex - look for commas and 'and' between relationship+name pairs
+        // Note: (?i) for case-insensitive relationship word, (?-i) to require uppercase names
 
         let relationshipPattern = relationshipWords.joined(separator: "|")
-        let listPattern = "\\b(\(relationshipPattern))\\s+([A-Z][a-z]+)"
+        let listPattern = "(?i)\\b(\(relationshipPattern))(?-i)\\s+([A-Z][a-z]+)"
 
-        guard let regex = try? NSRegularExpression(pattern: listPattern, options: .caseInsensitive) else {
+        guard let regex = try? NSRegularExpression(pattern: listPattern, options: []) else {
             return []
         }
 
