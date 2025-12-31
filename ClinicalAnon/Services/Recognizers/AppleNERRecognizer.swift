@@ -66,7 +66,114 @@ class AppleNERRecognizer: EntityRecognizer {
         // Extend names with following surnames (Hayden → Hayden Hooper)
         let extendedEntities = extendWithSurnames(entities, in: text)
 
-        return extendedEntities
+        // Extend with name-words (Sue Fletcher, May Johnson)
+        let withNameWords = extendWithNameWords(extendedEntities, in: text)
+
+        return withNameWords
+    }
+
+    // MARK: - Name-Word List
+
+    /// Words that are both common words AND valid first names
+    /// Only matched when capitalized and NOT at sentence start
+    private let nameWords: Set<String> = [
+        // Legal/action words that are also names
+        "sue", "will", "bill", "grant", "mark", "pat", "rob", "drew",
+        "chase", "pierce", "wade", "earnest", "payton",
+        // Month names
+        "april", "may", "june",
+        // Virtue/nature names
+        "hope", "joy", "faith", "grace", "rose", "belle", "dawn",
+        "sky", "skye", "rain", "reign", "ash", "clay", "reed", "reid",
+        "lane", "brook", "brooke", "blair", "sage",
+        // Other common word-names
+        "guy", "herb", "gene", "earl", "dean"
+    ]
+
+    // MARK: - Name-Word Extension
+
+    /// Extend detected names with preceding words from name-word list
+    /// Only extends if word is capitalized AND not at sentence start
+    private func extendWithNameWords(_ entities: [Entity], in text: String) -> [Entity] {
+        var result: [Entity] = []
+
+        for entity in entities {
+            guard entity.type.isPerson else {
+                result.append(entity)
+                continue
+            }
+
+            guard let position = entity.positions.first, position.count >= 2 else {
+                result.append(entity)
+                continue
+            }
+
+            let entityStart = position[0]
+
+            if let nameWord = findPrecedingNameWord(before: entityStart, in: text) {
+                let extendedStart = entityStart - nameWord.count - 1
+                result.append(Entity(
+                    originalText: nameWord + " " + entity.originalText,
+                    replacementCode: "",
+                    type: entity.type,
+                    positions: [[extendedStart, position[1]]],
+                    confidence: entity.confidence
+                ))
+
+                #if DEBUG
+                print("  ✓ Extended '\(entity.originalText)' with name-word '\(nameWord)'")
+                #endif
+            } else {
+                result.append(entity)
+            }
+        }
+        return result
+    }
+
+    /// Find a name-word preceding the entity
+    /// Must be: in list, capitalized, NOT at sentence start
+    private func findPrecedingNameWord(before startIndex: Int, in text: String) -> String? {
+        guard startIndex > 2 else { return nil }
+
+        let idx = text.index(text.startIndex, offsetBy: startIndex)
+        let beforeIdx = text.index(before: idx)
+        guard text[beforeIdx] == " " else { return nil }
+
+        // Find the start of the preceding word
+        var wordStart = beforeIdx
+        while wordStart > text.startIndex {
+            let prevIdx = text.index(before: wordStart)
+            if text[prevIdx].isLetter { wordStart = prevIdx }
+            else { break }
+        }
+
+        guard wordStart < beforeIdx else { return nil }
+        let word = String(text[wordStart..<beforeIdx])
+
+        // Must be in name-word list
+        guard nameWords.contains(word.lowercased()) else { return nil }
+
+        // Must be capitalized
+        guard word.first?.isUppercase == true else { return nil }
+
+        // Must NOT be at sentence start (check what's before the word)
+        if wordStart > text.startIndex {
+            let charBeforeWord = text.index(before: wordStart)
+            let prevChar = text[charBeforeWord]
+            // If preceded by period, newline, or bullet, it's sentence start - skip
+            if prevChar == "." || prevChar == "\n" || prevChar == "•" || prevChar == "-" {
+                return nil
+            }
+            // If preceded by ": " or "- " it's likely a list item start
+            if prevChar == ":" || prevChar == ";" {
+                return nil
+            }
+        } else {
+            // At very start of text - sentence start
+            return nil
+        }
+
+        return word
     }
 
     // MARK: - Surname Extension
