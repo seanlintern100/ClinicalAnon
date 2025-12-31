@@ -402,9 +402,14 @@ class RedactPhaseState: ObservableObject {
         let originalText = result.originalText
         let existingTexts = Set(allEntities.map { $0.originalText.lowercased() })
 
+        // Get existing person names for fuzzy matching
+        let existingPersonNames = allEntities
+            .filter { $0.type.isPerson }
+            .map { $0.originalText }
+
         let findings = await Task.detached(priority: .userInitiated) {
             let recognizer = DeepScanRecognizer()
-            return recognizer.recognize(in: originalText)
+            return recognizer.recognize(in: originalText, knownNames: existingPersonNames)
         }.value
 
         await MainActor.run {

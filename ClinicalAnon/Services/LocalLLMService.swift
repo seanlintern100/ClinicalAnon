@@ -290,7 +290,12 @@ class LocalLLMService: ObservableObject {
 
             SKIP: drug names, medical terms, diagnoses, organization names, place names.
 
-            Format: NAME|exact text|reason (or EMAIL|, PHONE|, ADDRESS|)
+            OUTPUT FORMAT - one per line, pipe-separated:
+            NAME|Storm|capitalised noun used as name
+            NAME|Meihana|Māori name
+            EMAIL|john@example.com|email address
+
+            List each name/email/phone/address you find:
 
             \(originalText)
             """

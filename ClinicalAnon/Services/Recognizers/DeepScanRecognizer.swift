@@ -128,7 +128,7 @@ class DeepScanRecognizer: EntityRecognizer {
 
     // MARK: - Entity Recognition
 
-    func recognize(in text: String) -> [Entity] {
+    func recognize(in text: String, knownNames: [String] = []) -> [Entity] {
         var entities: [Entity] = []
 
         // 1. Unfiltered Apple NER
@@ -145,6 +145,11 @@ class DeepScanRecognizer: EntityRecognizer {
 
         // 5. Names with particles (e.g., "Jurriaan de Groot", "van der Berg")
         entities.append(contentsOf: detectNamesWithParticles(text))
+
+        // 6. Fuzzy matches for misspelled known names
+        if !knownNames.isEmpty {
+            entities.append(contentsOf: detectFuzzyMatches(text, knownNames: knownNames))
+        }
 
         // Merge adjacent capitalized words into single entities
         let merged = mergeAdjacentNames(entities, in: text)
@@ -543,6 +548,105 @@ class DeepScanRecognizer: EntityRecognizer {
         }
 
         return idx < text.endIndex && text[idx] == ":"
+    }
+
+    // MARK: - Detection Strategy 6: Fuzzy Matching
+
+    /// Detect misspelled variants of known names using Levenshtein distance
+    private func detectFuzzyMatches(_ text: String, knownNames: [String]) -> [Entity] {
+        var entities: [Entity] = []
+
+        // Extract individual name parts from known names
+        var nameWords: Set<String> = []
+        for name in knownNames {
+            for word in name.components(separatedBy: " ") {
+                let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
+                if trimmed.count >= 3 {  // Only fuzzy match words 3+ chars
+                    nameWords.insert(trimmed)
+                }
+            }
+        }
+
+        guard !nameWords.isEmpty else { return [] }
+
+        // Find all words in text (including lowercase to catch typos)
+        let wordPattern = "\\b[A-Za-z]{3,}\\b"
+        guard let regex = try? NSRegularExpression(pattern: wordPattern) else {
+            return []
+        }
+
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+
+        for match in matches {
+            guard let matchRange = Range(match.range, in: text) else { continue }
+
+            let word = String(text[matchRange])
+
+            // Skip if word is exactly in known names (not a misspelling)
+            if nameWords.contains(word) { continue }
+
+            // Skip common words
+            if isCommonEnglishWord(word) { continue }
+
+            // Check against each known name word
+            for knownWord in nameWords {
+                let distance = levenshteinDistance(word.lowercased(), knownWord.lowercased())
+
+                // Allow distance 1 for short words, distance 2 for longer words
+                let maxDistance = knownWord.count <= 5 ? 1 : 2
+
+                if distance > 0 && distance <= maxDistance {
+                    // Found a potential misspelling
+                    let start = text.distance(from: text.startIndex, to: matchRange.lowerBound)
+                    let end = text.distance(from: text.startIndex, to: matchRange.upperBound)
+
+                    entities.append(Entity(
+                        originalText: word,
+                        replacementCode: "",
+                        type: .personOther,
+                        positions: [[start, end]],
+                        confidence: 0.5  // Medium confidence for fuzzy matches
+                    ))
+                    break  // Don't add same word multiple times
+                }
+            }
+        }
+
+        return entities
+    }
+
+    /// Calculate Levenshtein distance between two strings
+    private func levenshteinDistance(_ s1: String, _ s2: String) -> Int {
+        let s1Array = Array(s1)
+        let s2Array = Array(s2)
+        let m = s1Array.count
+        let n = s2Array.count
+
+        // Handle edge cases
+        if m == 0 { return n }
+        if n == 0 { return m }
+
+        // Create distance matrix
+        var matrix = [[Int]](repeating: [Int](repeating: 0, count: n + 1), count: m + 1)
+
+        // Initialize first row and column
+        for i in 0...m { matrix[i][0] = i }
+        for j in 0...n { matrix[0][j] = j }
+
+        // Fill in the rest of the matrix
+        for i in 1...m {
+            for j in 1...n {
+                let cost = s1Array[i - 1] == s2Array[j - 1] ? 0 : 1
+                matrix[i][j] = min(
+                    matrix[i - 1][j] + 1,      // deletion
+                    matrix[i][j - 1] + 1,      // insertion
+                    matrix[i - 1][j - 1] + cost // substitution
+                )
+            }
+        }
+
+        return matrix[m][n]
     }
 
     /// Deduplicate entities by text (case-insensitive)
