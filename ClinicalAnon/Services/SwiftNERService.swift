@@ -149,6 +149,7 @@ class SwiftNERService {
             var searchStart = text.startIndex
 
             while let range = text.range(of: entity.originalText,
+                                          options: .caseInsensitive,
                                           range: searchStart..<text.endIndex) {
                 let start = text.distance(from: text.startIndex, to: range.lowerBound)
                 let end = text.distance(from: text.startIndex, to: range.upperBound)

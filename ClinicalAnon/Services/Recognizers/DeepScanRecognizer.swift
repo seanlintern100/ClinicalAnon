@@ -17,6 +17,13 @@ class DeepScanRecognizer: EntityRecognizer {
 
     // MARK: - Properties
 
+    /// Common name particles (lowercase words that appear in names)
+    private let nameParticles: Set<String> = [
+        "de", "van", "von", "der", "den", "la", "le", "du", "da", "dos", "das",
+        "del", "della", "di", "el", "al", "bin", "ibn", "ben", "mac", "mc", "o'",
+        "te", "ter", "ten", "het", "op", "tot", "zur", "zum", "af"
+    ]
+
     /// Relationship/context trigger words for name detection
     private let relationshipTriggers: Set<String> = [
         "cousin", "aunt", "uncle", "nephew", "niece", "friend", "colleague",
@@ -100,7 +107,22 @@ class DeepScanRecognizer: EntityRecognizer {
             // Days/months
             "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
             "sunday", "january", "february", "march", "april", "may", "june",
-            "july", "august", "september", "october", "november", "december"
+            "july", "august", "september", "october", "november", "december",
+            // Professional titles
+            "psychologist", "therapist", "physician", "psychiatrist", "nurse",
+            "consultant", "specialist", "clinician", "practitioner", "counselor",
+            "counsellor", "occupational", "physiotherapist", "neuropsychologist",
+            "registered", "senior", "assistant", "associate", "director",
+            // Clinical/medical terms (expanded)
+            "report", "service", "services", "programme",
+            "rehabilitation", "medical", "clinical", "psychology", "neuropsychological",
+            "concussion", "independence", "wellbeing", "wellness", "behaviour",
+            "behavior", "pain", "management", "support", "central", "specialist",
+            "medicine", "injury", "injuries", "accident", "trauma",
+            // Document/admin terms
+            "form", "sections", "submission", "date", "claim", "address",
+            "supplier", "provider", "physical", "mental", "status", "review",
+            "signature", "signed", "approved", "submitted", "received"
         ]
     }()
 
@@ -121,11 +143,14 @@ class DeepScanRecognizer: EntityRecognizer {
         // 4. Capitalized word sequences (multi-word names)
         entities.append(contentsOf: detectCapitalizedSequences(text))
 
-        // 5. Non-English capitalized words
-        entities.append(contentsOf: detectNonEnglishCapitalized(text))
+        // 5. Names with particles (e.g., "Jurriaan de Groot", "van der Berg")
+        entities.append(contentsOf: detectNamesWithParticles(text))
+
+        // Merge adjacent capitalized words into single entities
+        let merged = mergeAdjacentNames(entities, in: text)
 
         // Deduplicate within our findings
-        return deduplicateFindings(entities)
+        return deduplicateFindings(merged)
     }
 
     // MARK: - Detection Strategy 1: Unfiltered NER
@@ -319,16 +344,21 @@ class DeepScanRecognizer: EntityRecognizer {
         return entities
     }
 
-    // MARK: - Detection Strategy 5: Non-English Capitalized
+    // MARK: - Detection Strategy 5: Names with Particles
 
-    /// Detect capitalized words not in common English dictionary
-    private func detectNonEnglishCapitalized(_ text: String) -> [Entity] {
+    /// Detect names containing particles like "de", "van", "von"
+    /// Examples: "Jurriaan de Groot", "van der Berg", "Maria del Carmen"
+    private func detectNamesWithParticles(_ text: String) -> [Entity] {
         var entities: [Entity] = []
 
-        // Pattern: Capitalized word 3+ characters
-        let pattern = "\\b[A-Z][a-z]{2,}\\b"
+        // Build particle pattern from our list
+        let particlePattern = nameParticles.joined(separator: "|")
 
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+        // Pattern: Capitalized + particle(s) + Capitalized
+        // e.g., "Jurriaan de Groot", "Jan van der Berg"
+        let pattern = "\\b([A-Z][a-z]+)\\s+((?:(?:\(particlePattern))\\s+)+)([A-Z][a-z]+)\\b"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return []
         }
 
@@ -338,13 +368,39 @@ class DeepScanRecognizer: EntityRecognizer {
         for match in matches {
             guard let matchRange = Range(match.range, in: text) else { continue }
 
-            let word = String(text[matchRange])
-
-            // Skip if it's a common English word
-            guard !isCommonEnglishWord(word) else { continue }
+            let fullName = String(text[matchRange])
 
             // Skip user-excluded
-            guard !isUserExcluded(word) else { continue }
+            guard !isUserExcluded(fullName) else { continue }
+
+            let start = text.distance(from: text.startIndex, to: matchRange.lowerBound)
+            let end = text.distance(from: text.startIndex, to: matchRange.upperBound)
+
+            entities.append(Entity(
+                originalText: fullName,
+                replacementCode: "",
+                type: .personOther,
+                positions: [[start, end]],
+                confidence: 0.7  // Higher confidence - clear name pattern
+            ))
+        }
+
+        // Also detect: particle + Capitalized (e.g., "de Groot" without first name)
+        let partialPattern = "\\b((?:\(particlePattern))\\s+)([A-Z][a-z]+)\\b"
+
+        guard let partialRegex = try? NSRegularExpression(pattern: partialPattern, options: .caseInsensitive) else {
+            return entities
+        }
+
+        let partialMatches = partialRegex.matches(in: text, range: range)
+
+        for match in partialMatches {
+            guard let matchRange = Range(match.range, in: text) else { continue }
+
+            let partialName = String(text[matchRange])
+
+            // Skip user-excluded
+            guard !isUserExcluded(partialName) else { continue }
 
             // Skip if at sentence start
             let matchStart = text.distance(from: text.startIndex, to: matchRange.lowerBound)
@@ -352,22 +408,97 @@ class DeepScanRecognizer: EntityRecognizer {
                 continue
             }
 
-            // Basic name heuristics: has vowels, not all consonants
-            guard looksLikeName(word) else { continue }
-
             let start = matchStart
             let end = text.distance(from: text.startIndex, to: matchRange.upperBound)
 
             entities.append(Entity(
-                originalText: word,
+                originalText: partialName,
                 replacementCode: "",
                 type: .personOther,
                 positions: [[start, end]],
-                confidence: 0.4  // Lowest confidence - most speculative
+                confidence: 0.5
             ))
         }
 
         return entities
+    }
+
+    // MARK: - Adjacent Name Merging
+
+    /// Merge adjacent capitalized word entities into single multi-word names
+    /// Example: "Janet" + "Leathem" -> "Janet Leathem"
+    private func mergeAdjacentNames(_ entities: [Entity], in text: String) -> [Entity] {
+        guard !entities.isEmpty else { return entities }
+
+        // Sort by position
+        let sorted = entities.sorted { entity1, entity2 in
+            guard let pos1 = entity1.positions.first?.first,
+                  let pos2 = entity2.positions.first?.first else {
+                return false
+            }
+            return pos1 < pos2
+        }
+
+        var result: [Entity] = []
+        var i = 0
+
+        while i < sorted.count {
+            var currentEntity = sorted[i]
+
+            // Try to merge with following adjacent entities
+            while i + 1 < sorted.count {
+                let nextEntity = sorted[i + 1]
+
+                // Check if they're adjacent (separated by single space)
+                guard let currentEnd = currentEntity.positions.first?.last,
+                      let nextStart = nextEntity.positions.first?.first,
+                      let nextEnd = nextEntity.positions.first?.last else {
+                    break
+                }
+
+                // Check if there's exactly one space between them
+                let gap = nextStart - currentEnd
+                if gap == 1 {
+                    // Check the character between is a space
+                    let gapStart = text.index(text.startIndex, offsetBy: currentEnd)
+                    let gapEnd = text.index(text.startIndex, offsetBy: nextStart)
+                    let gapChar = String(text[gapStart..<gapEnd])
+
+                    if gapChar == " " {
+                        // Both words should be capitalized
+                        let currentWord = currentEntity.originalText
+                        let nextWord = nextEntity.originalText
+
+                        if startsWithCapital(currentWord) && startsWithCapital(nextWord) {
+                            // Merge them
+                            let mergedText = currentWord + " " + nextWord
+                            let mergedStart = currentEntity.positions.first?.first ?? 0
+                            currentEntity = Entity(
+                                originalText: mergedText,
+                                replacementCode: "",
+                                type: .personOther,
+                                positions: [[mergedStart, nextEnd]],
+                                confidence: 0.6  // Higher confidence for multi-word names
+                            )
+                            i += 1
+                            continue
+                        }
+                    }
+                }
+                break
+            }
+
+            result.append(currentEntity)
+            i += 1
+        }
+
+        return result
+    }
+
+    /// Check if word starts with a capital letter
+    private func startsWithCapital(_ word: String) -> Bool {
+        guard let first = word.first else { return false }
+        return first.isUppercase
     }
 
     // MARK: - Helper Methods
@@ -412,20 +543,6 @@ class DeepScanRecognizer: EntityRecognizer {
         }
 
         return idx < text.endIndex && text[idx] == ":"
-    }
-
-    /// Basic heuristic: word looks like it could be a name
-    private func looksLikeName(_ word: String) -> Bool {
-        let vowels = CharacterSet(charactersIn: "aeiouAEIOU")
-        let hasVowel = word.unicodeScalars.contains { vowels.contains($0) }
-
-        // Names typically have vowels
-        guard hasVowel else { return false }
-
-        // Names are typically 2-20 characters
-        guard word.count >= 2 && word.count <= 20 else { return false }
-
-        return true
     }
 
     /// Deduplicate entities by text (case-insensitive)

@@ -38,11 +38,17 @@ class TextReplacer {
         // Process entities in order of first occurrence
         // This ensures we don't mess up positions by replacing later text first
         for entity in entities {
-            // Use simple string replacement - finds all occurrences automatically
-            result = result.replacingOccurrences(
-                of: entity.originalText,
-                with: entity.replacementCode
-            )
+            // Use case-insensitive regex replacement to catch all variations (Jo, JO, jo)
+            let pattern = NSRegularExpression.escapedPattern(for: entity.originalText)
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(result.startIndex..., in: result)
+                result = regex.stringByReplacingMatches(
+                    in: result,
+                    options: [],
+                    range: range,
+                    withTemplate: entity.replacementCode
+                )
+            }
         }
 
         print("✅ Replaced \(entities.count) entity types")

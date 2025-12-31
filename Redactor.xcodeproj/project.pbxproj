@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		047A4256A36B91FEE8806193 /* SourceSans3-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* DeepScanRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9D0E1F2A3B4 /* DeepScanRecognizer.swift */; };
 		0688AF41B2C3D4E5F6A7B8C9 /* AllNumbersRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */; };
 		0699BF52C3D4E5F6A7B8C9D1 /* EmailRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */; };
 		0703EA34A5DE292DBF3FF3D5 /* NZMedicalIDRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EE4A37A7BD54B6C0B78ECE /* NZMedicalIDRecognizer.swift */; };
@@ -89,6 +90,7 @@
 		B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailRecognizer.swift; sourceTree = "<group>"; };
 		06463A5E2CDA5C7A80638837 /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
 		0930F3E57AF670171CFA140C /* DateRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateRecognizer.swift; sourceTree = "<group>"; };
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* DeepScanRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepScanRecognizer.swift; sourceTree = "<group>"; };
 		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
 		212E6C017812F7CA53B24F18 /* Redactor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Redactor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		22DB2B5F3E1335B11F8AA173 /* AWSCredentialsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSCredentialsManager.swift; sourceTree = "<group>"; };
@@ -319,6 +321,7 @@
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */,
 				DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */,
 				0930F3E57AF670171CFA140C /* DateRecognizer.swift */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* DeepScanRecognizer.swift */,
 				B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */,
 				AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */,
 				39842730A81E3E5F5BF42B6C /* NZAddressRecognizer.swift */,
@@ -469,6 +472,7 @@
 				D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */,
 				FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */,
 				77070C1F6D2F5E7C93827F34 /* DateRecognizer.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* DeepScanRecognizer.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,
 				SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */,
 				STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */,
