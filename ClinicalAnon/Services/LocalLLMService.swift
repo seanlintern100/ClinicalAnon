@@ -364,34 +364,10 @@ class LocalLLMService: ObservableObject {
 
         // Filter out candidates that are already in existing entities
         let existingTexts = Set(existingEntities.map { $0.originalText.lowercased() })
-        var newCandidates = candidates.filter { !existingTexts.contains($0.originalText.lowercased()) }
-
-        // Pre-filter obvious non-person candidates (save LLM calls)
-        newCandidates = newCandidates.filter { entity in
-            let text = entity.originalText.lowercased()
-
-            // Skip phrases starting with "and " - relationship fragments
-            if text.hasPrefix("and ") { return false }
-
-            // Skip very long phrases (>4 words unlikely to be a name)
-            if text.components(separatedBy: " ").count > 4 { return false }
-
-            // Skip common organization patterns
-            let orgPatterns = ["programme", "program", "service", "services", "index",
-                               "scale", "rating", "plan", "order", "report", "assessment",
-                               "behaviour", "behavior", "skills", "support", "application",
-                               "interview", "interviewer", "estimator", "stationery"]
-            for pattern in orgPatterns {
-                if text.contains(pattern) { return false }
-            }
-
-            return true
-        }
-
-        print("LocalLLMService: Pre-filtered to \(newCandidates.count) candidates (removed obvious non-persons)")
+        let newCandidates = candidates.filter { !existingTexts.contains($0.originalText.lowercased()) }
 
         guard !newCandidates.isEmpty else {
-            print("LocalLLMService: No candidates after pre-filtering")
+            print("LocalLLMService: No new candidates to filter")
             return []
         }
 
@@ -431,28 +407,21 @@ class LocalLLMService: ObservableObject {
 
             // Focused prompt for filtering
             let prompt = """
-                Review these candidates. ONLY keep actual PERSON NAMES (people you could meet).
+                Review these potential names found in clinical text. For each one, determine if it's actually a person's name or a FALSE POSITIVE (common word mistaken for a name).
 
-                CANDIDATES (the text in quotes is the candidate, context follows):
+                CANDIDATES:
                 \(candidateList)
 
-                REMOVE these (not person names):
-                - Companies/organizations: Burger King, Kelly Services, Housing NZ
-                - Programs/tools: Personal Wellbeing Index, Parenting Programme
-                - Relationship words: mother, brother, children, family
-                - Actions/phrases: Working Well, Action Plan, Develop CV
-                - Clinical terms: Severity Rating, Behaviour Scale
-                - Partial phrases starting with "and": and brother, and children
+                RULES:
+                - Names are proper nouns referring to specific people
+                - FALSE POSITIVES include: adjectives (notable, remarkable), verbs (checks, report), common nouns
+                - Consider the context - does it make sense as someone's name?
 
-                KEEP only:
-                - Actual first names: Ronald, Rona, Sue, Hayden
-                - Full names: Ronald Nath, Sue Fletcher
+                OUTPUT FORMAT - one line per candidate:
+                1|KEEP|reason (if it's a real name)
+                2|REMOVE|reason (if it's a false positive)
 
-                OUTPUT FORMAT - one line per number:
-                1|KEEP|person name
-                2|REMOVE|not a person name
-
-                Review each:
+                Review each candidate:
                 """
 
             print("LocalLLMService: Batch \(batchIndex + 1) prompt length: \(prompt.count) chars")
