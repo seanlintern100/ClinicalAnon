@@ -412,29 +412,27 @@ class LocalLLMService: ObservableObject {
         for (batchIndex, batch) in batches.enumerated() {
             print("LocalLLMService: Processing batch \(batchIndex + 1)/\(batches.count) with \(batch.count) candidates")
 
-            // Build context snippets for each candidate in this batch
+            // Build candidate list (no context - just the words)
             let candidateList = batch.enumerated().map { index, entity -> String in
-                let context = extractContext(for: entity, in: originalText, windowSize: 40)
-                return "\(index + 1). \"\(entity.originalText)\" in: \"...\(context)...\""
+                return "\(index + 1). \(entity.originalText)"
             }.joined(separator: "\n")
 
             // Focused prompt for filtering
             let prompt = """
-                Review these potential names found in clinical text. For each one, determine if it's actually a person's name or a FALSE POSITIVE (common word mistaken for a name).
+                Review these potential names. Determine if each is a person's name or FALSE POSITIVE.
 
                 CANDIDATES:
                 \(candidateList)
 
                 RULES:
-                - Names are proper nouns referring to specific people
-                - FALSE POSITIVES include: adjectives (notable, remarkable), verbs (checks, report), common nouns
-                - Consider the context - does it make sense as someone's name?
+                - KEEP only actual person names (first names, full names)
+                - REMOVE companies, programs, tools, phrases, relationship words
 
-                OUTPUT FORMAT - one line per candidate:
-                1|KEEP|reason (if it's a real name)
-                2|REMOVE|reason (if it's a false positive)
+                OUTPUT FORMAT:
+                1|KEEP|reason
+                2|REMOVE|reason
 
-                Review each candidate:
+                Review each:
                 """
 
             print("LocalLLMService: Batch \(batchIndex + 1) prompt length: \(prompt.count) chars")
