@@ -287,20 +287,29 @@ class XLMRobertaNERService: ObservableObject {
 
     /// Split long text into overlapping chunks
     private func splitIntoChunks(_ text: String) -> [TextChunk] {
+        print("XLMRobertaNERService: Converting text to array...")
         // Convert to Array for O(1) indexing (Swift String indexing is O(n))
         let chars = Array(text)
         let textLength = chars.count
+        print("XLMRobertaNERService: Array created, length: \(textLength)")
 
         // If text is short enough, return as single chunk
         if textLength <= maxCharsPerChunk {
+            print("XLMRobertaNERService: Text fits in single chunk")
             return [TextChunk(text: text, startOffset: 0, endOffset: textLength)]
         }
 
         var chunks: [TextChunk] = []
         let overlapChars = maxCharsPerChunk / 4  // ~25% overlap in characters
+        print("XLMRobertaNERService: Starting chunk loop...")
 
         var currentStart = 0
+        var chunkCount = 0
         while currentStart < textLength {
+            chunkCount += 1
+            if chunkCount % 5 == 0 {
+                print("XLMRobertaNERService: Created \(chunkCount) chunks so far...")
+            }
             // Calculate chunk end
             var chunkEnd = min(currentStart + maxCharsPerChunk, textLength)
 
