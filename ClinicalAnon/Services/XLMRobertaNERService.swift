@@ -225,6 +225,9 @@ class XLMRobertaNERService: ObservableObject {
         // Deduplicate entities from overlapping chunks
         var rawEntities = deduplicateEntities(allRawEntities)
 
+        // Remove subsumed entities (e.g., "Sue" within "Sue Fletcher")
+        rawEntities = removeSubsumedEntities(rawEntities)
+
         // Post-processing: Bridge gaps between PER entities for middle names
         rawEntities = bridgeNameGaps(rawEntities, in: normalizedText)
 
@@ -446,6 +449,34 @@ class XLMRobertaNERService: ObservableObject {
         }
 
         print("XLMRobertaNERService: Deduplicated \(entities.count) → \(result.count) entities")
+        return result
+    }
+
+    /// Remove entities that are subsumed by longer overlapping entities
+    /// For example, "Sue" at [100,103] is subsumed by "Sue Fletcher" at [100,112]
+    private func removeSubsumedEntities(_ entities: [XLMREntity]) -> [XLMREntity] {
+        guard entities.count > 1 else { return entities }
+
+        // Sort by length (longest first) to prefer longer entities
+        let sorted = entities.sorted { ($0.end - $0.start) > ($1.end - $1.start) }
+        var result: [XLMREntity] = []
+
+        for entity in sorted {
+            // Check if this entity is subsumed by any entity already in result
+            let isSubsumed = result.contains { existing in
+                // Check if entity is fully contained within existing
+                entity.start >= existing.start && entity.end <= existing.end
+            }
+
+            if !isSubsumed {
+                result.append(entity)
+            }
+        }
+
+        // Sort by position for consistent ordering
+        result.sort { $0.start < $1.start }
+
+        print("XLMRobertaNERService: Removed subsumed entities \(entities.count) → \(result.count)")
         return result
     }
 
