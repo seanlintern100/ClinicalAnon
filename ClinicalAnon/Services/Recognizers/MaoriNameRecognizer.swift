@@ -48,33 +48,40 @@ class MaoriNameRecognizer: EntityRecognizer {
     /// Recognize known Māori names from dictionary
     private func recognizeKnownNames(in text: String) -> [Entity] {
         var entities: [Entity] = []
+        let nsText = text as NSString
 
-        // Split into words
-        let words = text.components(separatedBy: CharacterSet.whitespacesAndNewlines)
-        var currentPosition = 0
+        // Combine all known names and search using word boundary regex
+        let allNames = Self.firstNames.union(Self.lastNames)
 
-        for word in words {
-            // Clean punctuation
-            let cleanWord = word.trimmingCharacters(in: .punctuationCharacters)
+        for name in allNames {
+            // Skip user-excluded names
+            guard !isUserExcluded(name) else { continue }
 
-            // Check if it's a known Māori name (and not user-excluded)
-            if (Self.firstNames.contains(cleanWord) || Self.lastNames.contains(cleanWord)) && !isUserExcluded(cleanWord) {
-                // Find actual position in text
-                if let range = text.range(of: cleanWord, range: text.index(text.startIndex, offsetBy: currentPosition)..<text.endIndex) {
-                    let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                    let end = text.distance(from: text.startIndex, to: range.upperBound)
+            // Use word boundary regex to find all occurrences
+            let escapedName = NSRegularExpression.escapedPattern(for: name)
+            let pattern = "\\b\(escapedName)\\b"
 
-                    entities.append(Entity(
-                        originalText: cleanWord,
-                        replacementCode: "",
-                        type: .personOther,
-                        positions: [[start, end]],
-                        confidence: 0.95  // High confidence for known names
-                    ))
-                }
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+                continue
             }
 
-            currentPosition += word.count + 1  // +1 for space
+            let searchRange = NSRange(location: 0, length: nsText.length)
+            let matches = regex.matches(in: text, options: [], range: searchRange)
+
+            for match in matches {
+                // Use NSRange directly for UTF-16 positions
+                let start = match.range.location
+                let end = match.range.location + match.range.length
+                let matchedText = nsText.substring(with: match.range)
+
+                entities.append(Entity(
+                    originalText: matchedText,
+                    replacementCode: "",
+                    type: .personOther,
+                    positions: [[start, end]],
+                    confidence: 0.95  // High confidence for known names
+                ))
+            }
         }
 
         return entities

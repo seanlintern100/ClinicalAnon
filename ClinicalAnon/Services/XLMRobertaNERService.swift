@@ -284,9 +284,9 @@ class XLMRobertaNERService: ObservableObject {
 
     /// Split long text into overlapping chunks
     private func splitIntoChunks(_ text: String) -> [TextChunk] {
-        // Convert to Array for O(1) indexing (Swift String indexing is O(n))
-        let chars = Array(text)
-        let textLength = chars.count
+        // Use NSString for UTF-16 length (consistent with other recognizers)
+        let nsText = text as NSString
+        let textLength = nsText.length
 
         // If text is short enough, return as single chunk
         if textLength <= maxCharsPerChunk {
@@ -303,18 +303,22 @@ class XLMRobertaNERService: ObservableObject {
 
             // Try to break at sentence boundary (search last 200 chars)
             if chunkEnd < textLength {
-                let searchStart = max(chunkEnd - 200, currentStart + stepSize)  // Don't search too far back
-                for i in stride(from: chunkEnd - 1, through: searchStart, by: -1) {
-                    let c = chars[i]
-                    if c == "." || c == "!" || c == "?" || c == "\n" {
-                        chunkEnd = i + 1
-                        break
-                    }
+                let searchStart = max(chunkEnd - 200, currentStart + stepSize)
+                let searchRange = NSRange(location: searchStart, length: chunkEnd - searchStart)
+
+                // Try sentence boundaries in order of preference
+                var foundBoundary = nsText.range(of: ". ", options: .backwards, range: searchRange)
+                if foundBoundary.location == NSNotFound {
+                    foundBoundary = nsText.range(of: "\n", options: .backwards, range: searchRange)
+                }
+                if foundBoundary.location != NSNotFound {
+                    chunkEnd = foundBoundary.location + foundBoundary.length
                 }
             }
 
-            // Extract chunk
-            let chunkText = String(chars[currentStart..<chunkEnd])
+            // Extract chunk using NSString (UTF-16)
+            let chunkRange = NSRange(location: currentStart, length: chunkEnd - currentStart)
+            let chunkText = nsText.substring(with: chunkRange)
 
             chunks.append(TextChunk(
                 text: chunkText,
@@ -607,6 +611,7 @@ class XLMRobertaNERService: ObservableObject {
 
     /// Bridge gaps between PER entities when the gap contains capitalized words
     private func bridgeNameGaps(_ entities: [XLMREntity], in text: String) -> [XLMREntity] {
+        let nsText = text as NSString
         let personEntities = entities.filter { $0.type.isPerson }.sorted { $0.start < $1.start }
         let otherEntities = entities.filter { !$0.type.isPerson }
 
@@ -627,9 +632,9 @@ class XLMRobertaNERService: ObservableObject {
 
                 guard gapEnd > gapStart && gapEnd - gapStart < 30 else { break }
 
-                let gapStartIdx = text.index(text.startIndex, offsetBy: gapStart)
-                let gapEndIdx = text.index(text.startIndex, offsetBy: gapEnd)
-                let gapText = String(text[gapStartIdx..<gapEndIdx]).trimmingCharacters(in: .whitespaces)
+                // Use NSString for UTF-16 consistent substring
+                let gapRange = NSRange(location: gapStart, length: gapEnd - gapStart)
+                let gapText = nsText.substring(with: gapRange).trimmingCharacters(in: .whitespaces)
 
                 let gapWords = gapText.split(separator: " ")
                 let allCapitalized = !gapWords.isEmpty && gapWords.allSatisfy { word in
@@ -640,9 +645,9 @@ class XLMRobertaNERService: ObservableObject {
                 if allCapitalized {
                     let mergedStart = current.start
                     let mergedEnd = next.end
-                    let startIdx = text.index(text.startIndex, offsetBy: mergedStart)
-                    let endIdx = text.index(text.startIndex, offsetBy: min(mergedEnd, text.count))
-                    let mergedText = String(text[startIdx..<endIdx])
+                    // Use NSString for UTF-16 consistent substring
+                    let mergedRange = NSRange(location: mergedStart, length: min(mergedEnd, nsText.length) - mergedStart)
+                    let mergedText = nsText.substring(with: mergedRange)
 
                     print("XLMRobertaNERService: Bridged '\(current.text)' + '\(gapText)' + '\(next.text)' → '\(mergedText)'")
 
@@ -679,12 +684,13 @@ class XLMRobertaNERService: ObservableObject {
         from entity: (text: String, type: String, start: Int, end: Int, confidence: Double),
         originalText: String
     ) -> XLMREntity {
+        // Use NSString for UTF-16 consistent positions
+        let nsText = originalText as NSString
         let start = entity.start
-        let end = min(entity.end, originalText.count)
+        let end = min(entity.end, nsText.length)
 
-        let startIdx = originalText.index(originalText.startIndex, offsetBy: start)
-        let endIdx = originalText.index(originalText.startIndex, offsetBy: end)
-        let extractedText = String(originalText[startIdx..<endIdx])
+        let range = NSRange(location: start, length: end - start)
+        let extractedText = nsText.substring(with: range)
 
         return XLMREntity(
             text: extractedText,
@@ -722,6 +728,7 @@ class XLMRobertaNERService: ObservableObject {
     private func extractNameComponents(_ entities: [XLMREntity], in text: String) -> [XLMREntity] {
         var newEntities: [XLMREntity] = []
         let existingTexts = Set(entities.map { $0.text.lowercased() })
+        let nsText = text as NSString
 
         for entity in entities {
             guard entity.type == .personOther || entity.type == .personClient || entity.type == .personProvider else {
@@ -746,13 +753,13 @@ class XLMRobertaNERService: ObservableObject {
                 continue
             }
 
-            let nsRange = NSRange(text.startIndex..., in: text)
-            let matches = regex.matches(in: text, options: [], range: nsRange)
+            let searchRange = NSRange(location: 0, length: nsText.length)
+            let matches = regex.matches(in: text, options: [], range: searchRange)
 
             for match in matches {
-                guard let swiftRange = Range(match.range, in: text) else { continue }
-                let start = text.distance(from: text.startIndex, to: swiftRange.lowerBound)
-                let end = text.distance(from: text.startIndex, to: swiftRange.upperBound)
+                // Use NSRange directly for UTF-16 positions
+                let start = match.range.location
+                let end = match.range.location + match.range.length
 
                 let isPartOfFullName = (start >= entity.start && end <= entity.end)
 
@@ -797,6 +804,7 @@ class XLMRobertaNERService: ObservableObject {
     /// Detect alphanumeric identifiers
     private func detectIdentifiers(in text: String) -> [XLMREntity] {
         var identifiers: [XLMREntity] = []
+        let nsText = text as NSString
 
         let pattern = #"\b[A-Za-z0-9][A-Za-z0-9\-]{3,}[A-Za-z0-9]\b"#
 
@@ -804,12 +812,12 @@ class XLMRobertaNERService: ObservableObject {
             return identifiers
         }
 
-        let range = NSRange(text.startIndex..., in: text)
+        let range = NSRange(location: 0, length: nsText.length)
         let matches = regex.matches(in: text, options: [], range: range)
 
         for match in matches {
-            guard let swiftRange = Range(match.range, in: text) else { continue }
-            let matchText = String(text[swiftRange])
+            // Use NSString for UTF-16 consistent substring
+            let matchText = nsText.substring(with: match.range)
 
             let hasLetter = matchText.contains(where: { $0.isLetter })
             let hasDigit = matchText.contains(where: { $0.isNumber })
@@ -817,8 +825,9 @@ class XLMRobertaNERService: ObservableObject {
 
             if isCommonAbbreviation(matchText) { continue }
 
-            let start = text.distance(from: text.startIndex, to: swiftRange.lowerBound)
-            let end = text.distance(from: text.startIndex, to: swiftRange.upperBound)
+            // Use NSRange directly for UTF-16 positions
+            let start = match.range.location
+            let end = match.range.location + match.range.length
 
             identifiers.append(XLMREntity(
                 text: matchText,
@@ -949,25 +958,34 @@ class SentencePieceTokenizer {
     /// BPE tokenize text into subword tokens
     private func bpeTokenize(text: String) -> [Token] {
         var tokens: [Token] = []
-        let chars = Array(text)
+        let nsText = text as NSString
         var i = 0
 
-        while i < chars.count {
+        while i < nsText.length {
+            // Get character at position (UTF-16 unit)
+            let char = nsText.character(at: i)
+            let scalar = UnicodeScalar(char)
+
             // Skip whitespace but track position
-            if chars[i].isWhitespace {
+            if let s = scalar, CharacterSet.whitespacesAndNewlines.contains(s) {
                 i += 1
                 continue
             }
 
             // Find the end of this word (until whitespace)
             var wordEnd = i
-            while wordEnd < chars.count && !chars[wordEnd].isWhitespace {
+            while wordEnd < nsText.length {
+                let c = nsText.character(at: wordEnd)
+                if let s = UnicodeScalar(c), CharacterSet.whitespacesAndNewlines.contains(s) {
+                    break
+                }
                 wordEnd += 1
             }
 
-            // Extract word
+            // Extract word using NSString (UTF-16)
             let wordStart = i
-            let word = String(chars[wordStart..<wordEnd])
+            let wordRange = NSRange(location: wordStart, length: wordEnd - wordStart)
+            let word = nsText.substring(with: wordRange)
 
             // Tokenize this word with BPE
             let wordTokens = tokenizeWord(word, charOffset: wordStart, isWordStart: true)
@@ -982,25 +1000,39 @@ class SentencePieceTokenizer {
     /// Tokenize a single word using greedy BPE matching
     private func tokenizeWord(_ word: String, charOffset: Int, isWordStart: Bool) -> [Token] {
         var tokens: [Token] = []
-        var remaining = word
-        var currentOffset = charOffset
+        let nsWord = word as NSString
+        var currentPos = 0  // Position within the word (UTF-16)
+        var currentOffset = charOffset  // Global offset (UTF-16)
         var isFirst = isWordStart
 
-        while !remaining.isEmpty {
+        while currentPos < nsWord.length {
+            // Get remaining portion of word
+            let remainingRange = NSRange(location: currentPos, length: nsWord.length - currentPos)
+            let remaining = nsWord.substring(with: remainingRange)
+
             // Try to find the longest matching piece
             var found = false
 
             // For first subword of a word, try with ▁ prefix
             let prefixedRemaining = isFirst ? (wordPrefix + remaining) : remaining
+            let nsPrefixed = prefixedRemaining as NSString
 
             // Try longest to shortest
-            for length in stride(from: prefixedRemaining.count, through: 1, by: -1) {
-                let endIndex = prefixedRemaining.index(prefixedRemaining.startIndex, offsetBy: length)
-                let candidate = String(prefixedRemaining[prefixedRemaining.startIndex..<endIndex])
+            for length in stride(from: nsPrefixed.length, through: 1, by: -1) {
+                let candidateRange = NSRange(location: 0, length: length)
+                let candidate = nsPrefixed.substring(with: candidateRange)
 
                 if let tokenId = vocab[candidate] {
                     // Found a match
-                    let actualLength = isFirst ? (length - 1) : length  // Subtract ▁ prefix length
+                    // Calculate actual UTF-16 length consumed from original word
+                    let actualLength: Int
+                    if isFirst {
+                        // Subtract the prefix length (▁ is 1 UTF-16 unit)
+                        actualLength = length - (wordPrefix as NSString).length
+                    } else {
+                        actualLength = length
+                    }
+
                     let pieceEndOffset = currentOffset + actualLength
 
                     tokens.append(Token(
@@ -1010,10 +1042,9 @@ class SentencePieceTokenizer {
                         charEnd: pieceEndOffset
                     ))
 
-                    // Advance
+                    // Advance within word
                     if actualLength > 0 {
-                        let advanceIndex = remaining.index(remaining.startIndex, offsetBy: actualLength)
-                        remaining = String(remaining[advanceIndex...])
+                        currentPos += actualLength
                         currentOffset = pieceEndOffset
                     } else {
                         // Edge case: only matched the prefix itself
@@ -1028,7 +1059,9 @@ class SentencePieceTokenizer {
 
             if !found {
                 // No match found - use UNK token for first character and continue
-                let firstChar = String(remaining.prefix(1))
+                // Get single UTF-16 unit (may be half of a surrogate pair)
+                let charRange = NSRange(location: currentPos, length: 1)
+                let firstChar = nsWord.substring(with: charRange)
 
                 // Try the character with prefix if first
                 let charPiece = isFirst ? (wordPrefix + firstChar) : firstChar
@@ -1041,7 +1074,7 @@ class SentencePieceTokenizer {
                     charEnd: currentOffset + 1
                 ))
 
-                remaining = String(remaining.dropFirst())
+                currentPos += 1
                 currentOffset += 1
                 isFirst = false
             }

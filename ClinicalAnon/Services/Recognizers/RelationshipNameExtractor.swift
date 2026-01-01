@@ -41,6 +41,7 @@ class RelationshipNameExtractor: EntityRecognizer {
 
     func recognize(in text: String) -> [Entity] {
         var entities: [Entity] = []
+        let nsText = text as NSString
 
         for relationship in relationshipWords {
             // Pattern: relationship word (case-insensitive) followed by capitalized name(s)
@@ -57,23 +58,25 @@ class RelationshipNameExtractor: EntityRecognizer {
                 continue
             }
 
-            let range = NSRange(text.startIndex..., in: text)
+            let range = NSRange(location: 0, length: nsText.length)
             let matches = regex.matches(in: text, range: range)
 
             for match in matches {
                 // Get the captured group (the name after relationship word)
-                guard match.numberOfRanges > 1,
-                      let nameRange = Range(match.range(at: 1), in: text) else {
-                    continue
-                }
+                guard match.numberOfRanges > 1 else { continue }
 
-                let name = String(text[nameRange])
+                let nameNSRange = match.range(at: 1)
+                guard nameNSRange.location != NSNotFound else { continue }
+
+                // Use NSString for UTF-16 consistent substring
+                let name = nsText.substring(with: nameNSRange)
 
                 // Skip if it's a common word (not a name)
                 guard !isCommonWord(name) else { continue }
 
-                let start = text.distance(from: text.startIndex, to: nameRange.lowerBound)
-                let end = text.distance(from: text.startIndex, to: nameRange.upperBound)
+                // Use NSRange directly for UTF-16 positions
+                let start = nameNSRange.location
+                let end = nameNSRange.location + nameNSRange.length
 
                 entities.append(Entity(
                     originalText: name,
@@ -97,6 +100,7 @@ class RelationshipNameExtractor: EntityRecognizer {
     /// Example: "mother Sofia, sister Rachel, and flatmate David"
     private func extractNamesFromLists(in text: String) -> [Entity] {
         var entities: [Entity] = []
+        let nsText = text as NSString
 
         // Pattern for lists: "relationship Name, relationship Name, and relationship Name"
         // More complex - look for commas and 'and' between relationship+name pairs
@@ -109,21 +113,23 @@ class RelationshipNameExtractor: EntityRecognizer {
             return []
         }
 
-        let range = NSRange(text.startIndex..., in: text)
+        let range = NSRange(location: 0, length: nsText.length)
         let matches = regex.matches(in: text, range: range)
 
         for match in matches {
-            guard match.numberOfRanges > 2,
-                  let nameRange = Range(match.range(at: 2), in: text) else {
-                continue
-            }
+            guard match.numberOfRanges > 2 else { continue }
 
-            let name = String(text[nameRange])
+            let nameNSRange = match.range(at: 2)
+            guard nameNSRange.location != NSNotFound else { continue }
+
+            // Use NSString for UTF-16 consistent substring
+            let name = nsText.substring(with: nameNSRange)
 
             guard !isCommonWord(name) else { continue }
 
-            let start = text.distance(from: text.startIndex, to: nameRange.lowerBound)
-            let end = text.distance(from: text.startIndex, to: nameRange.upperBound)
+            // Use NSRange directly for UTF-16 positions
+            let start = nameNSRange.location
+            let end = nameNSRange.location + nameNSRange.length
 
             entities.append(Entity(
                 originalText: name,

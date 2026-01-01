@@ -633,7 +633,8 @@ class RedactPhaseState: ObservableObject {
             return
         }
 
-        var text = result.originalText
+        // Use NSString for all operations since positions are in UTF-16 (NSRange) coordinates
+        var nsText = result.originalText as NSString
         var allReplacements: [(start: Int, end: Int, code: String)] = []
 
         for entity in activeEntities {
@@ -642,7 +643,8 @@ class RedactPhaseState: ObservableObject {
                 let start = position[0]
                 let end = position[1]
 
-                guard start >= 0 && end <= text.count && start < end else { continue }
+                // Validate against NSString length (UTF-16), not String.count (grapheme clusters)
+                guard start >= 0 && end <= nsText.length && start < end else { continue }
                 allReplacements.append((start: start, end: end, code: entity.replacementCode))
             }
         }
@@ -676,19 +678,18 @@ class RedactPhaseState: ObservableObject {
         }
 
         // Sort in descending order for replacement (process end-to-start)
+        // This ensures earlier replacements don't shift positions of later ones
         nonOverlapping.sort { $0.start > $1.start }
 
         for replacement in nonOverlapping {
-            guard replacement.start < text.count && replacement.end <= text.count else { continue }
+            guard replacement.start >= 0 && replacement.end <= nsText.length else { continue }
 
-            let start = text.index(text.startIndex, offsetBy: replacement.start)
-            let end = text.index(text.startIndex, offsetBy: replacement.end)
-
-            guard start < text.endIndex && end <= text.endIndex && start < end else { continue }
-            text.replaceSubrange(start..<end, with: replacement.code)
+            // Use NSString operations to maintain UTF-16 coordinate consistency
+            let range = NSRange(location: replacement.start, length: replacement.end - replacement.start)
+            nsText = nsText.replacingCharacters(in: range, with: replacement.code) as NSString
         }
 
-        cachedRedactedText = text
+        cachedRedactedText = nsText as String
         redactedTextNeedsUpdate = false
     }
 

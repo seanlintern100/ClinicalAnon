@@ -28,6 +28,7 @@ class TitleNameRecognizer: EntityRecognizer {
 
     func recognize(in text: String) -> [Entity] {
         var entities: [Entity] = []
+        let nsText = text as NSString
 
         // Build pattern: Title (with optional period) + 1-3 capitalized words
         let titlePattern = titles.joined(separator: "|")
@@ -38,17 +39,18 @@ class TitleNameRecognizer: EntityRecognizer {
             return []
         }
 
-        let range = NSRange(text.startIndex..., in: text)
+        let range = NSRange(location: 0, length: nsText.length)
         let matches = regex.matches(in: text, range: range)
 
         for match in matches {
             // Get the captured group (the name after title)
-            guard match.numberOfRanges > 2,
-                  let nameRange = Range(match.range(at: 2), in: text) else {
-                continue
-            }
+            guard match.numberOfRanges > 2 else { continue }
 
-            let name = String(text[nameRange])
+            let nameNSRange = match.range(at: 2)
+            guard nameNSRange.location != NSNotFound else { continue }
+
+            // Use NSString for UTF-16 consistent substring
+            let name = nsText.substring(with: nameNSRange)
 
             // Skip if it's a common word (not a name)
             guard !isCommonWord(name) else { continue }
@@ -56,8 +58,9 @@ class TitleNameRecognizer: EntityRecognizer {
             // Skip user-excluded words
             guard !isUserExcluded(name) else { continue }
 
-            let start = text.distance(from: text.startIndex, to: nameRange.lowerBound)
-            let end = text.distance(from: text.startIndex, to: nameRange.upperBound)
+            // Use NSRange directly for UTF-16 positions
+            let start = nameNSRange.location
+            let end = nameNSRange.location + nameNSRange.length
 
             entities.append(Entity(
                 originalText: name,
