@@ -287,59 +287,36 @@ class XLMRobertaNERService: ObservableObject {
 
     /// Split long text into overlapping chunks
     private func splitIntoChunks(_ text: String) -> [TextChunk] {
-        print("XLMRobertaNERService: Converting text to array...")
         // Convert to Array for O(1) indexing (Swift String indexing is O(n))
         let chars = Array(text)
         let textLength = chars.count
-        print("XLMRobertaNERService: Array created, length: \(textLength)")
 
         // If text is short enough, return as single chunk
         if textLength <= maxCharsPerChunk {
-            print("XLMRobertaNERService: Text fits in single chunk")
             return [TextChunk(text: text, startOffset: 0, endOffset: textLength)]
         }
 
         var chunks: [TextChunk] = []
-        let overlapChars = maxCharsPerChunk / 4  // ~25% overlap in characters
-        print("XLMRobertaNERService: Starting chunk loop...")
+        let stepSize = maxCharsPerChunk - 200  // Small overlap of 200 chars
 
         var currentStart = 0
-        var chunkCount = 0
         while currentStart < textLength {
-            chunkCount += 1
-            if chunkCount % 5 == 0 {
-                print("XLMRobertaNERService: Created \(chunkCount) chunks so far...")
-            }
             // Calculate chunk end
             var chunkEnd = min(currentStart + maxCharsPerChunk, textLength)
 
-            // Try to break at sentence or word boundary (not mid-word)
+            // Try to break at sentence boundary (search last 200 chars)
             if chunkEnd < textLength {
-                let searchStart = max(chunkEnd - 200, currentStart)
-
-                // Search backwards for sentence break
-                var foundBreak = false
+                let searchStart = max(chunkEnd - 200, currentStart + stepSize)  // Don't search too far back
                 for i in stride(from: chunkEnd - 1, through: searchStart, by: -1) {
                     let c = chars[i]
-                    if c == "." || c == "!" || c == "?" {
+                    if c == "." || c == "!" || c == "?" || c == "\n" {
                         chunkEnd = i + 1
-                        foundBreak = true
                         break
-                    }
-                }
-
-                // Fall back to word break (space)
-                if !foundBreak {
-                    for i in stride(from: chunkEnd - 1, through: searchStart, by: -1) {
-                        if chars[i] == " " {
-                            chunkEnd = i + 1
-                            break
-                        }
                     }
                 }
             }
 
-            // Extract chunk using array slice
+            // Extract chunk
             let chunkText = String(chars[currentStart..<chunkEnd])
 
             chunks.append(TextChunk(
@@ -348,13 +325,16 @@ class XLMRobertaNERService: ObservableObject {
                 endOffset: chunkEnd
             ))
 
-            // Move to next chunk with overlap
-            currentStart = chunkEnd - overlapChars
-            if currentStart >= text.count - 50 {
-                break  // Avoid tiny final chunks
+            // Advance by step size (ensures progress)
+            currentStart += stepSize
+
+            // Break if we've covered the text
+            if currentStart >= textLength - 100 {
+                break
             }
         }
 
+        print("XLMRobertaNERService: Created \(chunks.count) chunks")
         return chunks
     }
 
