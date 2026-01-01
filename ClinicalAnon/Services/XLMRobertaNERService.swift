@@ -287,41 +287,51 @@ class XLMRobertaNERService: ObservableObject {
 
     /// Split long text into overlapping chunks
     private func splitIntoChunks(_ text: String) -> [TextChunk] {
+        // Convert to Array for O(1) indexing (Swift String indexing is O(n))
+        let chars = Array(text)
+        let textLength = chars.count
+
         // If text is short enough, return as single chunk
-        if text.count <= maxCharsPerChunk {
-            return [TextChunk(text: text, startOffset: 0, endOffset: text.count)]
+        if textLength <= maxCharsPerChunk {
+            return [TextChunk(text: text, startOffset: 0, endOffset: textLength)]
         }
 
         var chunks: [TextChunk] = []
         let overlapChars = maxCharsPerChunk / 4  // ~25% overlap in characters
 
         var currentStart = 0
-        while currentStart < text.count {
+        while currentStart < textLength {
             // Calculate chunk end
-            var chunkEnd = min(currentStart + maxCharsPerChunk, text.count)
+            var chunkEnd = min(currentStart + maxCharsPerChunk, textLength)
 
             // Try to break at sentence or word boundary (not mid-word)
-            if chunkEnd < text.count {
+            if chunkEnd < textLength {
                 let searchStart = max(chunkEnd - 200, currentStart)
-                let searchRange = text.index(text.startIndex, offsetBy: searchStart)..<text.index(text.startIndex, offsetBy: chunkEnd)
-                let searchText = String(text[searchRange])
 
-                // Prefer sentence breaks (. ! ?)
-                if let lastSentence = searchText.lastIndex(where: { $0 == "." || $0 == "!" || $0 == "?" }) {
-                    let offset = searchText.distance(from: searchText.startIndex, to: lastSentence)
-                    chunkEnd = searchStart + offset + 1
+                // Search backwards for sentence break
+                var foundBreak = false
+                for i in stride(from: chunkEnd - 1, through: searchStart, by: -1) {
+                    let c = chars[i]
+                    if c == "." || c == "!" || c == "?" {
+                        chunkEnd = i + 1
+                        foundBreak = true
+                        break
+                    }
                 }
+
                 // Fall back to word break (space)
-                else if let lastSpace = searchText.lastIndex(of: " ") {
-                    let offset = searchText.distance(from: searchText.startIndex, to: lastSpace)
-                    chunkEnd = searchStart + offset + 1
+                if !foundBreak {
+                    for i in stride(from: chunkEnd - 1, through: searchStart, by: -1) {
+                        if chars[i] == " " {
+                            chunkEnd = i + 1
+                            break
+                        }
+                    }
                 }
             }
 
-            // Extract chunk
-            let startIdx = text.index(text.startIndex, offsetBy: currentStart)
-            let endIdx = text.index(text.startIndex, offsetBy: chunkEnd)
-            let chunkText = String(text[startIdx..<endIdx])
+            // Extract chunk using array slice
+            let chunkText = String(chars[currentStart..<chunkEnd])
 
             chunks.append(TextChunk(
                 text: chunkText,
@@ -496,7 +506,7 @@ class XLMRobertaNERService: ObservableObject {
     }
 
     /// Extract BIO tags from logits (static version for background processing)
-    private static func extractBIOTagsStatic(from logits: MLMultiArray, tokenCount: Int, id2label: [Int: String]) -> [String] {
+    nonisolated private static func extractBIOTagsStatic(from logits: MLMultiArray, tokenCount: Int, id2label: [Int: String]) -> [String] {
         var tags: [String] = []
         let numLabels = id2label.count
 
@@ -530,7 +540,7 @@ class XLMRobertaNERService: ObservableObject {
     }
 
     /// Aggregate BIO tags into entity spans (static version for background processing)
-    private static func aggregateBIOTagsStatic(
+    nonisolated private static func aggregateBIOTagsStatic(
         tags: [String],
         inputIds: [Int],
         tokenToChar: [(Int, Int)],
@@ -669,7 +679,7 @@ class XLMRobertaNERService: ObservableObject {
         return Self.createXLMREntityStatic(from: entity, originalText: originalText)
     }
 
-    private static func createXLMREntityStatic(
+    nonisolated private static func createXLMREntityStatic(
         from entity: (text: String, type: String, start: Int, end: Int, confidence: Double),
         originalText: String
     ) -> XLMREntity {
@@ -695,7 +705,7 @@ class XLMRobertaNERService: ObservableObject {
         return Self.mapXLMRTypeStatic(xlmrType)
     }
 
-    private static func mapXLMRTypeStatic(_ xlmrType: String) -> EntityType {
+    nonisolated private static func mapXLMRTypeStatic(_ xlmrType: String) -> EntityType {
         switch xlmrType {
         case "PER":
             return .personOther
