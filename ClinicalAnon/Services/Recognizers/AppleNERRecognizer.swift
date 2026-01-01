@@ -34,6 +34,20 @@ class AppleNERRecognizer: EntityRecognizer {
 
             guard let tag = tag else { return true }
 
+            // Get actual confidence from NLTagger
+            let (hypotheses, _) = tagger.tagHypotheses(
+                at: range.lowerBound,
+                unit: .word,
+                scheme: .nameType,
+                maximumCount: 1
+            )
+
+            // Require minimum confidence to reduce false positives
+            let minConfidence = 0.8
+            guard let confidence = hypotheses[tag.rawValue], confidence >= minConfidence else {
+                return true  // Skip low-confidence predictions
+            }
+
             let name = String(text[range])
 
             // Skip multi-word "names" with invalid middle words (e.g., "John asked Mary")
@@ -63,7 +77,7 @@ class AppleNERRecognizer: EntityRecognizer {
                     replacementCode: "",
                     type: type,
                     positions: [[start, end]],
-                    confidence: 0.7  // Apple NER baseline confidence
+                    confidence: confidence  // Actual confidence from NLTagger
                 ))
             }
 
