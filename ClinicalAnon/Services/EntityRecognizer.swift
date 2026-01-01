@@ -179,7 +179,7 @@ extension EntityRecognizer {
             "Client", "Supplier", "Provider", "Participant", "Claimant",
             "Referrer", "Coordinator", "Author", "Reviewer", "Approver",
             "Name", "Address", "Phone", "Email", "Contact", "Details",
-            "Number", "Date", "Claim", "Reference", "Report", "File"
+            "Number", "Date", "Claim", "Reference", "Ref", "Report", "File"
         ]
 
         return clinicalTerms.contains(word) || clinicalTerms.contains(word.uppercased())

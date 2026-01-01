@@ -164,6 +164,10 @@ class WorkflowViewModel: ObservableObject {
     var isRunningXLMRNER: Bool { redactState.isRunningXLMRNER }
     var xlmrNERError: String? { redactState.xlmrNERError }
 
+    var deepScanFindings: [Entity] { redactState.deepScanFindings }
+    var isRunningDeepScan: Bool { redactState.isRunningDeepScan }
+    var deepScanError: String? { redactState.deepScanError }
+
     var cachedRedactedText: String { redactState.cachedRedactedText }
 
     var prefilledText: String? {
@@ -368,6 +372,20 @@ class WorkflowViewModel: ObservableObject {
 
     func runXLMRNERScan() async {
         await redactState.runXLMRNERScan()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
+    }
+
+    func runDeepScan() async {
+        await redactState.runDeepScan()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,

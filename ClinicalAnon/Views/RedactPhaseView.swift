@@ -296,6 +296,24 @@ struct RedactPhaseView: View {
                             .help("Scan using XLM-RoBERTa multilingual NER for foreign names (100+ languages)")
                         }
 
+                        // Deep Scan button (Apple NER at lower confidence)
+                        Button(action: { Task { await viewModel.runDeepScan() } }) {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                if viewModel.isRunningDeepScan {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .frame(width: 14, height: 14)
+                                } else {
+                                    Image(systemName: "magnifyingglass.circle.fill")
+                                }
+                                Text("Deep Scan")
+                            }
+                            .font(DesignSystem.Typography.body)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(viewModel.isRunningDeepScan)
+                        .help("Run Apple NER with lower confidence (0.75) to catch additional names")
+
                         Button(action: { viewModel.continueToNextPhase() }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
                                 Text("Continue")
@@ -393,6 +411,18 @@ private struct RedactEntitySidebar: View {
                                 icon: "globe.americas.fill",
                                 color: .teal,
                                 entities: viewModel.xlmrNERFindings,
+                                viewModel: viewModel,
+                                isAISection: true  // Reuse AI section styling
+                            )
+                        }
+
+                        // Show Deep Scan section if there are deep scan findings
+                        if !viewModel.deepScanFindings.isEmpty {
+                            EntityTypeSection(
+                                title: "Deep Scan Findings",
+                                icon: "magnifyingglass.circle.fill",
+                                color: .purple,
+                                entities: viewModel.deepScanFindings,
                                 viewModel: viewModel,
                                 isAISection: true  // Reuse AI section styling
                             )

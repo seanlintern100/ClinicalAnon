@@ -16,6 +16,18 @@ import NaturalLanguage
 /// Note: Chunking is handled by SwiftNERService - this recognizer receives pre-chunked text
 class AppleNERRecognizer: EntityRecognizer {
 
+    // MARK: - Properties
+
+    /// Minimum confidence threshold for entity detection
+    /// Default: 0.85 for initial scan, can be lowered (e.g., 0.75) for deep scan
+    private let minConfidence: Double
+
+    // MARK: - Initialization
+
+    init(minConfidence: Double = 0.85) {
+        self.minConfidence = minConfidence
+    }
+
     // MARK: - Entity Recognition
 
     func recognize(in text: String) -> [Entity] {
@@ -46,7 +58,6 @@ class AppleNERRecognizer: EntityRecognizer {
             let confidence = hypotheses[tag.rawValue] ?? 0.0
 
             // Require minimum confidence to reduce false positives
-            let minConfidence = 0.8
             guard confidence >= minConfidence else {
                 return true  // Skip low-confidence predictions
             }

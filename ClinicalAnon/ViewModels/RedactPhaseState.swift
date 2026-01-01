@@ -49,6 +49,11 @@ class RedactPhaseState: ObservableObject {
     @Published var isRunningXLMRNER: Bool = false
     @Published var xlmrNERError: String?
 
+    // Deep Scan (Apple NER at 0.75 confidence)
+    @Published var deepScanFindings: [Entity] = []
+    @Published var isRunningDeepScan: Bool = false
+    @Published var deepScanError: String?
+
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
     @Published var hasPendingChanges: Bool = false
@@ -84,11 +89,11 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review + BERT NER + XLM-R NER findings)
+    /// All entities (detected + custom + PII review + BERT NER + XLM-R NER + Deep Scan findings)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings + bertNERFindings + xlmrNERFindings }
+        guard let result = result else { return customEntities + piiReviewFindings + bertNERFindings + xlmrNERFindings + deepScanFindings }
         let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings + bertNERFindings + xlmrNERFindings
+        return baseEntities + customEntities + piiReviewFindings + bertNERFindings + xlmrNERFindings + deepScanFindings
     }
 
     /// Only active entities (not excluded)
@@ -592,6 +597,77 @@ class RedactPhaseState: ObservableObject {
         let existingXLMRTexts = Set(xlmrNERFindings.map { $0.originalText.lowercased() })
         let uniqueNewEntities = newEntities.filter { !existingXLMRTexts.contains($0.originalText.lowercased()) }
         xlmrNERFindings.append(contentsOf: uniqueNewEntities)
+    }
+
+    // MARK: - Deep Scan (Apple NER at Lower Confidence)
+
+    /// Run Apple NER with lower confidence (0.75) to catch entities missed by initial scan
+    func runDeepScan() async {
+        guard let result = result else {
+            deepScanError = "Please analyze text first"
+            return
+        }
+
+        isRunningDeepScan = true
+        deepScanError = nil
+        successMessage = "Running Deep Scan..."
+
+        let findings = await SwiftNERService.shared.runDeepScan(
+            text: result.originalText,
+            existingEntities: allEntities
+        )
+
+        await MainActor.run {
+            processDeepScanFindings(findings, originalText: result.originalText)
+            isRunningDeepScan = false
+
+            if deepScanFindings.isEmpty {
+                successMessage = "Deep Scan complete - no additional entities found"
+            } else {
+                successMessage = "Deep Scan found \(deepScanFindings.count) additional entity/entities"
+            }
+            autoHideSuccess()
+            redactedTextNeedsUpdate = true
+        }
+    }
+
+    private func processDeepScanFindings(_ findings: [PIIFinding], originalText: String) {
+        var newEntities: [Entity] = []
+
+        for finding in findings {
+            // Skip if text already exists in current entities
+            let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
+            if alreadyExists { continue }
+
+            // Skip if already added in this batch
+            if newEntities.contains(where: { $0.originalText.lowercased() == finding.text.lowercased() }) {
+                continue
+            }
+
+            // Find all occurrences in original text
+            let positions = findAllOccurrences(of: finding.text, in: originalText)
+            guard !positions.isEmpty else { continue }
+
+            // Get next available replacement code
+            let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count +
+                               newEntities.filter { $0.type == finding.suggestedType }.count
+            let code = finding.suggestedType.replacementCode(for: existingCount)
+
+            let entity = Entity(
+                originalText: finding.text,
+                replacementCode: code,
+                type: finding.suggestedType,
+                positions: positions,
+                confidence: finding.confidence
+            )
+
+            newEntities.append(entity)
+        }
+
+        // Merge with existing deep scan findings, avoiding duplicates
+        let existingDeepTexts = Set(deepScanFindings.map { $0.originalText.lowercased() })
+        let uniqueNewEntities = newEntities.filter { !existingDeepTexts.contains($0.originalText.lowercased()) }
+        deepScanFindings.append(contentsOf: uniqueNewEntities)
     }
 
     // MARK: - Copy Actions

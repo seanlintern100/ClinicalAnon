@@ -15,6 +15,11 @@ import NaturalLanguage
 /// Combines Apple's NaturalLanguage framework with custom NZ-specific recognizers
 class SwiftNERService {
 
+    // MARK: - Shared Instance
+
+    /// Shared instance for deep scan access
+    static let shared = SwiftNERService()
+
     // MARK: - Properties
 
     private let recognizers: [EntityRecognizer]
@@ -107,6 +112,112 @@ class SwiftNERService {
         #endif
 
         return withAllOccurrences
+    }
+
+    // MARK: - Deep Scan (Apple NER at Lower Confidence)
+
+    /// Run Apple NER with lower confidence threshold to catch entities missed by initial scan
+    /// - Parameters:
+    ///   - text: The text to scan
+    ///   - existingEntities: Entities already detected (to avoid duplicates)
+    /// - Returns: Array of new PIIFindings not already in existingEntities
+    func runDeepScan(text: String, existingEntities: [Entity]) async -> [PIIFinding] {
+        let startTime = Date()
+
+        #if DEBUG
+        print("🔍 Deep Scan: Starting Apple NER at 0.75 confidence...")
+        print("📝 Input text length: \(text.count) chars")
+        print("📋 Existing entities to compare against: \(existingEntities.count)")
+        #endif
+
+        // Create Apple NER recognizer with lower confidence threshold
+        let deepScanRecognizer = AppleNERRecognizer(minConfidence: 0.75)
+
+        // PHASE 1: Chunked detection (same as main scan)
+        let chunks = ChunkManager.splitWithOverlap(text)
+        var allEntities: [Entity] = []
+
+        #if DEBUG
+        print("📦 Processing \(chunks.count) chunks...")
+        #endif
+
+        // Process chunks in parallel
+        await withTaskGroup(of: (Int, [Entity]).self) { group in
+            for (index, chunk) in chunks.enumerated() {
+                group.addTask {
+                    let entities = deepScanRecognizer.recognize(in: chunk.text)
+
+                    // Adjust positions from chunk-local to global coordinates
+                    var adjustedEntities: [Entity] = []
+                    for entity in entities {
+                        if let adjustedPositions = ChunkManager.adjustPositions(entity.positions, for: chunk) {
+                            adjustedEntities.append(Entity(
+                                id: entity.id,
+                                originalText: entity.originalText,
+                                replacementCode: entity.replacementCode,
+                                type: entity.type,
+                                positions: adjustedPositions,
+                                confidence: entity.confidence
+                            ))
+                        }
+                    }
+                    return (index, adjustedEntities)
+                }
+            }
+
+            for await (_, chunkEntities) in group {
+                allEntities.append(contentsOf: chunkEntities)
+            }
+        }
+
+        #if DEBUG
+        print("📦 Phase 1 complete: \(allEntities.count) raw entities from chunks")
+        #endif
+
+        // Apply same cleanup as main scan
+        let noOverlaps = removeOverlaps(allEntities)
+        let deduplicated = deduplicateEntities(noOverlaps)
+        let validated = validateEntityPositions(deduplicated, textLength: text.count)
+
+        // PHASE 2: Single-pass occurrence scan
+        let withAllOccurrences = singlePassOccurrenceScan(validated, in: text)
+
+        // PHASE 3: Filter against existing entities (only return delta)
+        let existingTexts = Set(existingEntities.map { $0.originalText.lowercased() })
+
+        let newFindings = withAllOccurrences.compactMap { entity -> PIIFinding? in
+            let normalizedText = entity.originalText.lowercased()
+
+            // Skip if already exists in existing entities
+            if existingTexts.contains(normalizedText) {
+                return nil
+            }
+
+            // Skip if this is a substring of an existing entity or vice versa
+            let isSubstringMatch = existingEntities.contains { existing in
+                let existingLower = existing.originalText.lowercased()
+                return existingLower.contains(normalizedText) || normalizedText.contains(existingLower)
+            }
+
+            if isSubstringMatch {
+                return nil
+            }
+
+            return PIIFinding(
+                text: entity.originalText,
+                suggestedType: entity.type,
+                reason: "Deep Scan (Apple NER 0.75)",
+                confidence: entity.confidence ?? 0.75
+            )
+        }
+
+        #if DEBUG
+        let elapsed = Date().timeIntervalSince(startTime)
+        print("✅ Deep Scan: Completed in \(String(format: "%.2f", elapsed))s")
+        print("   Found \(withAllOccurrences.count) total, \(newFindings.count) new (delta)")
+        #endif
+
+        return newFindings
     }
 
     // MARK: - Chunk Processing
