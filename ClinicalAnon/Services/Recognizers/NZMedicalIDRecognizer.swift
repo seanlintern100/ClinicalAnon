@@ -10,7 +10,7 @@ import Foundation
 
 // MARK: - NZ Medical ID Recognizer
 
-/// Recognizes New Zealand medical identifiers
+/// Recognizes New Zealand medical identifiers and alphanumeric codes
 class NZMedicalIDRecognizer: PatternRecognizer {
 
     init() {
@@ -30,7 +30,13 @@ class NZMedicalIDRecognizer: PatternRecognizer {
 
             // Medical record with prefix
             // Format: MR-123456, CR-456789
-            ("\\b(?:MR|CR|UR)-\\d{5,}\\b", .identifier, 0.85)
+            ("\\b(?:MR|CR|UR)-\\d{5,}\\b", .identifier, 0.85),
+
+            // CATCH-ALL: Any alphanumeric code containing BOTH letters AND numbers
+            // Uses lookaheads to ensure at least one letter and one digit
+            // Examples: S7798120001, VEND-G0M136, ABC123, 123ABC, A1B2C3
+            // Minimum 4 chars to reduce false positives
+            ("(?=[A-Za-z0-9-]*[A-Za-z])(?=[A-Za-z0-9-]*[0-9])[A-Za-z0-9][A-Za-z0-9-]{2,}[A-Za-z0-9]", .identifier, 0.7)
         ]
 
         super.init(patterns: patterns)

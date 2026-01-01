@@ -161,6 +161,10 @@ class WorkflowViewModel: ObservableObject {
     var deepScanError: String? { redactState.deepScanError }
     var isRunningDeepScanWithLLM: Bool { redactState.isRunningDeepScanWithLLM }
 
+    var bertNERFindings: [Entity] { redactState.bertNERFindings }
+    var isRunningBertNER: Bool { redactState.isRunningBertNER }
+    var bertNERError: String? { redactState.bertNERError }
+
     var cachedRedactedText: String { redactState.cachedRedactedText }
 
     var prefilledText: String? {
@@ -365,6 +369,20 @@ class WorkflowViewModel: ObservableObject {
 
     func runDeepScanWithLLM() async {
         await redactState.runDeepScanWithLLM()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
+    }
+
+    func runBertNERScan() async {
+        await redactState.runBertNERScan()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,

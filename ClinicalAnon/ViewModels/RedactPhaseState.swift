@@ -47,6 +47,11 @@ class RedactPhaseState: ObservableObject {
     // Deep scan with LLM filtering (experimental)
     @Published var isRunningDeepScanWithLLM: Bool = false
 
+    // BERT NER scan
+    @Published var bertNERFindings: [Entity] = []
+    @Published var isRunningBertNER: Bool = false
+    @Published var bertNERError: String?
+
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
     @Published var hasPendingChanges: Bool = false
@@ -82,11 +87,11 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review + deep scan findings)
+    /// All entities (detected + custom + PII review + deep scan + BERT NER findings)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings }
+        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings + bertNERFindings }
         let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings + deepScanFindings
+        return baseEntities + customEntities + piiReviewFindings + deepScanFindings + bertNERFindings
     }
 
     /// Only active entities (not excluded)
@@ -168,11 +173,14 @@ class RedactPhaseState: ObservableObject {
         customEntities.removeAll()
         piiReviewFindings.removeAll()
         deepScanFindings.removeAll()
+        bertNERFindings.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
         isRunningDeepScan = false
         deepScanError = nil
+        isRunningBertNER = false
+        bertNERError = nil
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -613,6 +621,96 @@ class RedactPhaseState: ObservableObject {
                 errorMessage = "LLM filter failed: \(error.localizedDescription)"
             }
         }
+    }
+
+    // MARK: - BERT NER Scan
+
+    /// Run BERT-based NER scan using CoreML model
+    func runBertNERScan() async {
+        guard let result = result else {
+            bertNERError = "Please analyze text first"
+            return
+        }
+
+        guard XLMRobertaNERService.shared.isAvailable else {
+            errorMessage = "XLM-RoBERTa NER not available on this device."
+            return
+        }
+
+        isRunningBertNER = true
+        bertNERError = nil
+
+        // Show appropriate status message
+        if !XLMRobertaNERService.shared.isModelLoaded {
+            successMessage = "Loading XLM-RoBERTa model..."
+        } else {
+            successMessage = "Running multilingual NER scan..."
+        }
+
+        do {
+            let findings = try await XLMRobertaNERService.shared.runNERScan(
+                text: result.originalText,
+                existingEntities: allEntities
+            )
+
+            await MainActor.run {
+                processBertNERFindings(findings, originalText: result.originalText)
+                isRunningBertNER = false
+
+                if bertNERFindings.isEmpty {
+                    successMessage = "BERT scan complete - no additional entities found"
+                } else {
+                    successMessage = "BERT scan found \(bertNERFindings.count) additional entity/entities"
+                }
+                autoHideSuccess()
+                redactedTextNeedsUpdate = true
+            }
+        } catch {
+            await MainActor.run {
+                isRunningBertNER = false
+                bertNERError = error.localizedDescription
+                errorMessage = "BERT NER scan failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func processBertNERFindings(_ findings: [PIIFinding], originalText: String) {
+        var newEntities: [Entity] = []
+
+        for finding in findings {
+            // Skip if text already exists in current entities
+            let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
+            if alreadyExists { continue }
+
+            // Skip if already added in this batch
+            if newEntities.contains(where: { $0.originalText.lowercased() == finding.text.lowercased() }) {
+                continue
+            }
+
+            // Find all occurrences in original text
+            let positions = findAllOccurrences(of: finding.text, in: originalText)
+            guard !positions.isEmpty else { continue }
+
+            // Get next available replacement code
+            let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count +
+                               newEntities.filter { $0.type == finding.suggestedType }.count
+            let code = finding.suggestedType.replacementCode(for: existingCount)
+
+            let entity = Entity(
+                originalText: finding.text,
+                replacementCode: code,
+                type: finding.suggestedType,
+                positions: positions,
+                confidence: finding.confidence
+            )
+
+            newEntities.append(entity)
+        }
+
+        // Merge with existing BERT findings, avoiding duplicates
+        let existingBertTexts = Set(bertNERFindings.map { $0.originalText.lowercased() })
+        let uniqueNewEntities = newEntities.filter { !existingBertTexts.contains($0.originalText.lowercased()) }
+        bertNERFindings.append(contentsOf: uniqueNewEntities)
     }
 
     // MARK: - Copy Actions
