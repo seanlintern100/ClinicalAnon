@@ -705,17 +705,21 @@ class RedactPhaseState: ObservableObject {
         // Use NSString for UTF-16 positions (consistent with redaction system)
         let nsText = normalizedText as NSString
         var positions: [[Int]] = []
-        var searchStart = 0
 
-        while searchStart < nsText.length {
-            let searchRange = NSRange(location: searchStart, length: nsText.length - searchStart)
-            let foundRange = nsText.range(of: normalizedSearch, options: .caseInsensitive, range: searchRange)
+        // Use word boundary regex to match whole words only (prevents "OT" matching in "OTHER")
+        let escapedSearch = NSRegularExpression.escapedPattern(for: normalizedSearch)
+        let pattern = "\\b\(escapedSearch)\\b"
 
-            if foundRange.location == NSNotFound { break }
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            return positions
+        }
 
+        let searchRange = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: normalizedText, options: [], range: searchRange)
+
+        for match in matches {
             // Use NSRange directly for UTF-16 positions
-            positions.append([foundRange.location, foundRange.location + foundRange.length])
-            searchStart = foundRange.location + foundRange.length
+            positions.append([match.range.location, match.range.location + match.range.length])
         }
 
         return positions
