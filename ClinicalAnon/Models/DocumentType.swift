@@ -270,6 +270,41 @@ struct DocumentType: Identifiable, Codable, Equatable {
         customInstructions: ""
     )
 
+    static let summarise = DocumentType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000005")!,
+        name: "Summarise",
+        promptTemplate: """
+            You are a clinical summarisation assistant. Create a clear, meaningful summary of the provided text.
+
+            Tone: {formality_text}
+            Detail: {detail_text}
+            Structure: {structure_text}
+
+            Instructions:
+            - Identify if the text contains multiple separate documents (e.g., different reports, notes from different dates, assessments)
+            - If multiple documents are present, provide a separate summary for each, clearly labelled
+            - For each document/section, extract:
+              - Key findings and observations
+              - Important clinical information
+              - Recommendations or actions noted
+              - Relevant dates and timeframes
+            - Preserve the clinical meaning without adding interpretation
+            - Keep summaries concise but comprehensive
+
+            Format:
+            - If single document: Provide one cohesive summary
+            - If multiple documents: Use clear headings to separate each summary (e.g., "## Assessment Report - [DATE_A]", "## Progress Notes - [DATE_B]")
+
+            Do NOT add information not present in the original.
+            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
+            Respond with only the summary/summaries.
+            """,
+        icon: "doc.text.magnifyingglass",
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 3, detail: 3, structure: 4),
+        customInstructions: ""
+    )
+
     static let custom = DocumentType(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
         name: "Custom",
@@ -296,6 +331,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
     static let builtInTypes: [DocumentType] = [
         .notes,
         .report,
+        .summarise,
         .accBSSReview,
         .custom
     ]
