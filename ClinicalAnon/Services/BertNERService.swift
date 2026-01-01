@@ -187,32 +187,25 @@ class BertNERService: ObservableObject {
         print("BertNERService: Starting NER scan on text of length \(text.count)")
         let startTime = Date()
 
-        // Tokenize the input
-        let (inputIds, attentionMask, tokenToChar) = tokenize(text: text)
+        // Split text into chunks for batch processing (BERT has 512 token limit)
+        let chunks = splitIntoChunks(text: text)
+        print("BertNERService: Processing \(chunks.count) chunk(s)")
 
-        // Create MLMultiArray inputs
-        let inputIdsArray = try createMLMultiArray(from: inputIds)
-        let attentionMaskArray = try createMLMultiArray(from: attentionMask)
+        var rawEntities: [BERTEntity] = []
 
-        // Run inference
-        let input = try MLDictionaryFeatureProvider(dictionary: [
-            "input_ids": inputIdsArray,
-            "attention_mask": attentionMaskArray
-        ])
-
-        let output = try await mlModel.prediction(from: input)
-
-        // Extract logits
-        guard let logitsValue = output.featureValue(for: "logits"),
-              let logitsArray = logitsValue.multiArrayValue else {
-            throw AppError.invalidResponse
+        for (chunkIndex, chunk) in chunks.enumerated() {
+            let chunkEntities = try await processChunk(
+                chunk: chunk.text,
+                charOffset: chunk.charOffset,
+                originalText: text,
+                model: mlModel
+            )
+            rawEntities.append(contentsOf: chunkEntities)
+            print("BertNERService: Chunk \(chunkIndex + 1)/\(chunks.count) found \(chunkEntities.count) entities")
         }
 
-        // Convert logits to BIO tags
-        let tags = extractBIOTags(from: logitsArray, tokenCount: inputIds.count)
-
-        // Aggregate tags into entities
-        var rawEntities = aggregateBIOTags(tags: tags, inputIds: inputIds, tokenToChar: tokenToChar, originalText: text)
+        // Deduplicate entities from chunk boundaries
+        rawEntities = deduplicateBERTEntities(rawEntities)
 
         // Post-processing: Bridge gaps between PER entities for middle names
         rawEntities = bridgeNameGaps(rawEntities, in: text)
@@ -301,6 +294,136 @@ class BertNERService: ObservableObject {
 
         print("BertNERService: Loaded vocabulary with \(vocab.count) tokens")
     }
+
+    // MARK: - Chunk Processing
+
+    /// Represents a text chunk with its character offset in the original text
+    private struct TextChunk {
+        let text: String
+        let charOffset: Int
+    }
+
+    /// Split text into chunks that fit within BERT's token limit
+    /// Uses sentence boundaries when possible, falls back to word boundaries
+    private func splitIntoChunks(text: String) -> [TextChunk] {
+        // Target ~400 tokens per chunk to leave room for special tokens and overlaps
+        // Average English word is ~1.3 tokens, so ~300 words per chunk
+        let targetCharsPerChunk = 1500  // ~300 words * 5 chars average
+
+        guard text.count > targetCharsPerChunk else {
+            return [TextChunk(text: text, charOffset: 0)]
+        }
+
+        var chunks: [TextChunk] = []
+        var currentStart = text.startIndex
+        var charOffset = 0
+
+        while currentStart < text.endIndex {
+            // Calculate end position for this chunk
+            let remainingDistance = text.distance(from: currentStart, to: text.endIndex)
+            let chunkSize = min(targetCharsPerChunk, remainingDistance)
+            var chunkEnd = text.index(currentStart, offsetBy: chunkSize)
+
+            // If not at end, try to find a good break point (sentence or word boundary)
+            if chunkEnd < text.endIndex {
+                // Look for sentence boundary (. ! ? followed by space or newline)
+                var bestBreak = chunkEnd
+                let searchStart = text.index(currentStart, offsetBy: max(0, chunkSize - 200))
+
+                // Search backwards from chunkEnd for sentence boundary
+                var searchIdx = chunkEnd
+                while searchIdx > searchStart {
+                    let prevIdx = text.index(before: searchIdx)
+                    let char = text[prevIdx]
+                    if (char == "." || char == "!" || char == "?") && searchIdx < text.endIndex {
+                        let nextChar = text[searchIdx]
+                        if nextChar.isWhitespace || nextChar.isNewline {
+                            bestBreak = searchIdx
+                            break
+                        }
+                    }
+                    searchIdx = prevIdx
+                }
+
+                // If no sentence boundary found, look for word boundary (space)
+                if bestBreak == chunkEnd {
+                    searchIdx = chunkEnd
+                    while searchIdx > searchStart {
+                        if text[searchIdx].isWhitespace {
+                            bestBreak = text.index(after: searchIdx)
+                            break
+                        }
+                        searchIdx = text.index(before: searchIdx)
+                    }
+                }
+
+                chunkEnd = bestBreak
+            }
+
+            // Extract chunk
+            let chunkText = String(text[currentStart..<chunkEnd])
+            if !chunkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                chunks.append(TextChunk(text: chunkText, charOffset: charOffset))
+            }
+
+            // Move to next chunk
+            charOffset += text.distance(from: currentStart, to: chunkEnd)
+            currentStart = chunkEnd
+        }
+
+        return chunks
+    }
+
+    /// Process a single chunk through BERT and return entities with adjusted positions
+    private func processChunk(
+        chunk: String,
+        charOffset: Int,
+        originalText: String,
+        model: MLModel
+    ) async throws -> [BERTEntity] {
+        // Tokenize the chunk
+        let (inputIds, attentionMask, tokenToChar) = tokenize(text: chunk)
+
+        // Create MLMultiArray inputs
+        let inputIdsArray = try createMLMultiArray(from: inputIds)
+        let attentionMaskArray = try createMLMultiArray(from: attentionMask)
+
+        // Run inference
+        let input = try MLDictionaryFeatureProvider(dictionary: [
+            "input_ids": inputIdsArray,
+            "attention_mask": attentionMaskArray
+        ])
+
+        let output = try await model.prediction(from: input)
+
+        // Extract logits
+        guard let logitsValue = output.featureValue(for: "logits"),
+              let logitsArray = logitsValue.multiArrayValue else {
+            throw AppError.invalidResponse
+        }
+
+        // Convert logits to BIO tags
+        let tags = extractBIOTags(from: logitsArray, tokenCount: inputIds.count)
+
+        // Aggregate tags into entities (positions relative to chunk)
+        let chunkEntities = aggregateBIOTags(tags: tags, inputIds: inputIds, tokenToChar: tokenToChar, originalText: chunk)
+
+        // Adjust positions to be relative to the original full text
+        let adjustedEntities = chunkEntities.map { entity -> BERTEntity in
+            BERTEntity(
+                text: entity.text,
+                type: entity.type,
+                label: entity.label,
+                start: entity.start + charOffset,
+                end: entity.end + charOffset,
+                confidence: entity.confidence
+            )
+        }
+
+        return adjustedEntities
+    }
+
+    // MARK: - Tokenization
 
     /// Tokenize text using WordPiece tokenization
     /// Returns: (inputIds, attentionMask, tokenToCharMapping)
@@ -853,6 +976,28 @@ class BertNERService: ObservableObject {
             "covid19", "covid-19", "h1n1", "mp3", "mp4", "a4", "b12", "c19"
         ]
         return commonPatterns.contains(text.lowercased())
+    }
+
+    // MARK: - Deduplication
+
+    /// Deduplicate BERT entities by text (case-insensitive)
+    /// Keeps the entity with higher confidence when duplicates found
+    private func deduplicateBERTEntities(_ entities: [BERTEntity]) -> [BERTEntity] {
+        var seen: [String: BERTEntity] = [:]
+
+        for entity in entities {
+            let key = entity.text.lowercased()
+            if let existing = seen[key] {
+                // Keep entity with higher confidence
+                if entity.confidence > existing.confidence {
+                    seen[key] = entity
+                }
+            } else {
+                seen[key] = entity
+            }
+        }
+
+        return Array(seen.values).sorted { $0.start < $1.start }
     }
 }
 

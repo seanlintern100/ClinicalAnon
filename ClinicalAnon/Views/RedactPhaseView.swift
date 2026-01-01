@@ -294,8 +294,8 @@ struct RedactPhaseView: View {
                             .help("Deep scan filtered by LLM to reduce false positives")
                         }
 
-                        // XLM-RoBERTa NER Scan button (multilingual)
-                        if XLMRobertaNERService.shared.isAvailable {
+                        // BERT NER Scan button
+                        if BertNERService.shared.isAvailable {
                             Button(action: { Task { await viewModel.runBertNERScan() } }) {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
                                     if viewModel.isRunningBertNER {
@@ -305,7 +305,7 @@ struct RedactPhaseView: View {
                                     } else {
                                         Image(systemName: "text.viewfinder")
                                     }
-                                    Text("XLM-R Scan")
+                                    Text("BERT Scan")
                                 }
                                 .font(DesignSystem.Typography.body)
                             }

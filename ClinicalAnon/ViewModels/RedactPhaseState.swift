@@ -632,8 +632,8 @@ class RedactPhaseState: ObservableObject {
             return
         }
 
-        guard XLMRobertaNERService.shared.isAvailable else {
-            errorMessage = "XLM-RoBERTa NER not available on this device."
+        guard BertNERService.shared.isAvailable else {
+            errorMessage = "BERT NER not available on this device."
             return
         }
 
@@ -641,14 +641,14 @@ class RedactPhaseState: ObservableObject {
         bertNERError = nil
 
         // Show appropriate status message
-        if !XLMRobertaNERService.shared.isModelLoaded {
-            successMessage = "Loading XLM-RoBERTa model..."
+        if !BertNERService.shared.isModelLoaded {
+            successMessage = "Loading BERT model..."
         } else {
-            successMessage = "Running multilingual NER scan..."
+            successMessage = "Running BERT NER scan..."
         }
 
         do {
-            let findings = try await XLMRobertaNERService.shared.runNERScan(
+            let findings = try await BertNERService.shared.runNERScan(
                 text: result.originalText,
                 existingEntities: allEntities
             )

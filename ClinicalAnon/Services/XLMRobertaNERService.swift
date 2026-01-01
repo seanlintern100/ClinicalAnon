@@ -25,6 +25,11 @@ class XLMRobertaNERService: ObservableObject {
     private let maxSequenceLength = 512
     private let vocabSize = 250002  // XLM-R vocab size
 
+    // Chunking settings for long documents
+    private let chunkSize = 450        // Tokens per chunk (leaving room for CLS/SEP)
+    private let chunkOverlap = 100     // Overlapping tokens between chunks
+    private let maxCharsPerChunk = 2000  // Approximate chars per chunk (conservative estimate)
+
     // BIO label mapping from the model (Davlan/xlm-roberta-base-ner-hrl)
     private let id2label: [Int: String] = [
         0: "O",
@@ -152,7 +157,7 @@ class XLMRobertaNERService: ObservableObject {
         print("XLMRobertaNERService: Model unloaded")
     }
 
-    /// Run NER scan on text and return findings
+    /// Run NER scan on text and return findings (with chunking for long documents)
     func runNERScan(text: String, existingEntities: [Entity]) async throws -> [PIIFinding] {
         guard isAvailable else {
             throw AppError.localLLMNotAvailable
@@ -178,43 +183,26 @@ class XLMRobertaNERService: ObservableObject {
         // Normalize Unicode (NFC)
         let normalizedText = text.precomposedStringWithCanonicalMapping
 
-        // Tokenize the input
-        let (inputIds, attentionMask, tokenToChar) = spmTokenizer.tokenize(
-            text: normalizedText,
-            maxLength: maxSequenceLength,
-            clsTokenId: clsTokenId,
-            sepTokenId: sepTokenId,
-            padTokenId: padTokenId
-        )
+        // Split into chunks for long documents
+        let chunks = splitIntoChunks(normalizedText)
+        print("XLMRobertaNERService: Split into \(chunks.count) chunk(s)")
 
-        // Create MLMultiArray inputs
-        let inputIdsArray = try createMLMultiArray(from: inputIds)
-        let attentionMaskArray = try createMLMultiArray(from: attentionMask)
+        // Process each chunk and collect entities
+        var allRawEntities: [XLMREntity] = []
 
-        // Run inference
-        let input = try MLDictionaryFeatureProvider(dictionary: [
-            "input_ids": inputIdsArray,
-            "attention_mask": attentionMaskArray
-        ])
-
-        let output = try await mlModel.prediction(from: input)
-
-        // Extract logits
-        guard let logitsValue = output.featureValue(for: "logits"),
-              let logitsArray = logitsValue.multiArrayValue else {
-            throw AppError.invalidResponse
+        for (chunkIndex, chunk) in chunks.enumerated() {
+            let chunkEntities = try await processChunk(
+                chunk: chunk,
+                chunkIndex: chunkIndex,
+                totalChunks: chunks.count,
+                model: mlModel,
+                tokenizer: spmTokenizer
+            )
+            allRawEntities.append(contentsOf: chunkEntities)
         }
 
-        // Convert logits to BIO tags
-        let tags = extractBIOTags(from: logitsArray, tokenCount: inputIds.count)
-
-        // Aggregate tags into entities
-        var rawEntities = aggregateBIOTags(
-            tags: tags,
-            inputIds: inputIds,
-            tokenToChar: tokenToChar,
-            originalText: normalizedText
-        )
+        // Deduplicate entities from overlapping chunks
+        var rawEntities = deduplicateEntities(allRawEntities)
 
         // Post-processing: Bridge gaps between PER entities for middle names
         rawEntities = bridgeNameGaps(rawEntities, in: normalizedText)
@@ -266,6 +254,168 @@ class XLMRobertaNERService: ObservableObject {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(text)
         return recognizer.dominantLanguage?.rawValue
+    }
+
+    // MARK: - Text Chunking for Long Documents
+
+    /// Represents a chunk of text with its position in the original document
+    private struct TextChunk {
+        let text: String
+        let startOffset: Int  // Character offset in original text
+        let endOffset: Int
+    }
+
+    /// Split long text into overlapping chunks
+    private func splitIntoChunks(_ text: String) -> [TextChunk] {
+        // If text is short enough, return as single chunk
+        if text.count <= maxCharsPerChunk {
+            return [TextChunk(text: text, startOffset: 0, endOffset: text.count)]
+        }
+
+        var chunks: [TextChunk] = []
+        let overlapChars = maxCharsPerChunk / 4  // ~25% overlap in characters
+
+        var currentStart = 0
+        while currentStart < text.count {
+            // Calculate chunk end
+            var chunkEnd = min(currentStart + maxCharsPerChunk, text.count)
+
+            // Try to break at sentence or word boundary (not mid-word)
+            if chunkEnd < text.count {
+                let searchStart = max(chunkEnd - 200, currentStart)
+                let searchRange = text.index(text.startIndex, offsetBy: searchStart)..<text.index(text.startIndex, offsetBy: chunkEnd)
+                let searchText = String(text[searchRange])
+
+                // Prefer sentence breaks (. ! ?)
+                if let lastSentence = searchText.lastIndex(where: { $0 == "." || $0 == "!" || $0 == "?" }) {
+                    let offset = searchText.distance(from: searchText.startIndex, to: lastSentence)
+                    chunkEnd = searchStart + offset + 1
+                }
+                // Fall back to word break (space)
+                else if let lastSpace = searchText.lastIndex(of: " ") {
+                    let offset = searchText.distance(from: searchText.startIndex, to: lastSpace)
+                    chunkEnd = searchStart + offset + 1
+                }
+            }
+
+            // Extract chunk
+            let startIdx = text.index(text.startIndex, offsetBy: currentStart)
+            let endIdx = text.index(text.startIndex, offsetBy: chunkEnd)
+            let chunkText = String(text[startIdx..<endIdx])
+
+            chunks.append(TextChunk(
+                text: chunkText,
+                startOffset: currentStart,
+                endOffset: chunkEnd
+            ))
+
+            // Move to next chunk with overlap
+            currentStart = chunkEnd - overlapChars
+            if currentStart >= text.count - 50 {
+                break  // Avoid tiny final chunks
+            }
+        }
+
+        return chunks
+    }
+
+    /// Process a single chunk and return entities with adjusted positions
+    private func processChunk(
+        chunk: TextChunk,
+        chunkIndex: Int,
+        totalChunks: Int,
+        model: MLModel,
+        tokenizer: SentencePieceTokenizer
+    ) async throws -> [XLMREntity] {
+
+        print("XLMRobertaNERService: Processing chunk \(chunkIndex + 1)/\(totalChunks) (chars \(chunk.startOffset)-\(chunk.endOffset))")
+
+        // Tokenize the chunk
+        let (inputIds, attentionMask, tokenToChar) = tokenizer.tokenize(
+            text: chunk.text,
+            maxLength: maxSequenceLength,
+            clsTokenId: clsTokenId,
+            sepTokenId: sepTokenId,
+            padTokenId: padTokenId
+        )
+
+        // Create MLMultiArray inputs
+        let inputIdsArray = try createMLMultiArray(from: inputIds)
+        let attentionMaskArray = try createMLMultiArray(from: attentionMask)
+
+        // Run inference
+        let input = try MLDictionaryFeatureProvider(dictionary: [
+            "input_ids": inputIdsArray,
+            "attention_mask": attentionMaskArray
+        ])
+
+        let output = try await model.prediction(from: input)
+
+        // Extract logits
+        guard let logitsValue = output.featureValue(for: "logits"),
+              let logitsArray = logitsValue.multiArrayValue else {
+            throw AppError.invalidResponse
+        }
+
+        // Convert logits to BIO tags
+        let tags = extractBIOTags(from: logitsArray, tokenCount: inputIds.count)
+
+        // Aggregate tags into entities (with chunk-local positions)
+        let localEntities = aggregateBIOTags(
+            tags: tags,
+            inputIds: inputIds,
+            tokenToChar: tokenToChar,
+            originalText: chunk.text
+        )
+
+        // Adjust entity positions to global document coordinates
+        let globalEntities = localEntities.map { entity -> XLMREntity in
+            XLMREntity(
+                text: entity.text,
+                type: entity.type,
+                label: entity.label,
+                start: entity.start + chunk.startOffset,
+                end: entity.end + chunk.startOffset,
+                confidence: entity.confidence
+            )
+        }
+
+        print("XLMRobertaNERService: Chunk \(chunkIndex + 1) found \(globalEntities.count) entities")
+        return globalEntities
+    }
+
+    /// Deduplicate entities from overlapping chunks
+    private func deduplicateEntities(_ entities: [XLMREntity]) -> [XLMREntity] {
+        guard !entities.isEmpty else { return [] }
+
+        // Sort by start position, then by length (prefer longer matches)
+        let sorted = entities.sorted { a, b in
+            if a.start != b.start {
+                return a.start < b.start
+            }
+            return (a.end - a.start) > (b.end - b.start)
+        }
+
+        var result: [XLMREntity] = []
+        var lastEnd = -1
+
+        for entity in sorted {
+            // Skip if this entity overlaps significantly with a previous one
+            if entity.start < lastEnd {
+                // Check if it's mostly overlapping (>50%)
+                let overlapAmount = lastEnd - entity.start
+                let entityLength = entity.end - entity.start
+                if overlapAmount > entityLength / 2 {
+                    continue  // Skip duplicate
+                }
+            }
+
+            result.append(entity)
+            lastEnd = max(lastEnd, entity.end)
+        }
+
+        print("XLMRobertaNERService: Deduplicated \(entities.count) → \(result.count) entities")
+        return result
     }
 
     /// Load SentencePiece tokenizer
