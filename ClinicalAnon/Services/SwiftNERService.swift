@@ -151,11 +151,17 @@ class SwiftNERService {
             nameSet.insert(entity.originalText)
             entityByName[key] = entity
 
+            #if DEBUG
+            if entity.type.isPerson {
+                print("  📋 Added to scan list: '\(entity.originalText)'")
+            }
+            #endif
+
             // Extract first name components from multi-word names
             let words = entity.originalText.split(separator: " ")
             if words.count >= 2 {
                 let firstName = String(words[0])
-                if firstName.count >= 3 && !isCommonWord(firstName) {
+                if firstName.count >= 3 && !isCommonWord(firstName) && !isClinicalTerm(firstName) {
                     nameSet.insert(firstName)
                 }
             }

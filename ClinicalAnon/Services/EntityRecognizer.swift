@@ -59,6 +59,10 @@ class PatternRecognizer: EntityRecognizer {
                 let start = match.range.location
                 let end = match.range.location + match.range.length
 
+                #if DEBUG
+                print("  📐 Regex: '\(matched)' → \(type) (pattern: \(pattern.prefix(50))...)")
+                #endif
+
                 entities.append(Entity(
                     originalText: matched,
                     replacementCode: "", // Will be assigned by EntityMapping
@@ -170,6 +174,7 @@ extension EntityRecognizer {
             // Section headers that get flagged
             "Current", "Background", "History", "Plan", "Goals", "Progress",
             "Summary", "Recommendations", "Actions", "Notes", "Comments",
+            "Rehab", "Reports",
             // Form field labels (not person names)
             "Client", "Supplier", "Provider", "Participant", "Claimant",
             "Referrer", "Coordinator", "Author", "Reviewer", "Approver",

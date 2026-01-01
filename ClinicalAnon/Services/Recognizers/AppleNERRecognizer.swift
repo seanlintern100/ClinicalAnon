@@ -45,16 +45,9 @@ class AppleNERRecognizer: EntityRecognizer {
             let name = String(text[range])
             let confidence = hypotheses[tag.rawValue] ?? 0.0
 
-            #if DEBUG
-            print("  🏷️ Apple NER: '\(name)' → \(tag.rawValue) (confidence: \(String(format: "%.2f", confidence)))")
-            #endif
-
             // Require minimum confidence to reduce false positives
             let minConfidence = 0.8
             guard confidence >= minConfidence else {
-                #if DEBUG
-                print("     ❌ Skipped (below \(minConfidence) threshold)")
-                #endif
                 return true  // Skip low-confidence predictions
             }
 
@@ -80,6 +73,9 @@ class AppleNERRecognizer: EntityRecognizer {
             let entityType: EntityType? = mapAppleTag(tag, text: name)
 
             if let type = entityType {
+                #if DEBUG
+                print("  🏷️ Apple NER: '\(name)' → \(type) (confidence: \(String(format: "%.2f", confidence)))")
+                #endif
                 entities.append(Entity(
                     originalText: name,
                     replacementCode: "",
