@@ -83,9 +83,16 @@ class HighlightCacheManager: ObservableObject {
         allEntities: [Entity],
         excludedIds: Set<UUID>
     ) -> AttributedString {
-        var attributedString = AttributedString(text)
-        attributedString.font = NSFont.systemFont(ofSize: 14)
-        attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+        // Use NSMutableAttributedString for UTF-16 position consistency
+        let nsText = text as NSString
+        let mutableAttrString = NSMutableAttributedString(string: text)
+
+        // Set base attributes
+        let baseAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14),
+            .foregroundColor: NSColor(DesignSystem.Colors.textPrimary)
+        ]
+        mutableAttrString.setAttributes(baseAttributes, range: NSRange(location: 0, length: nsText.length))
 
         for entity in allEntities {
             let isExcluded = excludedIds.contains(entity.id)
@@ -101,19 +108,17 @@ class HighlightCacheManager: ObservableObject {
                 let start = position[0]
                 let end = position[1]
 
-                guard start >= 0 && end <= text.count && start < end else { continue }
+                // Validate against NSString length (UTF-16)
+                guard start >= 0 && end <= nsText.length && start < end else { continue }
 
-                let startIdx = attributedString.index(attributedString.startIndex, offsetByCharacters: start)
-                let endIdx = attributedString.index(attributedString.startIndex, offsetByCharacters: end)
-
-                guard startIdx < attributedString.endIndex && endIdx <= attributedString.endIndex else { continue }
-
-                attributedString[startIdx..<endIdx].backgroundColor = bgColor
-                attributedString[startIdx..<endIdx].foregroundColor = fgColor
+                let range = NSRange(location: start, length: end - start)
+                mutableAttrString.addAttribute(.backgroundColor, value: bgColor, range: range)
+                mutableAttrString.addAttribute(.foregroundColor, value: fgColor, range: range)
             }
         }
 
-        return attributedString
+        // Convert to AttributedString
+        return AttributedString(mutableAttrString)
     }
 
     private func buildRedactedAttributed(
