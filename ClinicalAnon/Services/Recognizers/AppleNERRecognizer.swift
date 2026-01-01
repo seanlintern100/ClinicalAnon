@@ -42,13 +42,21 @@ class AppleNERRecognizer: EntityRecognizer {
                 maximumCount: 1
             )
 
+            let name = String(text[range])
+            let confidence = hypotheses[tag.rawValue] ?? 0.0
+
+            #if DEBUG
+            print("  🏷️ Apple NER: '\(name)' → \(tag.rawValue) (confidence: \(String(format: "%.2f", confidence)))")
+            #endif
+
             // Require minimum confidence to reduce false positives
             let minConfidence = 0.8
-            guard let confidence = hypotheses[tag.rawValue], confidence >= minConfidence else {
+            guard confidence >= minConfidence else {
+                #if DEBUG
+                print("     ❌ Skipped (below \(minConfidence) threshold)")
+                #endif
                 return true  // Skip low-confidence predictions
             }
-
-            let name = String(text[range])
 
             // Skip multi-word "names" with invalid middle words (e.g., "John asked Mary")
             guard !hasInvalidMiddleWord(name) else { return true }
