@@ -693,7 +693,7 @@ class RedactPhaseState: ObservableObject {
         redactedTextNeedsUpdate = false
     }
 
-    private func findAllOccurrences(of searchText: String, in text: String) -> [[Int]] {
+    private func findAllOccurrences(of searchText: String, in text: String, includePossessive: Bool = true) -> [[Int]] {
         // Normalize apostrophes for matching (curly ' and straight ')
         let normalizedSearch = searchText
             .replacingOccurrences(of: "'", with: "'")
@@ -706,9 +706,16 @@ class RedactPhaseState: ObservableObject {
         let nsText = normalizedText as NSString
         var positions: [[Int]] = []
 
-        // Use word boundary regex to match whole words only (prevents "OT" matching in "OTHER")
+        // Build pattern: match the word, and optionally the possessive form (name + "s")
+        // This handles cases like "Sean" also matching "Seans" (possessive without apostrophe)
         let escapedSearch = NSRegularExpression.escapedPattern(for: normalizedSearch)
-        let pattern = "\\b\(escapedSearch)\\b"
+        let pattern: String
+        if includePossessive {
+            // Match "Sean" or "Seans" (possessive without apostrophe)
+            pattern = "\\b\(escapedSearch)s?\\b"
+        } else {
+            pattern = "\\b\(escapedSearch)\\b"
+        }
 
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return positions

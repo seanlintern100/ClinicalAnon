@@ -170,9 +170,10 @@ class SwiftNERService {
         guard !nameSet.isEmpty else { return entities }
 
         // Build single regex for all names (longest first to prevent partial matches)
+        // Also match possessive forms without apostrophe (e.g., "Sean" also matches "Seans")
         let sortedNames = nameSet.sorted { $0.count > $1.count }
         let escapedNames = sortedNames.map { NSRegularExpression.escapedPattern(for: $0) }
-        let pattern = "\\b(" + escapedNames.joined(separator: "|") + ")\\b"
+        let pattern = "\\b(" + escapedNames.joined(separator: "|") + ")s?\\b"
 
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return entities

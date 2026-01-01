@@ -778,8 +778,9 @@ class XLMRobertaNERService: ObservableObject {
             var foundPositions: [(start: Int, end: Int)] = []
 
             // Use word boundary regex to avoid matching inside other words (e.g., "OT" in "OTHER")
+            // Also match possessive forms without apostrophe (e.g., "Sean" also matches "Seans")
             let escapedName = NSRegularExpression.escapedPattern(for: firstName)
-            let pattern = "\\b\(escapedName)\\b"
+            let pattern = "\\b\(escapedName)s?\\b"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
                 continue
             }
