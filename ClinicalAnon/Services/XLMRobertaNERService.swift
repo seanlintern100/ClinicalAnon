@@ -43,6 +43,19 @@ class XLMRobertaNERService: ObservableObject {
         8: "I-LOC"
     ]
 
+    // Static version for nonisolated methods
+    private static let staticId2label: [Int: String] = [
+        0: "O",
+        1: "B-DATE",
+        2: "I-DATE",
+        3: "B-PER",
+        4: "I-PER",
+        5: "B-ORG",
+        6: "I-ORG",
+        7: "B-LOC",
+        8: "I-LOC"
+    ]
+
     // MARK: - Published Properties
 
     @Published var isAvailable: Bool = false
@@ -181,9 +194,12 @@ class XLMRobertaNERService: ObservableObject {
         let startTime = Date()
 
         // Normalize Unicode (NFC)
+        print("XLMRobertaNERService: Normalizing text...")
         let normalizedText = text.precomposedStringWithCanonicalMapping
+        print("XLMRobertaNERService: Text normalized")
 
         // Split into chunks for long documents
+        print("XLMRobertaNERService: Splitting into chunks...")
         let chunks = splitIntoChunks(normalizedText)
         print("XLMRobertaNERService: Split into \(chunks.count) chunk(s)")
 
@@ -196,7 +212,11 @@ class XLMRobertaNERService: ObservableObject {
                 chunkIndex: chunkIndex,
                 totalChunks: chunks.count,
                 model: mlModel,
-                tokenizer: spmTokenizer
+                tokenizer: spmTokenizer,
+                maxSeqLen: maxSequenceLength,
+                clsId: clsTokenId,
+                sepId: sepTokenId,
+                padId: padTokenId
             )
             allRawEntities.append(contentsOf: chunkEntities)
         }
@@ -320,12 +340,16 @@ class XLMRobertaNERService: ObservableObject {
     }
 
     /// Process a single chunk and return entities with adjusted positions
-    private func processChunk(
+    nonisolated private func processChunk(
         chunk: TextChunk,
         chunkIndex: Int,
         totalChunks: Int,
         model: MLModel,
-        tokenizer: SentencePieceTokenizer
+        tokenizer: SentencePieceTokenizer,
+        maxSeqLen: Int,
+        clsId: Int,
+        sepId: Int,
+        padId: Int
     ) async throws -> [XLMREntity] {
 
         print("XLMRobertaNERService: Processing chunk \(chunkIndex + 1)/\(totalChunks) (chars \(chunk.startOffset)-\(chunk.endOffset))")
@@ -333,15 +357,15 @@ class XLMRobertaNERService: ObservableObject {
         // Tokenize the chunk
         let (inputIds, attentionMask, tokenToChar) = tokenizer.tokenize(
             text: chunk.text,
-            maxLength: maxSequenceLength,
-            clsTokenId: clsTokenId,
-            sepTokenId: sepTokenId,
-            padTokenId: padTokenId
+            maxLength: maxSeqLen,
+            clsTokenId: clsId,
+            sepTokenId: sepId,
+            padTokenId: padId
         )
 
         // Create MLMultiArray inputs
-        let inputIdsArray = try createMLMultiArray(from: inputIds)
-        let attentionMaskArray = try createMLMultiArray(from: attentionMask)
+        let inputIdsArray = try createMLMultiArrayNonisolated(from: inputIds, maxLength: maxSeqLen)
+        let attentionMaskArray = try createMLMultiArrayNonisolated(from: attentionMask, maxLength: maxSeqLen)
 
         // Run inference
         let input = try MLDictionaryFeatureProvider(dictionary: [
@@ -349,7 +373,14 @@ class XLMRobertaNERService: ObservableObject {
             "attention_mask": attentionMaskArray
         ])
 
-        let output = try await model.prediction(from: input)
+        print("XLMRobertaNERService: Running inference for chunk \(chunkIndex + 1)...")
+
+        // Run inference on background thread to avoid blocking
+        let output = try await Task.detached(priority: .userInitiated) {
+            try model.prediction(from: input)
+        }.value
+
+        print("XLMRobertaNERService: Inference complete for chunk \(chunkIndex + 1)")
 
         // Extract logits
         guard let logitsValue = output.featureValue(for: "logits"),
@@ -358,10 +389,10 @@ class XLMRobertaNERService: ObservableObject {
         }
 
         // Convert logits to BIO tags
-        let tags = extractBIOTags(from: logitsArray, tokenCount: inputIds.count)
+        let tags = Self.extractBIOTagsStatic(from: logitsArray, tokenCount: inputIds.count, id2label: Self.staticId2label)
 
         // Aggregate tags into entities (with chunk-local positions)
-        let localEntities = aggregateBIOTags(
+        let localEntities = Self.aggregateBIOTagsStatic(
             tags: tags,
             inputIds: inputIds,
             tokenToChar: tokenToChar,
@@ -448,8 +479,24 @@ class XLMRobertaNERService: ObservableObject {
         return mlArray
     }
 
+    /// Create MLMultiArray from Int array (nonisolated version for background processing)
+    nonisolated private func createMLMultiArrayNonisolated(from array: [Int], maxLength: Int) throws -> MLMultiArray {
+        let mlArray = try MLMultiArray(shape: [1, NSNumber(value: maxLength)], dataType: .int32)
+
+        for (index, value) in array.enumerated() {
+            mlArray[index] = NSNumber(value: value)
+        }
+
+        return mlArray
+    }
+
     /// Extract BIO tags from logits
     private func extractBIOTags(from logits: MLMultiArray, tokenCount: Int) -> [String] {
+        return Self.extractBIOTagsStatic(from: logits, tokenCount: tokenCount, id2label: id2label)
+    }
+
+    /// Extract BIO tags from logits (static version for background processing)
+    private static func extractBIOTagsStatic(from logits: MLMultiArray, tokenCount: Int, id2label: [Int: String]) -> [String] {
         var tags: [String] = []
         let numLabels = id2label.count
 
@@ -479,6 +526,16 @@ class XLMRobertaNERService: ObservableObject {
         tokenToChar: [(Int, Int)],
         originalText: String
     ) -> [XLMREntity] {
+        return Self.aggregateBIOTagsStatic(tags: tags, inputIds: inputIds, tokenToChar: tokenToChar, originalText: originalText)
+    }
+
+    /// Aggregate BIO tags into entity spans (static version for background processing)
+    private static func aggregateBIOTagsStatic(
+        tags: [String],
+        inputIds: [Int],
+        tokenToChar: [(Int, Int)],
+        originalText: String
+    ) -> [XLMREntity] {
         var entities: [XLMREntity] = []
         var currentEntity: (text: String, type: String, start: Int, end: Int, confidence: Double)?
 
@@ -489,7 +546,7 @@ class XLMRobertaNERService: ObservableObject {
             // Skip special tokens
             guard charStart >= 0 && charEnd >= 0 else {
                 if let entity = currentEntity {
-                    entities.append(createXLMREntity(from: entity, originalText: originalText))
+                    entities.append(createXLMREntityStatic(from: entity, originalText: originalText))
                     currentEntity = nil
                 }
                 continue
@@ -498,7 +555,7 @@ class XLMRobertaNERService: ObservableObject {
             if tag.hasPrefix("B-") {
                 // Start of new entity
                 if let entity = currentEntity {
-                    entities.append(createXLMREntity(from: entity, originalText: originalText))
+                    entities.append(createXLMREntityStatic(from: entity, originalText: originalText))
                 }
                 let entityType = String(tag.dropFirst(2))
                 currentEntity = (
@@ -516,7 +573,7 @@ class XLMRobertaNERService: ObservableObject {
                         entity.end = charEnd
                         currentEntity = entity
                     } else {
-                        entities.append(createXLMREntity(from: entity, originalText: originalText))
+                        entities.append(createXLMREntityStatic(from: entity, originalText: originalText))
                         currentEntity = (
                             text: "",
                             type: entityType,
@@ -529,14 +586,14 @@ class XLMRobertaNERService: ObservableObject {
             } else {
                 // O tag - end current entity
                 if let entity = currentEntity {
-                    entities.append(createXLMREntity(from: entity, originalText: originalText))
+                    entities.append(createXLMREntityStatic(from: entity, originalText: originalText))
                     currentEntity = nil
                 }
             }
         }
 
         if let entity = currentEntity {
-            entities.append(createXLMREntity(from: entity, originalText: originalText))
+            entities.append(createXLMREntityStatic(from: entity, originalText: originalText))
         }
 
         return entities
@@ -609,6 +666,13 @@ class XLMRobertaNERService: ObservableObject {
         from entity: (text: String, type: String, start: Int, end: Int, confidence: Double),
         originalText: String
     ) -> XLMREntity {
+        return Self.createXLMREntityStatic(from: entity, originalText: originalText)
+    }
+
+    private static func createXLMREntityStatic(
+        from entity: (text: String, type: String, start: Int, end: Int, confidence: Double),
+        originalText: String
+    ) -> XLMREntity {
         let start = entity.start
         let end = min(entity.end, originalText.count)
 
@@ -618,7 +682,7 @@ class XLMRobertaNERService: ObservableObject {
 
         return XLMREntity(
             text: extractedText,
-            type: mapXLMRType(entity.type),
+            type: mapXLMRTypeStatic(entity.type),
             label: entity.type,
             start: start,
             end: end,
@@ -628,6 +692,10 @@ class XLMRobertaNERService: ObservableObject {
 
     /// Map XLM-R entity type to app's EntityType
     private func mapXLMRType(_ xlmrType: String) -> EntityType {
+        return Self.mapXLMRTypeStatic(xlmrType)
+    }
+
+    private static func mapXLMRTypeStatic(_ xlmrType: String) -> EntityType {
         switch xlmrType {
         case "PER":
             return .personOther
