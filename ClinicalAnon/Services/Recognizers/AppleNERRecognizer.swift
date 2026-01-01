@@ -35,6 +35,9 @@ class AppleNERRecognizer: EntityRecognizer {
 
             let name = String(text[range])
 
+            // Skip multi-word "names" with invalid middle words (e.g., "John asked Mary")
+            guard !hasInvalidMiddleWord(name) else { return true }
+
             // Skip if it's a common word (not actually a name)
             guard !isCommonWord(name) else { return true }
 
@@ -73,6 +76,14 @@ class AppleNERRecognizer: EntityRecognizer {
     }
 
     // MARK: - Name-Word List
+
+    /// Name particles that are valid lowercase middle words in multi-word names
+    /// e.g., "Ludwig van Beethoven", "Leonardo da Vinci"
+    private let nameParticles: Set<String> = [
+        "von", "van", "de", "da", "del", "della", "di", "du",
+        "la", "le", "los", "las",
+        "bin", "ibn", "al", "el",
+    ]
 
     /// Words that are both common words AND valid first names
     /// Only matched when capitalized and NOT at sentence start
@@ -258,6 +269,31 @@ class AppleNERRecognizer: EntityRecognizer {
     }
 
     // MARK: - Helper Methods
+
+    // MARK: - Multi-Word Name Validation
+
+    /// Check if multi-word name has invalid middle words
+    /// Valid middle words: capitalized OR known name particle (von, de, van, etc.)
+    /// Rejects: "Liesbet asked Sean" (asked is lowercase, not a particle)
+    /// Accepts: "Mary Jane Watson" (Jane is capitalized)
+    /// Accepts: "Ludwig van Beethoven" (van is a particle)
+    private func hasInvalidMiddleWord(_ text: String) -> Bool {
+        let words = text.split(separator: " ")
+        guard words.count > 2 else { return false }  // Only check 3+ word names
+
+        // Check middle words (skip first and last)
+        for word in words.dropFirst().dropLast() {
+            let wordStr = String(word)
+
+            // If lowercase and NOT a name particle → invalid
+            if wordStr.first?.isLowercase == true {
+                if !nameParticles.contains(wordStr.lowercased()) {
+                    return true  // Invalid - lowercase non-particle
+                }
+            }
+        }
+        return false
+    }
 
     /// Map Apple's NLTag to our EntityType
     private func mapAppleTag(_ tag: NLTag, text: String) -> EntityType? {
