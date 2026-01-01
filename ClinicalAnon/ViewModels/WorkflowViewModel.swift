@@ -156,11 +156,6 @@ class WorkflowViewModel: ObservableObject {
     var isReviewingPII: Bool { redactState.isReviewingPII }
     var piiReviewError: String? { redactState.piiReviewError }
 
-    var deepScanFindings: [Entity] { redactState.deepScanFindings }
-    var isRunningDeepScan: Bool { redactState.isRunningDeepScan }
-    var deepScanError: String? { redactState.deepScanError }
-    var isRunningDeepScanWithLLM: Bool { redactState.isRunningDeepScanWithLLM }
-
     var bertNERFindings: [Entity] { redactState.bertNERFindings }
     var isRunningBertNER: Bool { redactState.isRunningBertNER }
     var bertNERError: String? { redactState.bertNERError }
@@ -345,34 +340,6 @@ class WorkflowViewModel: ObservableObject {
 
     func runLocalPIIReview() async {
         await redactState.runLocalPIIReview()
-        if let result = redactState.result {
-            cacheManager.rebuildAllCaches(
-                originalText: result.originalText,
-                allEntities: redactState.allEntities,
-                activeEntities: redactState.activeEntities,
-                excludedIds: redactState.excludedEntityIds,
-                redactedText: redactState.displayedRedactedText,
-                restoredText: nil
-            )
-        }
-    }
-
-    func runDeepScan() async {
-        await redactState.runDeepScan()
-        if let result = redactState.result {
-            cacheManager.rebuildAllCaches(
-                originalText: result.originalText,
-                allEntities: redactState.allEntities,
-                activeEntities: redactState.activeEntities,
-                excludedIds: redactState.excludedEntityIds,
-                redactedText: redactState.displayedRedactedText,
-                restoredText: nil
-            )
-        }
-    }
-
-    func runDeepScanWithLLM() async {
-        await redactState.runDeepScanWithLLM()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
