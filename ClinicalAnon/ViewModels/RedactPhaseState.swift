@@ -702,18 +702,20 @@ class RedactPhaseState: ObservableObject {
             .replacingOccurrences(of: "'", with: "'")
             .replacingOccurrences(of: "'", with: "'")
 
+        // Use NSString for UTF-16 positions (consistent with redaction system)
+        let nsText = normalizedText as NSString
         var positions: [[Int]] = []
-        var searchStartIndex = normalizedText.startIndex
+        var searchStart = 0
 
-        while searchStartIndex < normalizedText.endIndex {
-            if let range = normalizedText.range(of: normalizedSearch, options: .caseInsensitive, range: searchStartIndex..<normalizedText.endIndex) {
-                let start = normalizedText.distance(from: normalizedText.startIndex, to: range.lowerBound)
-                let end = normalizedText.distance(from: normalizedText.startIndex, to: range.upperBound)
-                positions.append([start, end])
-                searchStartIndex = range.upperBound
-            } else {
-                break
-            }
+        while searchStart < nsText.length {
+            let searchRange = NSRange(location: searchStart, length: nsText.length - searchStart)
+            let foundRange = nsText.range(of: normalizedSearch, options: .caseInsensitive, range: searchRange)
+
+            if foundRange.location == NSNotFound { break }
+
+            // Use NSRange directly for UTF-16 positions
+            positions.append([foundRange.location, foundRange.location + foundRange.length])
+            searchStart = foundRange.location + foundRange.length
         }
 
         return positions
