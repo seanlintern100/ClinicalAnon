@@ -139,49 +139,50 @@ extension EntityRecognizer {
     /// Check if a word is a clinical abbreviation or term to exclude
     /// These are common in psychology/mental health notes and cause false positives
     func isClinicalTerm(_ word: String) -> Bool {
+        // All terms stored in lowercase for case-insensitive matching
         let clinicalTerms: Set<String> = [
             // Common clinical abbreviations
-            "GP", "MDT", "AOD", "A&D", "ACC", "DHB", "ED", "ICU", "OT", "PT",
-            "CBT", "DBT", "ACT", "EMDR", "MI", "MH", "MHA", "MOH", "DOH",
-            "CAMHS", "CATT", "CAT", "CRISIS", "EAP", "EPS", "ECT",
+            "gp", "mdt", "aod", "a&d", "acc", "dhb", "ed", "icu", "ot", "pt",
+            "cbt", "dbt", "act", "emdr", "mi", "mh", "mha", "moh", "doh",
+            "camhs", "catt", "cat", "crisis", "eap", "eps", "ect",
             // Mental health conditions
-            "ADHD", "ADD", "ASD", "OCD", "PTSD", "GAD", "MDD", "BPD", "NPD",
+            "adhd", "add", "asd", "ocd", "ptsd", "gad", "mdd", "bpd", "npd",
             // Assessment tools
-            "BAI", "BDI", "PHQ", "GAD7", "K10", "DASS", "WAIS", "WISC",
+            "bai", "bdi", "phq", "gad7", "k10", "dass", "wais", "wisc",
             // Medical abbreviations
-            "DSM", "ICD", "Dx", "Rx", "Tx", "Hx", "Sx", "PRN", "QID", "TDS", "BD",
+            "dsm", "icd", "dx", "rx", "tx", "hx", "sx", "prn", "qid", "tds", "bd",
             // Injury/condition abbreviations
-            "TBI", "CVA", "MS", "CP", "LD", "ID", "ABI",
+            "tbi", "cva", "ms", "cp", "ld", "id", "abi",
             // NZ Government/org abbreviations
-            "NGO", "MOE", "MSD", "WINZ", "CYF", "SENCO",
+            "ngo", "moe", "msd", "winz", "cyf", "senco",
             // Support groups
-            "AA", "NA", "CA", "GA", "SAA", "SLAA",
+            "aa", "na", "ca", "ga", "saa", "slaa",
             // AOD specific
-            "AODS", "CADS", "DAPAANZ",
+            "aods", "cads", "dapaanz",
             // Business abbreviations
-            "FTE", "PTE", "CEO", "GM", "HR",
+            "fte", "pte", "ceo", "gm", "hr",
             // Country/region codes
-            "NZ", "USA", "UK", "AU", "NSW", "VIC", "QLD",
+            "nz", "usa", "uk", "au", "nsw", "vic", "qld",
             // Common abbreviations
-            "TD", "TT", "TBC", "TBA", "ASAP", "FYI", "NB", "PS", "RE",
+            "td", "tt", "tbc", "tba", "asap", "fyi", "nb", "ps", "re",
             // Medications that get flagged as names
-            "Methadone", "Suboxone", "Ritalin", "Dexamphetamine",
-            "Antidepressant", "Antipsychotic", "Anxiolytic", "Benzodiazepine",
-            "Turps", "Cannabis", "Methamphetamine", "Amphetamine",
+            "methadone", "suboxone", "ritalin", "dexamphetamine",
+            "antidepressant", "antipsychotic", "anxiolytic", "benzodiazepine",
+            "turps", "cannabis", "methamphetamine", "amphetamine",
             // Clinical roles/terms
-            "Specialist", "Registrar", "Consultant", "Clinician",
-            "Timeline", "Formulation", "Assessment", "Intervention",
+            "specialist", "registrar", "consultant", "clinician",
+            "timeline", "formulation", "assessment", "intervention",
             // Section headers that get flagged
-            "Current", "Background", "History", "Plan", "Goals", "Progress",
-            "Summary", "Recommendations", "Actions", "Notes", "Comments",
-            "Rehab", "Reports",
+            "current", "background", "history", "plan", "goals", "progress",
+            "summary", "recommendations", "actions", "notes", "comments",
+            "rehab", "reports",
             // Form field labels (not person names)
-            "Client", "Supplier", "Provider", "Participant", "Claimant",
-            "Referrer", "Coordinator", "Author", "Reviewer", "Approver",
-            "Name", "Address", "Phone", "Email", "Contact", "Details",
-            "Number", "Date", "Claim", "Reference", "Ref", "Report", "File"
+            "client", "supplier", "provider", "participant", "claimant",
+            "referrer", "coordinator", "author", "reviewer", "approver",
+            "name", "address", "phone", "email", "contact", "details",
+            "number", "date", "claim", "reference", "ref", "report", "file"
         ]
 
-        return clinicalTerms.contains(word) || clinicalTerms.contains(word.uppercased())
+        return clinicalTerms.contains(word.lowercased())
     }
 }

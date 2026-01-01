@@ -100,8 +100,12 @@ class SwiftNERService {
         // Deduplicate (merges same-text entities from overlap regions)
         let deduplicated = deduplicateEntities(noOverlaps)
 
+        // Extend first names with known surnames (searches FULL text, not per-chunk)
+        // This catches cases like "Madhu" when "Nath" is known from "Ronald Nath"
+        let withSurnames = extendWithKnownSurnames(deduplicated, in: text)
+
         // Validate positions are within text bounds
-        let validated = validateEntityPositions(deduplicated, textLength: text.count)
+        let validated = validateEntityPositions(withSurnames, textLength: text.count)
 
         // PHASE 2: Single-pass occurrence scan for all names
         let withAllOccurrences = singlePassOccurrenceScan(validated, in: text)
@@ -360,6 +364,87 @@ class SwiftNERService {
         return result
     }
 
+    // MARK: - Surname Extension (Full Text)
+
+    /// Extend first names with known surnames from detected full names
+    /// Runs on FULL text after chunk processing to catch cross-chunk matches
+    private func extendWithKnownSurnames(_ entities: [Entity], in text: String) -> [Entity] {
+        // Step 1: Collect known surnames from multi-word person names
+        var knownSurnames: Set<String> = []
+        for entity in entities {
+            guard entity.type.isPerson else { continue }
+            let words = entity.originalText.split(separator: " ")
+            if words.count >= 2, let lastName = words.last {
+                let surname = String(lastName)
+                if surname.first?.isUppercase == true && surname.count >= 2 {
+                    knownSurnames.insert(surname)
+                }
+            }
+        }
+
+        guard !knownSurnames.isEmpty else { return entities }
+
+        // Step 2: For each single-word first name, check if followed by a known surname
+        var result: [Entity] = []
+        for entity in entities {
+            guard entity.type.isPerson else {
+                result.append(entity)
+                continue
+            }
+
+            // Skip if already multi-word
+            if entity.originalText.contains(" ") {
+                result.append(entity)
+                continue
+            }
+
+            // Check if this first name is followed by a known surname in the FULL text
+            if let surname = findKnownSurnameAfter(entity.originalText, knownSurnames: knownSurnames, in: text) {
+                let extendedEntity = Entity(
+                    id: entity.id,
+                    originalText: entity.originalText + " " + surname,
+                    replacementCode: entity.replacementCode,
+                    type: entity.type,
+                    positions: entity.positions, // Will be recalculated in Phase 2
+                    confidence: entity.confidence
+                )
+                result.append(extendedEntity)
+            } else {
+                result.append(entity)
+            }
+        }
+
+        return result
+    }
+
+    /// Check if firstName is followed by any known surname in the text
+    private func findKnownSurnameAfter(_ firstName: String, knownSurnames: Set<String>, in text: String) -> String? {
+        // Pattern: firstName followed by space(s) and capitalized word
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: firstName)) +([A-Z][a-z]+)\\b"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return nil
+        }
+
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        for match in matches {
+            guard match.numberOfRanges >= 2 else { continue }
+
+            let surnameRange = match.range(at: 1)
+            let potentialSurname = nsText.substring(with: surnameRange)
+
+            // Check if this is a known surname
+            if knownSurnames.contains(potentialSurname) {
+                return potentialSurname
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - Position Validation
 
     /// Validate that all entity positions are within text bounds
@@ -416,22 +501,23 @@ class SwiftNERService {
 
     /// Check if a word is a clinical term to exclude
     private func isClinicalTerm(_ word: String) -> Bool {
+        // All terms stored in lowercase for case-insensitive matching
         let clinicalTerms: Set<String> = [
-            "GP", "MDT", "AOD", "ACC", "DHB", "ED", "ICU", "OT", "PT",
-            "CBT", "DBT", "ACT", "EMDR", "MI", "MH", "MHA", "MOH",
-            "ADHD", "ADD", "ASD", "OCD", "PTSD", "GAD", "MDD", "BPD",
-            "DSM", "ICD", "Dx", "Rx", "Tx", "Hx", "Sx", "PRN",
-            "TBI", "CVA", "MS", "CP", "LD", "ID", "ABI",
-            "NGO", "MOE", "MSD", "WINZ", "CYF",
-            "NZ", "USA", "UK", "AU",
-            "Client", "Supplier", "Provider", "Participant", "Claimant",
-            "Referrer", "Coordinator", "Author", "Reviewer", "Approver",
-            "Name", "Address", "Phone", "Email", "Contact", "Details",
-            "Number", "Date", "Claim", "Reference", "Report", "File",
-            "Current", "Background", "History", "Plan", "Goals", "Progress",
-            "Summary", "Recommendations", "Actions", "Notes", "Comments"
+            "gp", "mdt", "aod", "acc", "dhb", "ed", "icu", "ot", "pt",
+            "cbt", "dbt", "act", "emdr", "mi", "mh", "mha", "moh",
+            "adhd", "add", "asd", "ocd", "ptsd", "gad", "mdd", "bpd",
+            "dsm", "icd", "dx", "rx", "tx", "hx", "sx", "prn",
+            "tbi", "cva", "ms", "cp", "ld", "id", "abi",
+            "ngo", "moe", "msd", "winz", "cyf",
+            "nz", "usa", "uk", "au",
+            "client", "supplier", "provider", "participant", "claimant",
+            "referrer", "coordinator", "author", "reviewer", "approver",
+            "name", "address", "phone", "email", "contact", "details",
+            "number", "date", "claim", "reference", "report", "reports", "file",
+            "current", "background", "history", "plan", "goals", "progress",
+            "summary", "recommendations", "actions", "notes", "comments"
         ]
-        return clinicalTerms.contains(word) || clinicalTerms.contains(word.uppercased())
+        return clinicalTerms.contains(word.lowercased())
     }
 
     // MARK: - Overlap Removal
@@ -531,12 +617,24 @@ class SwiftNERService {
                 // Merge all positions
                 let mergedPositions = existing.positions + entity.positions
 
+                // Prefer person type over location (Apple NER sometimes misclassifies names as places)
+                // e.g., "Hayden" detected as location in one chunk, person in another
+                let preferredType: EntityType
+                if existing.type == .location && entity.type.isPerson {
+                    preferredType = entity.type
+                } else if entity.type == .location && existing.type.isPerson {
+                    preferredType = existing.type
+                } else {
+                    // Otherwise keep existing type (first seen)
+                    preferredType = existing.type
+                }
+
                 // Use the entity with higher confidence as the base, but keep all positions
                 let merged = Entity(
                     id: existing.id,
                     originalText: existing.originalText,
                     replacementCode: existing.replacementCode,
-                    type: existing.type,
+                    type: preferredType,
                     positions: mergedPositions,
                     confidence: max(newConfidence, existingConfidence)
                 )

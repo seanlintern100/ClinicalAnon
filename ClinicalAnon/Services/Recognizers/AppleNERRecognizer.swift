@@ -31,14 +31,18 @@ class AppleNERRecognizer: EntityRecognizer {
     // MARK: - Entity Recognition
 
     func recognize(in text: String) -> [Entity] {
+        // Replace tabs with newlines so Apple NER treats columns as separate sentences
+        // This prevents cross-column name joining and allows proper surname detection
+        let processedText = text.replacingOccurrences(of: "\t", with: "\n")
+
         let tagger = NLTagger(tagSchemes: [.nameType])
-        tagger.string = text
+        tagger.string = processedText
 
         var entities: [Entity] = []
 
         // Enumerate tags in the text
         tagger.enumerateTags(
-            in: text.startIndex..<text.endIndex,
+            in: processedText.startIndex..<processedText.endIndex,
             unit: .word,
             scheme: .nameType,
             options: [.omitWhitespace, .omitPunctuation, .joinNames]
@@ -54,7 +58,7 @@ class AppleNERRecognizer: EntityRecognizer {
                 maximumCount: 1
             )
 
-            let name = String(text[range])
+            let name = String(processedText[range])
             let confidence = hypotheses[tag.rawValue] ?? 0.0
 
             // Require minimum confidence to reduce false positives
@@ -62,7 +66,7 @@ class AppleNERRecognizer: EntityRecognizer {
                 return true  // Skip low-confidence predictions
             }
 
-            // Skip multi-word "names" with invalid middle words (e.g., "John asked Mary")
+            // Skip multi-word "names" with invalid middle words (e.g., "Person asked Other")
             guard !hasInvalidMiddleWord(name) else { return true }
 
             // Skip if it's a common word (not actually a name)
@@ -75,8 +79,9 @@ class AppleNERRecognizer: EntityRecognizer {
             guard !isUserExcluded(name) else { return true }
 
             // Use NSString for fast O(1) offset calculation
-            let nsText = text as NSString
-            let nsRange = NSRange(range, in: text)
+            // Positions are same since \t and \n are both single chars
+            let nsText = processedText as NSString
+            let nsRange = NSRange(range, in: processedText)
             let start = nsRange.location
             let end = nsRange.location + nsRange.length
 
@@ -99,11 +104,15 @@ class AppleNERRecognizer: EntityRecognizer {
             return true  // Continue enumeration
         }
 
-        // Extend names with following surnames (Hayden → Hayden Hooper)
-        let extendedEntities = extendWithSurnames(entities, in: text)
+        // Extend names with following surnames (FirstName → FirstName Surname)
+        let extendedEntities = extendWithSurnames(entities, in: processedText)
 
-        // Extend with name-words (Sue Fletcher, May Johnson)
-        let withNameWords = extendWithNameWords(extendedEntities, in: text)
+        // Second pass: use known surnames to extend remaining first names
+        // e.g., if "Person A Surname" was detected, use "Surname" to extend "Person B" → "Person B Surname"
+        let withKnownSurnames = extendWithKnownSurnames(extendedEntities, in: processedText)
+
+        // Extend with name-words (e.g., common words that are also names)
+        let withNameWords = extendWithNameWords(withKnownSurnames, in: processedText)
 
         return withNameWords
     }
@@ -111,7 +120,7 @@ class AppleNERRecognizer: EntityRecognizer {
     // MARK: - Name-Word List
 
     /// Name particles that are valid lowercase middle words in multi-word names
-    /// e.g., "Ludwig van Beethoven", "Leonardo da Vinci"
+    /// e.g., "Person van Name", "Person da Name"
     private let nameParticles: Set<String> = [
         "von", "van", "de", "da", "del", "della", "di", "du",
         "la", "le", "los", "las",
@@ -223,7 +232,8 @@ class AppleNERRecognizer: EntityRecognizer {
     // MARK: - Surname Extension
 
     /// Extend detected first names with following capitalized words (likely surnames)
-    /// Example: "Hayden" detected, followed by "Hooper" → extend to "Hayden Hooper"
+    /// Scans ALL occurrences of each name in text to find surname opportunities
+    /// Example: "FirstName" detected, find occurrence followed by "Surname" → extend to "FirstName Surname"
     private func extendWithSurnames(_ entities: [Entity], in text: String) -> [Entity] {
         var result: [Entity] = []
 
@@ -236,22 +246,19 @@ class AppleNERRecognizer: EntityRecognizer {
                 continue
             }
 
-            guard let position = entity.positions.first,
-                  position.count >= 2 else {
+            // Skip if already multi-word (already has surname)
+            if entity.originalText.contains(" ") {
                 result.append(entity)
                 continue
             }
 
-            let entityEnd = position[1]
-
-            // Check if there's a following word that could be a surname
-            if let extendedName = findFollowingSurname(after: entityEnd, in: text, firstName: entity.originalText) {
-                let extendedEnd = entityEnd + 1 + extendedName.count // +1 for space
+            // Find ALL occurrences of this first name in text to find a surname
+            if let surname = findSurnameForName(entity.originalText, in: text) {
                 let extendedEntity = Entity(
-                    originalText: entity.originalText + " " + extendedName,
+                    originalText: entity.originalText + " " + surname,
                     replacementCode: "",
                     type: entity.type,
-                    positions: [[position[0], extendedEnd]],
+                    positions: entity.positions, // Will be recalculated in Phase 2
                     confidence: entity.confidence
                 )
                 result.append(extendedEntity)
@@ -263,42 +270,117 @@ class AppleNERRecognizer: EntityRecognizer {
         return result
     }
 
-    /// Find a surname following a first name at the given position
-    private func findFollowingSurname(after endIndex: Int, in text: String, firstName: String) -> String? {
-        guard endIndex < text.count else { return nil }
-
-        let startIdx = text.index(text.startIndex, offsetBy: endIndex)
-
-        // Check if followed by a space
-        guard startIdx < text.endIndex, text[startIdx] == " " else { return nil }
-
-        // Get the next word
-        let afterSpace = text.index(after: startIdx)
-        guard afterSpace < text.endIndex else { return nil }
-
-        // Find the end of the next word
-        var wordEnd = afterSpace
-        while wordEnd < text.endIndex && text[wordEnd].isLetter {
-            wordEnd = text.index(after: wordEnd)
+    /// Second pass: extend first names using known surnames from already-detected full names
+    /// e.g., if "Person A Surname" was detected, "Surname" becomes known
+    /// Then "Person B" can be extended to "Person B Surname" if followed by same surname in text
+    private func extendWithKnownSurnames(_ entities: [Entity], in text: String) -> [Entity] {
+        // Step 1: Collect known surnames from multi-word person names
+        var knownSurnames: Set<String> = []
+        for entity in entities {
+            guard entity.type.isPerson else { continue }
+            let words = entity.originalText.split(separator: " ")
+            if words.count >= 2, let lastName = words.last {
+                let surname = String(lastName)
+                if surname.first?.isUppercase == true && surname.count >= 2 {
+                    knownSurnames.insert(surname)
+                }
+            }
         }
 
-        guard wordEnd > afterSpace else { return nil }
+        guard !knownSurnames.isEmpty else { return entities }
 
-        let nextWord = String(text[afterSpace..<wordEnd])
+        // Step 2: For each single-word first name, check if followed by a known surname
+        var result: [Entity] = []
+        for entity in entities {
+            guard entity.type.isPerson else {
+                result.append(entity)
+                continue
+            }
 
-        // Check if it looks like a surname:
-        // - Starts with uppercase
-        // - At least 2 characters
-        // - Not a common word or clinical term
-        guard nextWord.count >= 2,
-              nextWord.first?.isUppercase == true,
-              !isCommonWord(nextWord),
-              !isClinicalTerm(nextWord),
-              !isUserExcluded(nextWord) else {
+            // Skip if already multi-word
+            if entity.originalText.contains(" ") {
+                result.append(entity)
+                continue
+            }
+
+            // Check if this first name is followed by a known surname
+            if let surname = findKnownSurnameAfter(entity.originalText, knownSurnames: knownSurnames, in: text) {
+                let extendedEntity = Entity(
+                    originalText: entity.originalText + " " + surname,
+                    replacementCode: "",
+                    type: entity.type,
+                    positions: entity.positions,
+                    confidence: entity.confidence
+                )
+                result.append(extendedEntity)
+            } else {
+                result.append(entity)
+            }
+        }
+
+        return result
+    }
+
+    /// Check if firstName is followed by any known surname in the text
+    private func findKnownSurnameAfter(_ firstName: String, knownSurnames: Set<String>, in text: String) -> String? {
+        // Build pattern: firstName followed by space and capitalized word
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: firstName)) +([A-Z][a-z]+)\\b"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return nil
         }
 
-        return nextWord
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        for match in matches {
+            guard match.numberOfRanges >= 2 else { continue }
+
+            let surnameRange = match.range(at: 1)
+            let potentialSurname = nsText.substring(with: surnameRange)
+
+            // Check if this is a known surname
+            if knownSurnames.contains(potentialSurname) {
+                return potentialSurname
+            }
+        }
+
+        return nil
+    }
+
+    /// Search all occurrences of firstName in text to find one followed by a surname
+    private func findSurnameForName(_ firstName: String, in text: String) -> String? {
+        // Build pattern: firstName followed by SPACE ONLY (not any whitespace)
+        // This respects tab→newline conversion as column separators
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: firstName)) +([A-Z][a-z]+)\\b"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return nil
+        }
+
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        for match in matches {
+            guard match.numberOfRanges >= 2 else { continue }
+
+            let surnameRange = match.range(at: 1)
+            let surname = nsText.substring(with: surnameRange)
+
+            // Validate surname
+            guard surname.count >= 2,
+                  !isCommonWord(surname),
+                  !isClinicalTerm(surname),
+                  !isUserExcluded(surname) else {
+                continue
+            }
+
+            return surname
+        }
+
+        return nil
     }
 
     // MARK: - Helper Methods
@@ -307,9 +389,9 @@ class AppleNERRecognizer: EntityRecognizer {
 
     /// Check if multi-word name has invalid middle words
     /// Valid middle words: capitalized OR known name particle (von, de, van, etc.)
-    /// Rejects: "Liesbet asked Sean" (asked is lowercase, not a particle)
-    /// Accepts: "Mary Jane Watson" (Jane is capitalized)
-    /// Accepts: "Ludwig van Beethoven" (van is a particle)
+    /// Rejects: "Person asked Other" (asked is lowercase, not a particle)
+    /// Accepts: "First Middle Last" (Middle is capitalized)
+    /// Accepts: "Person van Name" (van is a particle)
     private func hasInvalidMiddleWord(_ text: String) -> Bool {
         let words = text.split(separator: " ")
         guard words.count > 2 else { return false }  // Only check 3+ word names
