@@ -737,19 +737,28 @@ class XLMRobertaNERService: ObservableObject {
             guard !newEntities.contains(where: { $0.text.lowercased() == firstName.lowercased() }) else { continue }
             guard firstName.count >= 3, !isCommonWord(firstName) else { continue }
 
-            var searchStart = text.startIndex
             var foundPositions: [(start: Int, end: Int)] = []
 
-            while let range = text.range(of: firstName, options: .caseInsensitive, range: searchStart..<text.endIndex) {
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
+            // Use word boundary regex to avoid matching inside other words (e.g., "OT" in "OTHER")
+            let escapedName = NSRegularExpression.escapedPattern(for: firstName)
+            let pattern = "\\b\(escapedName)\\b"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+                continue
+            }
+
+            let nsRange = NSRange(text.startIndex..., in: text)
+            let matches = regex.matches(in: text, options: [], range: nsRange)
+
+            for match in matches {
+                guard let swiftRange = Range(match.range, in: text) else { continue }
+                let start = text.distance(from: text.startIndex, to: swiftRange.lowerBound)
+                let end = text.distance(from: text.startIndex, to: swiftRange.upperBound)
 
                 let isPartOfFullName = (start >= entity.start && end <= entity.end)
 
                 if !isPartOfFullName {
                     foundPositions.append((start: start, end: end))
                 }
-                searchStart = range.upperBound
             }
 
             for pos in foundPositions {
