@@ -41,21 +41,23 @@ class PatternRecognizer: EntityRecognizer {
     func recognize(in text: String) -> [Entity] {
         var entities: [Entity] = []
 
+        // Use NSString for fast O(1) offset access (UTF-16 based)
+        let nsText = text as NSString
+
         for (pattern, type, confidence) in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern) else {
                 print("⚠️ Invalid regex pattern: \(pattern)")
                 continue
             }
 
-            let range = NSRange(text.startIndex..., in: text)
+            let range = NSRange(location: 0, length: nsText.length)
             let matches = regex.matches(in: text, range: range)
 
             for match in matches {
-                guard let range = Range(match.range, in: text) else { continue }
-
-                let matched = String(text[range])
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
+                let matched = nsText.substring(with: match.range)
+                // Use UTF-16 offsets directly - fast O(1) access
+                let start = match.range.location
+                let end = match.range.location + match.range.length
 
                 entities.append(Entity(
                     originalText: matched,
@@ -82,16 +84,19 @@ extension EntityRecognizer {
     /// Helper to find all occurrences of a word in text
     func findOccurrences(of word: String, in text: String, caseInsensitive: Bool = false) -> [[Int]] {
         var positions: [[Int]] = []
-        var searchRange = text.startIndex..<text.endIndex
+        let nsText = text as NSString
+        var searchStart = 0
 
-        let options: String.CompareOptions = caseInsensitive ? [.caseInsensitive] : []
+        let options: NSString.CompareOptions = caseInsensitive ? [.caseInsensitive] : []
 
-        while let range = text.range(of: word, options: options, range: searchRange) {
-            let start = text.distance(from: text.startIndex, to: range.lowerBound)
-            let end = text.distance(from: text.startIndex, to: range.upperBound)
-            positions.append([start, end])
+        while searchStart < nsText.length {
+            let searchRange = NSRange(location: searchStart, length: nsText.length - searchStart)
+            let foundRange = nsText.range(of: word, options: options, range: searchRange)
 
-            searchRange = range.upperBound..<text.endIndex
+            if foundRange.location == NSNotFound { break }
+
+            positions.append([foundRange.location, foundRange.location + foundRange.length])
+            searchStart = foundRange.location + foundRange.length
         }
 
         return positions

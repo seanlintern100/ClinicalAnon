@@ -13,62 +13,12 @@ import NaturalLanguage
 
 /// Uses Apple's built-in Named Entity Recognition
 /// Provides baseline detection for common English names, places, and organizations
+/// Note: Chunking is handled by SwiftNERService - this recognizer receives pre-chunked text
 class AppleNERRecognizer: EntityRecognizer {
-
-    // MARK: - Configuration
-
-    /// Maximum chunk size for processing (prevents stalling on large texts)
-    private let maxChunkSize = 20_000
 
     // MARK: - Entity Recognition
 
     func recognize(in text: String) -> [Entity] {
-        // For large texts, process in chunks to prevent stalling
-        if text.count > maxChunkSize {
-            return recognizeInChunks(text)
-        }
-        return recognizeSingleChunk(text, offset: 0)
-    }
-
-    /// Process large text in chunks
-    private func recognizeInChunks(_ text: String) -> [Entity] {
-        var allEntities: [Entity] = []
-        var currentIndex = text.startIndex
-        var charOffset = 0
-
-        while currentIndex < text.endIndex {
-            // Find chunk end - try to break at sentence/paragraph boundary
-            var chunkEnd = text.index(currentIndex, offsetBy: maxChunkSize, limitedBy: text.endIndex) ?? text.endIndex
-
-            // If not at end, back up to last sentence boundary
-            if chunkEnd < text.endIndex {
-                let searchRange = currentIndex..<chunkEnd
-                if let lastPeriod = text.range(of: ". ", options: .backwards, range: searchRange) {
-                    chunkEnd = lastPeriod.upperBound
-                } else if let lastNewline = text.range(of: "\n", options: .backwards, range: searchRange) {
-                    chunkEnd = lastNewline.upperBound
-                }
-            }
-
-            let chunk = String(text[currentIndex..<chunkEnd])
-            let chunkEntities = recognizeSingleChunk(chunk, offset: charOffset)
-            allEntities.append(contentsOf: chunkEntities)
-
-            charOffset += chunk.count
-            currentIndex = chunkEnd
-        }
-
-        // Extend names with following surnames (Hayden → Hayden Hooper)
-        let extendedEntities = extendWithSurnames(allEntities, in: text)
-
-        // Extend with name-words (Sue Fletcher, May Johnson)
-        let withNameWords = extendWithNameWords(extendedEntities, in: text)
-
-        return withNameWords
-    }
-
-    /// Process a single chunk of text
-    private func recognizeSingleChunk(_ text: String, offset: Int) -> [Entity] {
         let tagger = NLTagger(tagSchemes: [.nameType])
         tagger.string = text
 
@@ -98,8 +48,11 @@ class AppleNERRecognizer: EntityRecognizer {
             // Skip user-excluded words
             guard !isUserExcluded(name) else { return true }
 
-            let start = text.distance(from: text.startIndex, to: range.lowerBound) + offset
-            let end = text.distance(from: text.startIndex, to: range.upperBound) + offset
+            // Use NSString for fast O(1) offset calculation
+            let nsText = text as NSString
+            let nsRange = NSRange(range, in: text)
+            let start = nsRange.location
+            let end = nsRange.location + nsRange.length
 
             // Map Apple's tag types to our EntityType
             let entityType: EntityType? = mapAppleTag(tag, text: name)
@@ -117,7 +70,13 @@ class AppleNERRecognizer: EntityRecognizer {
             return true  // Continue enumeration
         }
 
-        return entities
+        // Extend names with following surnames (Hayden → Hayden Hooper)
+        let extendedEntities = extendWithSurnames(entities, in: text)
+
+        // Extend with name-words (Sue Fletcher, May Johnson)
+        let withNameWords = extendWithNameWords(extendedEntities, in: text)
+
+        return withNameWords
     }
 
     // MARK: - Name-Word List

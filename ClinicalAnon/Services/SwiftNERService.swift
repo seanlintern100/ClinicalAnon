@@ -49,9 +49,9 @@ class SwiftNERService {
         #endif
     }
 
-    // MARK: - Entity Detection
+    // MARK: - Entity Detection (Two-Phase Chunked Architecture)
 
-    /// Detect entities in the given text
+    /// Detect entities in the given text using chunked parallel processing
     /// - Parameter text: The clinical text to analyze
     /// - Returns: Array of detected entities
     func detectEntities(in text: String) async throws -> [Entity] {
@@ -62,40 +62,184 @@ class SwiftNERService {
         print("📝 Input text length: \(text.count) chars")
         #endif
 
+        // PHASE 1: Chunked detection with parallel processing
+        let chunks = ChunkManager.splitWithOverlap(text)
         var allEntities: [Entity] = []
 
-        // Run all recognizers
-        for recognizer in recognizers {
-            let recognizerName = String(describing: type(of: recognizer))
-            let entities = recognizer.recognize(in: text)
+        #if DEBUG
+        print("📦 Processing \(chunks.count) chunks in parallel...")
+        #endif
 
-            #if DEBUG
-            if !entities.isEmpty {
-                print("  ✓ \(recognizerName): Found \(entities.count) entities")
+        // Process chunks in parallel using TaskGroup
+        await withTaskGroup(of: (Int, [Entity]).self) { group in
+            for (index, chunk) in chunks.enumerated() {
+                group.addTask {
+                    let entities = self.processChunk(chunk)
+                    return (index, entities)
+                }
             }
-            #endif
 
-            allEntities.append(contentsOf: entities)
+            // Collect results (order doesn't matter, we sort later)
+            for await (_, chunkEntities) in group {
+                allEntities.append(contentsOf: chunkEntities)
+            }
         }
 
-        // Remove overlaps FIRST (keeps longer, higher-confidence entities)
+        #if DEBUG
+        print("📦 Phase 1 complete: \(allEntities.count) raw entities from chunks")
+        #endif
+
+        // Remove overlaps (keeps longer, higher-confidence entities)
         let noOverlaps = removeOverlaps(allEntities)
 
-        // Then deduplicate exact matches
+        // Deduplicate (merges same-text entities from overlap regions)
         let deduplicated = deduplicateEntities(noOverlaps)
 
-        // Validate all entity positions are within bounds
+        // Validate positions are within text bounds
         let validated = validateEntityPositions(deduplicated, textLength: text.count)
 
-        // Scan for all occurrences of detected names (catches "Mark:" headings etc.)
-        let withAllOccurrences = scanForAllOccurrences(validated, in: text)
+        // PHASE 2: Single-pass occurrence scan for all names
+        let withAllOccurrences = singlePassOccurrenceScan(validated, in: text)
 
         #if DEBUG
         let elapsed = Date().timeIntervalSince(startTime)
-        print("✅ SwiftNER: Completed in \(String(format: "%.2f", elapsed))s")
+        print("✅ SwiftNER: Completed in \(String(format: "%.2f", elapsed))s (\(withAllOccurrences.count) entities)")
         #endif
 
         return withAllOccurrences
+    }
+
+    // MARK: - Chunk Processing
+
+    /// Process a single chunk through all recognizers
+    private func processChunk(_ chunk: ChunkInfo) -> [Entity] {
+        var chunkEntities: [Entity] = []
+
+        for recognizer in recognizers {
+            let entities = recognizer.recognize(in: chunk.text)
+
+            // Adjust positions from chunk-local to global coordinates
+            for entity in entities {
+                if let adjustedPositions = ChunkManager.adjustPositions(entity.positions, for: chunk) {
+                    chunkEntities.append(Entity(
+                        id: entity.id,
+                        originalText: entity.originalText,
+                        replacementCode: entity.replacementCode,
+                        type: entity.type,
+                        positions: adjustedPositions,
+                        confidence: entity.confidence
+                    ))
+                }
+            }
+        }
+
+        return chunkEntities
+    }
+
+    // MARK: - Phase 2: Single-Pass Occurrence Scan
+
+    /// Find all occurrences of detected names in a single pass through the text
+    private func singlePassOccurrenceScan(_ entities: [Entity], in text: String) -> [Entity] {
+        // Collect unique person name strings
+        var nameSet: Set<String> = []
+        var entityByName: [String: Entity] = [:]
+
+        for entity in entities {
+            guard entity.type.isPerson else { continue }
+
+            let key = entity.originalText.lowercased()
+            nameSet.insert(entity.originalText)
+            entityByName[key] = entity
+
+            // Extract first name components from multi-word names
+            let words = entity.originalText.split(separator: " ")
+            if words.count >= 2 {
+                let firstName = String(words[0])
+                if firstName.count >= 3 && !isCommonWord(firstName) {
+                    nameSet.insert(firstName)
+                }
+            }
+        }
+
+        guard !nameSet.isEmpty else { return entities }
+
+        // Build single regex for all names (longest first to prevent partial matches)
+        let sortedNames = nameSet.sorted { $0.count > $1.count }
+        let escapedNames = sortedNames.map { NSRegularExpression.escapedPattern(for: $0) }
+        let pattern = "\\b(" + escapedNames.joined(separator: "|") + ")\\b"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            return entities
+        }
+
+        // Single pass through text to find all occurrences
+        let nsText = text as NSString
+        var allPositions: [String: [[Int]]] = [:]
+
+        let range = NSRange(location: 0, length: nsText.length)
+        regex.enumerateMatches(in: text, range: range) { match, _, _ in
+            guard let match = match else { return }
+            let matchedText = nsText.substring(with: match.range)
+            let key = matchedText.lowercased()
+            let position = [match.range.location, match.range.location + match.range.length]
+            allPositions[key, default: []].append(position)
+        }
+
+        // Build result with complete position lists
+        var result: [Entity] = []
+        var processedKeys: Set<String> = []
+
+        // Update existing entities with all positions found
+        for entity in entities {
+            if entity.type.isPerson {
+                let key = entity.originalText.lowercased()
+                if let positions = allPositions[key], !processedKeys.contains(key) {
+                    result.append(Entity(
+                        id: entity.id,
+                        originalText: entity.originalText,
+                        replacementCode: entity.replacementCode,
+                        type: entity.type,
+                        positions: positions,
+                        confidence: entity.confidence
+                    ))
+                    processedKeys.insert(key)
+                } else if !processedKeys.contains(key) {
+                    // Name wasn't found in scan (edge case) - keep original
+                    result.append(entity)
+                    processedKeys.insert(key)
+                }
+            } else {
+                // Non-person entities pass through unchanged
+                result.append(entity)
+            }
+        }
+
+        // Add extracted first names that were found
+        for (key, positions) in allPositions {
+            guard !processedKeys.contains(key) else { continue }
+
+            // Find parent entity for type/replacement code inheritance
+            let parentEntity = entities.first { entity in
+                entity.type.isPerson && entity.originalText.lowercased().hasPrefix(key + " ")
+            }
+
+            if let parent = parentEntity {
+                result.append(Entity(
+                    originalText: positions.first.map { nsText.substring(with: NSRange(location: $0[0], length: $0[1] - $0[0])) } ?? key.capitalized,
+                    replacementCode: parent.replacementCode,
+                    type: parent.type,
+                    positions: positions,
+                    confidence: parent.confidence
+                ))
+                processedKeys.insert(key)
+
+                #if DEBUG
+                print("  ✓ Extracted '\(key)' (\(positions.count) occurrences)")
+                #endif
+            }
+        }
+
+        return result
     }
 
     // MARK: - Position Validation
@@ -130,227 +274,6 @@ class SwiftNERService {
 
             return entity
         }
-    }
-
-    // MARK: - All Occurrences Scan
-
-    /// Scan text for all occurrences of detected name entities
-    /// Ensures names detected in one context are replaced everywhere (e.g., "Mark:" headings)
-    private func scanForAllOccurrences(_ entities: [Entity], in text: String) -> [Entity] {
-        var result = entities.map { entity -> Entity in
-            // Only scan for person name types
-            guard entity.type == .personClient ||
-                  entity.type == .personProvider ||
-                  entity.type == .personOther else {
-                return entity
-            }
-
-            // Find all occurrences of this name in text
-            var allPositions: [[Int]] = []
-            var searchStart = text.startIndex
-
-            while let range = text.range(of: entity.originalText,
-                                          options: .caseInsensitive,
-                                          range: searchStart..<text.endIndex) {
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
-                allPositions.append([start, end])
-                searchStart = range.upperBound
-            }
-
-            // If we found more occurrences than originally detected, update the entity
-            if allPositions.count > entity.positions.count {
-                return Entity(
-                    id: entity.id,
-                    originalText: entity.originalText,
-                    replacementCode: entity.replacementCode,
-                    type: entity.type,
-                    positions: allPositions,
-                    confidence: entity.confidence
-                )
-            }
-
-            return entity
-        }
-
-        // Extend person names with following surnames at all positions
-        let extendedNames = extendNamesWithSurnames(result, in: text)
-        result.append(contentsOf: extendedNames)
-
-        // Extract first name components from multi-word names
-        // e.g., "Yvonne Murray" → also find standalone "Yvonne"
-        let extractedComponents = extractNameComponents(result, in: text)
-        result.append(contentsOf: extractedComponents)
-
-        return result
-    }
-
-    // MARK: - Name Component Extraction
-
-    /// Extract first name components from multi-word person names
-    /// When "Yvonne Murray" is detected, also find standalone "Yvonne"
-    private func extractNameComponents(_ entities: [Entity], in text: String) -> [Entity] {
-        var newEntities: [Entity] = []
-        let existingTexts = Set(entities.map { $0.originalText.lowercased() })
-
-        for entity in entities {
-            // Only process multi-word person names
-            guard entity.type.isPerson else { continue }
-
-            let components = entity.originalText.split(separator: " ")
-            guard components.count >= 2 else { continue }
-
-            // Extract first name (first component)
-            let firstName = String(components[0])
-
-            // Skip if first name already detected as separate entity
-            guard !existingTexts.contains(firstName.lowercased()) else { continue }
-
-            // Skip if already added in this loop
-            guard !newEntities.contains(where: { $0.originalText.lowercased() == firstName.lowercased() }) else { continue }
-
-            // Skip if too short or common word
-            guard firstName.count >= 3, !isCommonWord(firstName) else { continue }
-
-            // Find standalone occurrences of first name
-            var positions: [[Int]] = []
-            var searchStart = text.startIndex
-
-            while let range = text.range(of: firstName,
-                                          options: .caseInsensitive,
-                                          range: searchStart..<text.endIndex) {
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
-
-                // Check this isn't part of the full name (already covered)
-                let isPartOfFullName = entity.positions.contains { pos in
-                    pos.count >= 2 && start >= pos[0] && end <= pos[1]
-                }
-
-                if !isPartOfFullName {
-                    positions.append([start, end])
-                }
-                searchStart = range.upperBound
-            }
-
-            if !positions.isEmpty {
-                // Create entity with same type, linking to same person
-                newEntities.append(Entity(
-                    originalText: firstName,
-                    replacementCode: entity.replacementCode, // Same replacement code!
-                    type: entity.type,
-                    positions: positions,
-                    confidence: entity.confidence
-                ))
-
-                #if DEBUG
-                print("  ✓ Extracted '\(firstName)' from '\(entity.originalText)' (\(positions.count) standalone occurrences)")
-                #endif
-            }
-        }
-
-        return newEntities
-    }
-
-    // MARK: - Surname Extension
-
-    /// Extend person name entities with following surnames at each position
-    /// Handles cases where "Hayden" is found but "Hooper" follows and wasn't joined
-    private func extendNamesWithSurnames(_ entities: [Entity], in text: String) -> [Entity] {
-        var newEntities: [Entity] = []
-
-        // Collect all existing full names to avoid duplicates
-        let existingNames = Set(entities.map { $0.originalText.lowercased() })
-
-        for entity in entities {
-            // Only extend person names
-            guard entity.type == .personOther ||
-                  entity.type == .personClient ||
-                  entity.type == .personProvider else { continue }
-
-            // Check each position for a following surname
-            for position in entity.positions {
-                guard position.count >= 2 else { continue }
-                let endIdx = position[1]
-
-                if let surname = findFollowingSurname(after: endIdx, in: text) {
-                    let fullName = entity.originalText + " " + surname
-
-                    // Only add if no entity already covers this full name
-                    guard !existingNames.contains(fullName.lowercased()) else { continue }
-
-                    // Check we haven't already added this full name
-                    guard !newEntities.contains(where: { $0.originalText.lowercased() == fullName.lowercased() }) else { continue }
-
-                    // Find ALL occurrences of this full name in text
-                    var fullNamePositions: [[Int]] = []
-                    var searchStart = text.startIndex
-
-                    while let range = text.range(of: fullName, range: searchStart..<text.endIndex) {
-                        let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                        let end = text.distance(from: text.startIndex, to: range.upperBound)
-                        fullNamePositions.append([start, end])
-                        searchStart = range.upperBound
-                    }
-
-                    guard !fullNamePositions.isEmpty else { continue }
-
-                    newEntities.append(Entity(
-                        originalText: fullName,
-                        replacementCode: "",
-                        type: entity.type,
-                        positions: fullNamePositions,
-                        confidence: entity.confidence ?? 0.7
-                    ))
-
-                    #if DEBUG
-                    print("  ✓ Extended '\(entity.originalText)' to '\(fullName)' (\(fullNamePositions.count) occurrences)")
-                    #endif
-                }
-            }
-        }
-
-        return newEntities
-    }
-
-    /// Find a surname following a name at the given position
-    private func findFollowingSurname(after endIndex: Int, in text: String) -> String? {
-        guard endIndex < text.count else { return nil }
-
-        let startIdx = text.index(text.startIndex, offsetBy: endIndex)
-
-        // Check if followed by whitespace (space or tab)
-        guard startIdx < text.endIndex, text[startIdx].isWhitespace else { return nil }
-
-        // Skip whitespace to get to the next word
-        var afterWhitespace = text.index(after: startIdx)
-        while afterWhitespace < text.endIndex && text[afterWhitespace].isWhitespace {
-            afterWhitespace = text.index(after: afterWhitespace)
-        }
-        guard afterWhitespace < text.endIndex else { return nil }
-
-        // Find the end of the next word
-        var wordEnd = afterWhitespace
-        while wordEnd < text.endIndex && text[wordEnd].isLetter {
-            wordEnd = text.index(after: wordEnd)
-        }
-
-        guard wordEnd > afterWhitespace else { return nil }
-
-        let nextWord = String(text[afterWhitespace..<wordEnd])
-
-        // Check if it looks like a surname:
-        // - Starts with uppercase
-        // - At least 2 characters
-        // - Not a common word or clinical term
-        guard nextWord.count >= 2,
-              nextWord.first?.isUppercase == true,
-              !isCommonWord(nextWord),
-              !isClinicalTerm(nextWord) else {
-            return nil
-        }
-
-        return nextWord
     }
 
     /// Check if a word is a common English word (not a name)
