@@ -228,10 +228,6 @@ class XLMRobertaNERService: ObservableObject {
         // Post-processing: Bridge gaps between PER entities for middle names
         rawEntities = bridgeNameGaps(rawEntities, in: normalizedText)
 
-        // Post-processing: Extend names with following surnames
-        let extendedEntities = extendNamesWithSurnames(rawEntities, in: normalizedText)
-        rawEntities.append(contentsOf: extendedEntities)
-
         // Post-processing: Extract first name components from full names
         let extractedComponents = extractNameComponents(rawEntities, in: normalizedText)
         rawEntities.append(contentsOf: extractedComponents)
@@ -721,66 +717,6 @@ class XLMRobertaNERService: ObservableObject {
     }
 
     // MARK: - Name Post-Processing
-
-    /// Extend person names with following surnames
-    private func extendNamesWithSurnames(_ entities: [XLMREntity], in text: String) -> [XLMREntity] {
-        var newEntities: [XLMREntity] = []
-        let existingNames = Set(entities.map { $0.text.lowercased() })
-
-        for entity in entities {
-            guard entity.type == .personOther || entity.type == .personClient || entity.type == .personProvider else {
-                continue
-            }
-
-            if let surname = findFollowingSurname(after: entity.end, in: text) {
-                let fullName = entity.text + " " + surname
-
-                guard !existingNames.contains(fullName.lowercased()) else { continue }
-
-                let extendedEnd = entity.end + 1 + surname.count
-                newEntities.append(XLMREntity(
-                    text: fullName,
-                    type: entity.type,
-                    label: entity.label,
-                    start: entity.start,
-                    end: extendedEnd,
-                    confidence: entity.confidence
-                ))
-
-                print("XLMRobertaNERService: Extended '\(entity.text)' to '\(fullName)'")
-            }
-        }
-
-        return newEntities
-    }
-
-    /// Find a surname following a name
-    private func findFollowingSurname(after endIndex: Int, in text: String) -> String? {
-        guard endIndex < text.count else { return nil }
-
-        let startIdx = text.index(text.startIndex, offsetBy: endIndex)
-        guard startIdx < text.endIndex, text[startIdx] == " " else { return nil }
-
-        let afterSpace = text.index(after: startIdx)
-        guard afterSpace < text.endIndex else { return nil }
-
-        var wordEnd = afterSpace
-        while wordEnd < text.endIndex && text[wordEnd].isLetter {
-            wordEnd = text.index(after: wordEnd)
-        }
-
-        guard wordEnd > afterSpace else { return nil }
-
-        let nextWord = String(text[afterSpace..<wordEnd])
-
-        guard nextWord.count >= 2,
-              nextWord.first?.isUppercase == true,
-              !isCommonWord(nextWord) else {
-            return nil
-        }
-
-        return nextWord
-    }
 
     /// Extract first name components from multi-word names
     private func extractNameComponents(_ entities: [XLMREntity], in text: String) -> [XLMREntity] {
