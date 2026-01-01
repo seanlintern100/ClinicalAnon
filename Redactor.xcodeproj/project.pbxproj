@@ -27,6 +27,8 @@
 		XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = XLMR0001000000000000000002 /* XLMRobertaNERService.swift */; };
 		XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */; };
 		XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0003000000000000000002 /* sentencepiece.bpe.model */; };
+		XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0004000000000000000002 /* xlmr_vocab.json */; };
+		XLMR0005000000000000000001 /* tokenizer.json in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0005000000000000000002 /* tokenizer.json */; };
 		2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */; };
 		2FA4EBE090F118C6234E6905 /* MaoriNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */; };
 		4035D0CC83F920E213197D5E /* AnonymizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */; };
@@ -166,6 +168,8 @@
 		XLMR0001000000000000000002 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
 		XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
 		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sentencepiece.bpe.model"; sourceTree = "<group>"; };
+		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
+		XLMR0005000000000000000002 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "tokenizer.json"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -316,6 +320,8 @@
 				CBAEB83EFDE545077FC75F28 /* DistilBertNER_quantized.mlpackage */,
 				XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */,
 				XLMR0003000000000000000002 /* sentencepiece.bpe.model */,
+				XLMR0004000000000000000002 /* xlmr_vocab.json */,
+				XLMR0005000000000000000002 /* tokenizer.json */,
 			);
 			name = BERT;
 			path = BERT;
@@ -479,6 +485,8 @@
 				B09C1A749EA1275331CACB28 /* DistilBertNER_quantized.mlpackage in Resources */,
 				XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */,
 				XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */,
+				XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */,
+				XLMR0005000000000000000001 /* tokenizer.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -70,11 +70,12 @@ class XLMRobertaNERService: ObservableObject {
     private var model: MLModel?
     private var tokenizer: SentencePieceTokenizer?
 
-    // XLM-R special tokens (different from BERT!)
+    // XLM-R special tokens (from HuggingFace tokenizer)
     private let clsTokenId = 0      // <s>
     private let sepTokenId = 2      // </s>
     private let padTokenId = 1      // <pad>
     private let unkTokenId = 3      // <unk>
+    private let vocabSizeExpected = 250002  // Full XLM-R vocab with special tokens
 
     // MARK: - Initialization
 
@@ -448,23 +449,33 @@ class XLMRobertaNERService: ObservableObject {
         return result
     }
 
-    /// Load SentencePiece tokenizer
+    /// Load SentencePiece tokenizer with vocabulary JSON
     private func loadTokenizer() throws {
-        // Look for sentencepiece model in bundle
-        guard let spmURL = Bundle.main.url(forResource: "sentencepiece.bpe", withExtension: "model") else {
-            // Fall back to tokenizer directory
-            if let tokenizerDir = Bundle.main.url(forResource: "tokenizer", withExtension: nil),
-               let spmPath = try? FileManager.default.contentsOfDirectory(at: tokenizerDir, includingPropertiesForKeys: nil)
-                .first(where: { $0.pathExtension == "model" }) {
-                tokenizer = try SentencePieceTokenizer(modelPath: spmPath)
-                print("XLMRobertaNERService: Loaded SentencePiece tokenizer from tokenizer directory")
-                return
-            }
-            throw AppError.localLLMModelLoadFailed("SentencePiece model not found")
+        // Primary: look for xlmr_vocab.json in bundle
+        if let vocabURL = Bundle.main.url(forResource: "xlmr_vocab", withExtension: "json") {
+            tokenizer = try SentencePieceTokenizer(modelPath: vocabURL)
+            print("XLMRobertaNERService: Loaded tokenizer from xlmr_vocab.json")
+            return
         }
 
-        tokenizer = try SentencePieceTokenizer(modelPath: spmURL)
-        print("XLMRobertaNERService: Loaded SentencePiece tokenizer")
+        // Fallback: look in BERT resources directory
+        if let bertDir = Bundle.main.url(forResource: "BERT", withExtension: nil) {
+            let vocabPath = bertDir.appendingPathComponent("xlmr_vocab.json")
+            if FileManager.default.fileExists(atPath: vocabPath.path) {
+                tokenizer = try SentencePieceTokenizer(modelPath: vocabPath)
+                print("XLMRobertaNERService: Loaded tokenizer from BERT/xlmr_vocab.json")
+                return
+            }
+        }
+
+        // Fallback: look for sentencepiece model (tokenizer will look for JSON in same directory)
+        if let spmURL = Bundle.main.url(forResource: "sentencepiece.bpe", withExtension: "model") {
+            tokenizer = try SentencePieceTokenizer(modelPath: spmURL)
+            print("XLMRobertaNERService: Loaded tokenizer via SentencePiece model path")
+            return
+        }
+
+        throw AppError.localLLMModelLoadFailed("XLM-R vocabulary file not found (xlmr_vocab.json)")
     }
 
     /// Create MLMultiArray from Int array
@@ -904,20 +915,41 @@ private struct XLMREntity {
 
 // MARK: - SentencePiece Tokenizer
 
-/// SentencePiece tokenizer for XLM-RoBERTa
-/// Note: This is a placeholder. In production, use swift-transformers package
-/// or implement native SentencePiece binding.
+/// SentencePiece tokenizer for XLM-RoBERTa using vocabulary JSON
 class SentencePieceTokenizer {
 
-    private let modelPath: URL
     private var vocab: [String: Int] = [:]
-    private var reverseVocab: [Int: String] = [:]
+    private let unkTokenId: Int
+    private let wordPrefix = "▁"  // Unicode U+2581
 
     init(modelPath: URL) throws {
-        self.modelPath = modelPath
-        // TODO: Load actual SentencePiece model
-        // For now, fall back to simple whitespace tokenization
-        print("SentencePieceTokenizer: Initialized with model at \(modelPath)")
+        // Try to load vocabulary JSON (xlmr_vocab.json)
+        let vocabURL: URL
+        if modelPath.pathExtension == "json" {
+            vocabURL = modelPath
+        } else {
+            // Look for vocab JSON in same directory
+            let directory = modelPath.deletingLastPathComponent()
+            vocabURL = directory.appendingPathComponent("xlmr_vocab.json")
+        }
+
+        guard FileManager.default.fileExists(atPath: vocabURL.path) else {
+            throw NSError(domain: "SentencePieceTokenizer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Vocabulary file not found at \(vocabURL.path)"])
+        }
+
+        let data = try Data(contentsOf: vocabURL)
+        vocab = try JSONDecoder().decode([String: Int].self, from: data)
+
+        // Find UNK token ID (should be 3 for XLM-R)
+        unkTokenId = vocab["<unk>"] ?? 3
+
+        print("SentencePieceTokenizer: Loaded \(vocab.count) vocabulary entries")
+
+        // Verify special tokens
+        let clsId = vocab["<s>"] ?? -1
+        let sepId = vocab["</s>"] ?? -1
+        let padId = vocab["<pad>"] ?? -1
+        print("SentencePieceTokenizer: Special tokens - <s>=\(clsId), </s>=\(sepId), <pad>=\(padId), <unk>=\(unkTokenId)")
     }
 
     /// Tokenize text and return (inputIds, attentionMask, tokenToCharMapping)
@@ -933,21 +965,17 @@ class SentencePieceTokenizer {
         var attentionMask: [Int] = [1]
         var tokenToChar: [(Int, Int)] = [(-1, -1)]  // CLS has no char mapping
 
-        // Simple word-based tokenization (placeholder for SentencePiece)
-        // In production, use actual SentencePiece tokenization
-        let words = tokenizeWords(text: text)
+        // Tokenize using BPE with word prefix
+        let tokens = bpeTokenize(text: text)
 
-        for (word, charStart, charEnd) in words {
+        for token in tokens {
             if inputIds.count >= maxLength - 1 {
                 break
             }
 
-            // For now, use a simple hash-based token ID (placeholder)
-            let tokenId = abs(word.hashValue % 250000) + 4  // Avoid special tokens 0-3
-
-            inputIds.append(tokenId)
+            inputIds.append(token.id)
             attentionMask.append(1)
-            tokenToChar.append((charStart, charEnd))
+            tokenToChar.append((token.charStart, token.charEnd))
         }
 
         // Add SEP token
@@ -965,33 +993,115 @@ class SentencePieceTokenizer {
         return (inputIds, attentionMask, tokenToChar)
     }
 
-    /// Split text into words with character positions
-    private func tokenizeWords(text: String) -> [(String, Int, Int)] {
-        var words: [(String, Int, Int)] = []
-        var currentWord = ""
-        var wordStart = 0
+    /// Token with ID and character positions
+    private struct Token {
+        let piece: String
+        let id: Int
+        let charStart: Int
+        let charEnd: Int
+    }
 
-        for (index, char) in text.enumerated() {
-            if char.isWhitespace || char.isPunctuation {
-                if !currentWord.isEmpty {
-                    words.append((currentWord, wordStart, index))
-                    currentWord = ""
+    /// BPE tokenize text into subword tokens
+    private func bpeTokenize(text: String) -> [Token] {
+        var tokens: [Token] = []
+        let chars = Array(text)
+        var i = 0
+
+        while i < chars.count {
+            // Skip whitespace but track position
+            if chars[i].isWhitespace {
+                i += 1
+                continue
+            }
+
+            // Find the end of this word (until whitespace)
+            var wordEnd = i
+            while wordEnd < chars.count && !chars[wordEnd].isWhitespace {
+                wordEnd += 1
+            }
+
+            // Extract word
+            let wordStart = i
+            let word = String(chars[wordStart..<wordEnd])
+
+            // Tokenize this word with BPE
+            let wordTokens = tokenizeWord(word, charOffset: wordStart, isWordStart: true)
+            tokens.append(contentsOf: wordTokens)
+
+            i = wordEnd
+        }
+
+        return tokens
+    }
+
+    /// Tokenize a single word using greedy BPE matching
+    private func tokenizeWord(_ word: String, charOffset: Int, isWordStart: Bool) -> [Token] {
+        var tokens: [Token] = []
+        var remaining = word
+        var currentOffset = charOffset
+        var isFirst = isWordStart
+
+        while !remaining.isEmpty {
+            // Try to find the longest matching piece
+            var found = false
+
+            // For first subword of a word, try with ▁ prefix
+            let prefixedRemaining = isFirst ? (wordPrefix + remaining) : remaining
+
+            // Try longest to shortest
+            for length in stride(from: prefixedRemaining.count, through: 1, by: -1) {
+                let endIndex = prefixedRemaining.index(prefixedRemaining.startIndex, offsetBy: length)
+                let candidate = String(prefixedRemaining[prefixedRemaining.startIndex..<endIndex])
+
+                if let tokenId = vocab[candidate] {
+                    // Found a match
+                    let actualLength = isFirst ? (length - 1) : length  // Subtract ▁ prefix length
+                    let pieceEndOffset = currentOffset + actualLength
+
+                    tokens.append(Token(
+                        piece: candidate,
+                        id: tokenId,
+                        charStart: currentOffset,
+                        charEnd: pieceEndOffset
+                    ))
+
+                    // Advance
+                    if actualLength > 0 {
+                        let advanceIndex = remaining.index(remaining.startIndex, offsetBy: actualLength)
+                        remaining = String(remaining[advanceIndex...])
+                        currentOffset = pieceEndOffset
+                    } else {
+                        // Edge case: only matched the prefix itself
+                        break
+                    }
+
+                    isFirst = false
+                    found = true
+                    break
                 }
-                if char.isPunctuation {
-                    words.append((String(char), index, index + 1))
-                }
-            } else {
-                if currentWord.isEmpty {
-                    wordStart = index
-                }
-                currentWord.append(char)
+            }
+
+            if !found {
+                // No match found - use UNK token for first character and continue
+                let firstChar = String(remaining.prefix(1))
+
+                // Try the character with prefix if first
+                let charPiece = isFirst ? (wordPrefix + firstChar) : firstChar
+                let tokenId = vocab[charPiece] ?? vocab[firstChar] ?? unkTokenId
+
+                tokens.append(Token(
+                    piece: charPiece,
+                    id: tokenId,
+                    charStart: currentOffset,
+                    charEnd: currentOffset + 1
+                ))
+
+                remaining = String(remaining.dropFirst())
+                currentOffset += 1
+                isFirst = false
             }
         }
 
-        if !currentWord.isEmpty {
-            words.append((currentWord, wordStart, text.count))
-        }
-
-        return words
+        return tokens
     }
 }
