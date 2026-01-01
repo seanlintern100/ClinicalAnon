@@ -314,6 +314,26 @@ struct RedactPhaseView: View {
                             .help("Scan using BERT NER model for names, organizations, and locations")
                         }
 
+                        // XLM-R NER Scan button (multilingual)
+                        if XLMRobertaNERService.shared.isAvailable {
+                            Button(action: { Task { await viewModel.runXLMRNERScan() } }) {
+                                HStack(spacing: DesignSystem.Spacing.xs) {
+                                    if viewModel.isRunningXLMRNER {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .frame(width: 14, height: 14)
+                                    } else {
+                                        Image(systemName: "globe.americas.fill")
+                                    }
+                                    Text("XLM-R Scan")
+                                }
+                                .font(DesignSystem.Typography.body)
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(viewModel.isRunningXLMRNER)
+                            .help("Scan using XLM-RoBERTa multilingual NER for foreign names (100+ languages)")
+                        }
+
                         Button(action: { viewModel.continueToNextPhase() }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
                                 Text("Continue")
@@ -416,6 +436,18 @@ private struct RedactEntitySidebar: View {
                             )
                         }
 
+                        // Show XLM-R NER section if there are XLM-R findings
+                        if !viewModel.xlmrNERFindings.isEmpty {
+                            EntityTypeSection(
+                                title: "XLM-R NER Findings",
+                                icon: "globe.americas.fill",
+                                color: .teal,
+                                entities: viewModel.xlmrNERFindings,
+                                viewModel: viewModel,
+                                isAISection: true  // Reuse AI section styling
+                            )
+                        }
+
                         // Group entities by type
                         ForEach(groupedEntityTypes, id: \.self) { entityType in
                             let entities = entitiesForType(entityType)
@@ -460,12 +492,13 @@ private struct RedactEntitySidebar: View {
         [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
     }
 
-    /// Get entities for a specific type (excluding AI, Deep Scan, and BERT findings to avoid duplicates)
+    /// Get entities for a specific type (excluding AI, Deep Scan, BERT, and XLM-R findings to avoid duplicates)
     private func entitiesForType(_ type: EntityType) -> [Entity] {
         let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
         let deepScanIds = Set(viewModel.deepScanFindings.map { $0.id })
         let bertIds = Set(viewModel.bertNERFindings.map { $0.id })
-        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) && !deepScanIds.contains($0.id) && !bertIds.contains($0.id) }
+        let xlmrIds = Set(viewModel.xlmrNERFindings.map { $0.id })
+        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) && !deepScanIds.contains($0.id) && !bertIds.contains($0.id) && !xlmrIds.contains($0.id) }
     }
 }
 

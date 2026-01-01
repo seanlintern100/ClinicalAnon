@@ -32,6 +32,7 @@ class SwiftNERService {
             NZAddressRecognizer(),         // NZ addresses and suburbs
             MaoriNameRecognizer(),         // NZ-specific Māori names
             RelationshipNameExtractor(),   // Extract names from "sister Margaret"
+            TitleNameRecognizer(),         // Extract names from "Mr Ronald", "Dr Smith"
             AppleNERRecognizer()           // Apple's baseline NER (names) last
         ]
 

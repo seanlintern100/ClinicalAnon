@@ -126,3 +126,7 @@ temp/
 !.gitignore
 !.claude.md
 !README.md
+
+# Large ML models (regenerate with scripts/convert_xlmr_to_coreml.py)
+ClinicalAnon/Resources/BERT/XLMRobertaNER.mlpackage/
+ClinicalAnon/Resources/BERT/tokenizer/

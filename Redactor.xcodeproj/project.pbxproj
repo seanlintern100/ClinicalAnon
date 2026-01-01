@@ -13,6 +13,7 @@
 		0703EA34A5DE292DBF3FF3D5 /* NZMedicalIDRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EE4A37A7BD54B6C0B78ECE /* NZMedicalIDRecognizer.swift */; };
 		07D7D707919079AFA4C8F51B /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA72D874BD6FB4834486B29F /* MainContentView.swift */; };
 		09AB519352E1961CF8BF9C2D /* RelationshipNameExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8438D6480E77924BABFCA894 /* RelationshipNameExtractor.swift */; };
+		0A1B2C3D4E5F6A7B8C9D0E1F /* TitleNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */; };
 		0E085DEAC7C367FC64D14900 /* EntityMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */; };
 		1018969E6E6D810477650A46 /* SwiftNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9741FCB21B765FA21672D641 /* SwiftNERService.swift */; };
 		15D511386E0C9D4F4CFEC7FC /* AppleNERRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */; };
@@ -23,6 +24,9 @@
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */; };
 		26F2EED833E35BEF64B2D0C3 /* BertNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D8DAF36AB2778D05B5F740 /* BertNERService.swift */; };
+		XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = XLMR0001000000000000000002 /* XLMRobertaNERService.swift */; };
+		XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */; };
+		XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0003000000000000000002 /* sentencepiece.bpe.model */; };
 		2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */; };
 		2FA4EBE090F118C6234E6905 /* MaoriNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */; };
 		4035D0CC83F920E213197D5E /* AnonymizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */; };
@@ -111,6 +115,7 @@
 		8096B7BFDB5397D700CDA6FD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationEngine.swift; sourceTree = "<group>"; };
 		8438D6480E77924BABFCA894 /* RelationshipNameExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipNameExtractor.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleNameRecognizer.swift; sourceTree = "<group>"; };
 		846F1B468F8E9926702E98A0 /* AppError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
 		86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightedTextView.swift; sourceTree = "<group>"; };
 		87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalAnonApp.swift; sourceTree = "<group>"; };
@@ -158,6 +163,9 @@
 		F6A7B8C9D0E1F2A3B4C5D6E7 /* HighlightCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightCacheManager.swift; sourceTree = "<group>"; };
 		SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtensions.swift; sourceTree = "<group>"; };
+		XLMR0001000000000000000002 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
+		XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
+		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sentencepiece.bpe.model"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -306,6 +314,8 @@
 			children = (
 				B98B9AB53E1655DEA4FCCDE2 /* vocab.txt */,
 				CBAEB83EFDE545077FC75F28 /* DistilBertNER_quantized.mlpackage */,
+				XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */,
+				XLMR0003000000000000000002 /* sentencepiece.bpe.model */,
 			);
 			name = BERT;
 			path = BERT;
@@ -329,6 +339,7 @@
 				374312736FC628C9B01D43D2 /* AWS */,
 				D90BD4EEC63338BFD6F5017D /* Recognizers */,
 				B5D8DAF36AB2778D05B5F740 /* BertNERService.swift */,
+				XLMR0001000000000000000002 /* XLMRobertaNERService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -346,6 +357,7 @@
 				E8EE4A37A7BD54B6C0B78ECE /* NZMedicalIDRecognizer.swift */,
 				5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */,
 				8438D6480E77924BABFCA894 /* RelationshipNameExtractor.swift */,
+				1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */,
 			);
 			path = Recognizers;
 			sourceTree = "<group>";
@@ -465,6 +477,8 @@
 				C459430DD92E2C888FA69914 /* SourceSans3-SemiBold.ttf in Resources */,
 				443E7E96061D0F95480E8983 /* vocab.txt in Resources */,
 				B09C1A749EA1275331CACB28 /* DistilBertNER_quantized.mlpackage in Resources */,
+				XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */,
+				XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -516,6 +530,7 @@
 				51E1B452410FB4281532D60C /* PromptBuilder.swift in Sources */,
 				73FA8AEC588FF517EBDB8D0B /* RedactPhaseView.swift in Sources */,
 				09AB519352E1961CF8BF9C2D /* RelationshipNameExtractor.swift in Sources */,
+				0A1B2C3D4E5F6A7B8C9D0E1F /* TitleNameRecognizer.swift in Sources */,
 				8A4431B706F76840302FA1D9 /* RestorePhaseView.swift in Sources */,
 				7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */,
 				1018969E6E6D810477650A46 /* SwiftNERService.swift in Sources */,
@@ -532,6 +547,7 @@
 				E4F5A6B7C8D9E0F1A2B3C4D5 /* RestorePhaseState.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* HighlightCacheManager.swift in Sources */,
 				26F2EED833E35BEF64B2D0C3 /* BertNERService.swift in Sources */,
+				XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

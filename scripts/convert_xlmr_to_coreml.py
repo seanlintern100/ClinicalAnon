@@ -1,22 +1,46 @@
 #!/usr/bin/env python3
 """
 Convert XLM-RoBERTa NER model to CoreML format.
-
-Usage:
-    pip install transformers coremltools torch onnx onnxruntime
-    python convert_xlmr_to_coreml.py
-
-Output:
-    - XLMRobertaNER.mlpackage (CoreML model)
-    - sentencepiece.bpe.model (tokenizer)
-    - config.json (label mapping)
 """
 
 import os
 import json
 import shutil
+import ssl
 from pathlib import Path
 
+# Disable SSL verification globally (for Zscaler)
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ['CURL_CA_BUNDLE'] = ''
+os.environ['REQUESTS_CA_BUNDLE'] = ''
+os.environ['HF_HUB_DISABLE_SSL_VERIFY'] = '1'
+
+# Monkey-patch requests to disable SSL verification
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
+
+class SSLAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+# Patch the default session
+old_request = requests.Session.request
+def new_request(self, *args, **kwargs):
+    kwargs['verify'] = False
+    return old_request(self, *args, **kwargs)
+requests.Session.request = new_request
+
+# Also patch urllib3
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Now import the ML libraries
+import numpy as np
 import torch
 import coremltools as ct
 from transformers import AutoModelForTokenClassification, AutoTokenizer
@@ -31,7 +55,8 @@ def main():
 
     # Load model and tokenizer
     model = AutoModelForTokenClassification.from_pretrained(MODEL_NAME)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    # Use slow tokenizer to avoid fast tokenizer bugs
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=False)
 
     model.eval()
 
@@ -51,10 +76,23 @@ def main():
 
     print(f"Input shape: {inputs['input_ids'].shape}")
 
+    # Wrap model to only return logits tensor
+    class LogitsOnlyWrapper(torch.nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+
+        def forward(self, input_ids, attention_mask):
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            return outputs.logits
+
+    wrapped_model = LogitsOnlyWrapper(model)
+    wrapped_model.eval()
+
     # Trace the model
     print("Tracing model...")
     traced_model = torch.jit.trace(
-        model,
+        wrapped_model,
         (inputs["input_ids"], inputs["attention_mask"]),
         strict=False
     )
@@ -68,12 +106,12 @@ def main():
             ct.TensorType(
                 name="input_ids",
                 shape=(1, MAX_SEQ_LENGTH),
-                dtype=ct.int32
+                dtype=np.int32
             ),
             ct.TensorType(
                 name="attention_mask",
                 shape=(1, MAX_SEQ_LENGTH),
-                dtype=ct.int32
+                dtype=np.int32
             ),
         ],
         outputs=[
@@ -88,6 +126,9 @@ def main():
     mlmodel.short_description = "XLM-RoBERTa NER for 100+ languages"
     mlmodel.version = "1.0"
 
+    # Ensure output directory exists
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     # Save CoreML model
     output_path = OUTPUT_DIR / "XLMRobertaNER.mlpackage"
     print(f"Saving to: {output_path}")
@@ -95,17 +136,19 @@ def main():
 
     # Copy tokenizer files
     print("Copying tokenizer files...")
-    tokenizer.save_pretrained(str(OUTPUT_DIR / "tokenizer"))
+    tokenizer_dir = OUTPUT_DIR / "tokenizer"
+    tokenizer.save_pretrained(str(tokenizer_dir))
 
     # The SentencePiece model file
-    spm_file = Path(tokenizer.vocab_file)
-    if spm_file.exists():
-        shutil.copy(spm_file, OUTPUT_DIR / "sentencepiece.bpe.model")
-        print(f"Copied: sentencepiece.bpe.model")
+    if hasattr(tokenizer, 'vocab_file') and tokenizer.vocab_file:
+        spm_file = Path(tokenizer.vocab_file)
+        if spm_file.exists():
+            shutil.copy(spm_file, OUTPUT_DIR / "sentencepiece.bpe.model")
+            print(f"Copied: sentencepiece.bpe.model")
 
     # Save label config
     config = {
-        "id2label": id2label,
+        "id2label": {str(k): v for k, v in id2label.items()},
         "label2id": {v: k for k, v in id2label.items()},
         "max_seq_length": MAX_SEQ_LENGTH,
         "vocab_size": tokenizer.vocab_size,

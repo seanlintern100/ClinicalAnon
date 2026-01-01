@@ -33,14 +33,14 @@ class XLMRobertaNERService: ObservableObject {
     // BIO label mapping from the model (Davlan/xlm-roberta-base-ner-hrl)
     private let id2label: [Int: String] = [
         0: "O",
-        1: "B-PER",
-        2: "I-PER",
-        3: "B-ORG",
-        4: "I-ORG",
-        5: "B-LOC",
-        6: "I-LOC",
-        7: "B-DATE",
-        8: "I-DATE"
+        1: "B-DATE",
+        2: "I-DATE",
+        3: "B-PER",
+        4: "I-PER",
+        5: "B-ORG",
+        6: "I-ORG",
+        7: "B-LOC",
+        8: "I-LOC"
     ]
 
     // MARK: - Published Properties

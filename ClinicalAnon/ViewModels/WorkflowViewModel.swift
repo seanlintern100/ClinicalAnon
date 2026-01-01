@@ -165,6 +165,10 @@ class WorkflowViewModel: ObservableObject {
     var isRunningBertNER: Bool { redactState.isRunningBertNER }
     var bertNERError: String? { redactState.bertNERError }
 
+    var xlmrNERFindings: [Entity] { redactState.xlmrNERFindings }
+    var isRunningXLMRNER: Bool { redactState.isRunningXLMRNER }
+    var xlmrNERError: String? { redactState.xlmrNERError }
+
     var cachedRedactedText: String { redactState.cachedRedactedText }
 
     var prefilledText: String? {
@@ -383,6 +387,20 @@ class WorkflowViewModel: ObservableObject {
 
     func runBertNERScan() async {
         await redactState.runBertNERScan()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
+    }
+
+    func runXLMRNERScan() async {
+        await redactState.runXLMRNERScan()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
