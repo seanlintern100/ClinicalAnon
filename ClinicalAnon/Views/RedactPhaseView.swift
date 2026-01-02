@@ -328,7 +328,7 @@ struct RedactPhaseView: View {
                         // Add More Docs button
                         Button(action: { viewModel.saveCurrentDocumentAndAddMore() }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
-                                Image(systemName: "plus.doc")
+                                Image(systemName: "doc.badge.plus")
                                 Text("Add More Docs")
                             }
                             .font(DesignSystem.Typography.body)

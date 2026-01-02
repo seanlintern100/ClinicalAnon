@@ -60,7 +60,7 @@ class WorkflowViewModel: ObservableObject {
         // Configure callbacks
         improveState.getRedactedText = { [weak self] in
             guard let self = self else { return "" }
-            // Use formatted source documents if available, otherwise fall back to current redacted text
+            // Use source documents if available, otherwise fall back to current redacted text
             if !self.improveState.sourceDocuments.isEmpty {
                 return self.improveState.formatSourceDocumentsForAI()
             }
@@ -108,48 +108,30 @@ class WorkflowViewModel: ObservableObject {
     }
 
     // MARK: - Bindable Properties (need @Published for SwiftUI $ bindings)
-    // These sync with state objects via didSet, wrapped in Task to avoid "Publishing changes from within view updates" warning
+    // These sync with state objects via didSet
 
     @Published var inputText: String = "" {
-        didSet {
-            let value = inputText
-            Task { @MainActor in redactState.inputText = value }
-        }
+        didSet { redactState.inputText = inputText }
     }
 
     @Published var showingAddCustom: Bool = false {
-        didSet {
-            let value = showingAddCustom
-            Task { @MainActor in redactState.showingAddCustom = value }
-        }
+        didSet { redactState.showingAddCustom = showingAddCustom }
     }
 
     @Published var refinementInput: String = "" {
-        didSet {
-            let value = refinementInput
-            Task { @MainActor in improveState.refinementInput = value }
-        }
+        didSet { improveState.refinementInput = refinementInput }
     }
 
     @Published var customInstructions: String = "" {
-        didSet {
-            let value = customInstructions
-            Task { @MainActor in improveState.customInstructions = value }
-        }
+        didSet { improveState.customInstructions = customInstructions }
     }
 
     @Published var showPromptEditor: Bool = false {
-        didSet {
-            let value = showPromptEditor
-            Task { @MainActor in improveState.showPromptEditor = value }
-        }
+        didSet { improveState.showPromptEditor = showPromptEditor }
     }
 
     @Published var showAddCustomCategory: Bool = false {
-        didSet {
-            let value = showAddCustomCategory
-            Task { @MainActor in improveState.showAddCustomCategory = value }
-        }
+        didSet { improveState.showAddCustomCategory = showAddCustomCategory }
     }
 
     // MARK: - Forwarded Properties (Redact Phase)
@@ -310,8 +292,6 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Redact Phase Actions
 
     func analyze() async {
-        // Ensure inputText is synced before analyzing (since didSet is now async)
-        redactState.inputText = inputText
         await redactState.analyze()
 
         // Rebuild cache using strong reference to cacheManager

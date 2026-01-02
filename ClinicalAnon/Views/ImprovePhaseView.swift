@@ -409,7 +409,10 @@ struct ImprovePhaseView: View {
                     .font(DesignSystem.Typography.body)
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(viewModel.displayedRedactedText.isEmpty || viewModel.selectedDocumentType == nil)
+                .disabled(
+                    (viewModel.displayedRedactedText.isEmpty && viewModel.improveState.sourceDocuments.isEmpty)
+                    || viewModel.selectedDocumentType == nil
+                )
             } else {
                 // Continue button
                 Button(action: { viewModel.continueToNextPhase() }) {
@@ -688,14 +691,8 @@ private struct HighlightedLine: View {
     let isChanged: Bool
 
     var body: some View {
-        Group {
-            if let attributedString = try? AttributedString(markdown: line.isEmpty ? " " : line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-                Text(attributedString)
-            } else {
-                Text(line.isEmpty ? " " : line)
-            }
-        }
-        .font(.system(size: 14))
+        // Use custom MarkdownParser to handle headers (##) and inline formatting
+        Text(MarkdownParser.parseToAttributedString(line.isEmpty ? " " : line))
         .foregroundColor(DesignSystem.Colors.textPrimary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)

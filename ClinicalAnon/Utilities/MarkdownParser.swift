@@ -206,8 +206,8 @@ struct MarkdownParser {
             return nil
         }
 
-        let fullRangeLower = text.index(startIndex, offsetBy: text[startIndex..<text.endIndex].distance(from: searchText.startIndex, to: matchRange.lowerBound))
-        let fullRangeUpper = text.index(startIndex, offsetBy: text[startIndex..<text.endIndex].distance(from: searchText.startIndex, to: matchRange.upperBound))
+        let fullRangeLower = text.index(startIndex, offsetBy: searchText.distance(from: searchText.startIndex, to: matchRange.lowerBound))
+        let fullRangeUpper = text.index(startIndex, offsetBy: searchText.distance(from: searchText.startIndex, to: matchRange.upperBound))
 
         return PatternMatch(range: fullRangeLower..<fullRangeUpper, content: content)
     }
