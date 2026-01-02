@@ -234,6 +234,35 @@ class WorkflowViewModel: ObservableObject {
     var allEntities: [Entity] { redactState.allEntities }
     var activeEntities: [Entity] { redactState.activeEntities }
 
+    /// All entities for restore display - combines sourceDocuments + current active entities
+    /// Deduplicates by originalText to avoid showing same entity multiple times
+    var restoredEntities: [Entity] {
+        var seen = Set<String>()
+        var result: [Entity] = []
+
+        // First add entities from source documents (multi-doc flow)
+        for doc in improveState.sourceDocuments {
+            for entity in doc.entities {
+                let key = entity.originalText.lowercased()
+                if !seen.contains(key) {
+                    seen.insert(key)
+                    result.append(entity)
+                }
+            }
+        }
+
+        // Then add current active entities (single-doc flow or unsaved current doc)
+        for entity in redactState.activeEntities {
+            let key = entity.originalText.lowercased()
+            if !seen.contains(key) {
+                seen.insert(key)
+                result.append(entity)
+            }
+        }
+
+        return result
+    }
+
     func isEntityExcluded(_ entity: Entity) -> Bool {
         redactState.isEntityExcluded(entity)
     }

@@ -272,7 +272,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
 
     static let summarise = DocumentType(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000005")!,
-        name: "Summarise",
+        name: "Summary",
         promptTemplate: """
             You are a clinical summarisation assistant. Create a clear, meaningful summary of the provided text.
 

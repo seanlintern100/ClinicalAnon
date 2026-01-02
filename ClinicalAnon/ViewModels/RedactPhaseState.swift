@@ -114,7 +114,10 @@ class RedactPhaseState: ObservableObject {
 
     /// Dynamically generated redacted text based on active entities
     var displayedRedactedText: String {
-        // Return cached value - cache is updated after analysis and entity changes
+        // Auto-refresh cache if needed
+        if redactedTextNeedsUpdate {
+            updateRedactedTextCache()
+        }
         return cachedRedactedText
     }
 

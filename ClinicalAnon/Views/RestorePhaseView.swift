@@ -163,7 +163,7 @@ struct RestorePhaseView: View {
             // Entity list (reversed: placeholder → original)
             ScrollView {
                 LazyVStack(spacing: DesignSystem.Spacing.xs) {
-                    ForEach(viewModel.activeEntities) { entity in
+                    ForEach(viewModel.restoredEntities) { entity in
                         RestoredEntityRow(entity: entity)
                     }
                 }
@@ -176,7 +176,7 @@ struct RestorePhaseView: View {
             HStack {
                 Spacer()
 
-                Text("\(viewModel.activeEntities.count) \(viewModel.activeEntities.count == 1 ? "entity" : "entities") restored")
+                Text("\(viewModel.restoredEntities.count) \(viewModel.restoredEntities.count == 1 ? "entity" : "entities") restored")
                     .font(DesignSystem.Typography.caption)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
 
