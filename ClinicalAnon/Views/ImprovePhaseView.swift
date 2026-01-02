@@ -28,8 +28,13 @@ struct ImprovePhaseView: View {
 
             Divider().opacity(0.3)
 
-            // Two-pane content: Document | Chat
+            // Content: Sources sidebar (if multiple docs) | Document | Chat
             HStack(spacing: 0) {
+                // Only show sidebar if multiple source docs
+                if viewModel.improveState.sourceDocuments.count > 1 {
+                    sourceDocumentsSidebar
+                    Divider().opacity(0.3)
+                }
                 documentPane
                 chatPane
             }
@@ -225,6 +230,64 @@ struct ImprovePhaseView: View {
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
         .frame(minWidth: 280, idealWidth: 350, maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Source Documents Sidebar
+
+    private var sourceDocumentsSidebar: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Sources (\(viewModel.improveState.sourceDocuments.count))")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+            }
+            .frame(height: 44)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+
+            Divider().opacity(0.15)
+
+            // Document list
+            ScrollView {
+                LazyVStack(spacing: DesignSystem.Spacing.small) {
+                    ForEach(viewModel.improveState.sourceDocuments) { doc in
+                        SourceDocumentRow(
+                            document: doc,
+                            isSelected: viewModel.improveState.selectedDocumentId == doc.id,
+                            onSelect: { viewModel.improveState.selectedDocumentId = doc.id },
+                            onUpdateDescription: { desc in
+                                viewModel.updateSourceDocumentDescription(id: doc.id, description: desc)
+                            }
+                        )
+                    }
+                }
+                .padding(DesignSystem.Spacing.small)
+            }
+
+            // Preview of selected document
+            if let selected = viewModel.improveState.selectedDocument {
+                Divider().opacity(0.15)
+
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Preview")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                    ScrollView {
+                        Text(selected.redactedText)
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 150)
+                }
+                .padding(DesignSystem.Spacing.small)
+            }
+        }
+        .frame(width: 220)
+        .background(DesignSystem.Colors.surface)
     }
 
     // MARK: - Chat History
@@ -496,6 +559,86 @@ private struct ChatMessageView: View {
             if !isUser {
                 Spacer(minLength: 40)  // Push AI messages to left
             }
+        }
+    }
+}
+
+// MARK: - Source Document Row
+
+private struct SourceDocumentRow: View {
+    let document: SourceDocument
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onUpdateDescription: (String) -> Void
+
+    @State private var isEditingDescription: Bool = false
+    @State private var editedDescription: String = ""
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 12))
+                        .foregroundColor(isSelected ? .white : DesignSystem.Colors.primaryTeal)
+
+                    Text(document.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+
+                    Spacer()
+
+                    // Edit description button
+                    Button(action: {
+                        editedDescription = document.description
+                        isEditingDescription = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(isSelected ? .white.opacity(0.7) : DesignSystem.Colors.textSecondary)
+                }
+
+                if !document.description.isEmpty {
+                    Text(document.description)
+                        .font(.system(size: 10))
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Text("\(document.entities.count) entities")
+                    .font(.system(size: 9))
+                    .foregroundColor(isSelected ? .white.opacity(0.6) : DesignSystem.Colors.textSecondary.opacity(0.7))
+            }
+            .padding(DesignSystem.Spacing.small)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.background)
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isEditingDescription) {
+            VStack(spacing: DesignSystem.Spacing.small) {
+                Text("Document Description")
+                    .font(DesignSystem.Typography.subheading)
+
+                TextField("Brief description...", text: $editedDescription)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 200)
+
+                HStack {
+                    Button("Cancel") { isEditingDescription = false }
+                        .buttonStyle(SecondaryButtonStyle())
+
+                    Button("Save") {
+                        onUpdateDescription(editedDescription)
+                        isEditingDescription = false
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                }
+            }
+            .padding()
         }
     }
 }

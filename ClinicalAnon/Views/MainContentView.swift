@@ -45,7 +45,7 @@ struct MainContentView: View {
             HStack {
                 Spacer()
 
-                if viewModel.result != nil || viewModel.hasGeneratedOutput {
+                if viewModel.result != nil || viewModel.hasGeneratedOutput || !viewModel.sourceDocuments.isEmpty || !viewModel.inputText.isEmpty {
                     Button(action: { viewModel.clearAll() }) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
                             Image(systemName: "arrow.counterclockwise")

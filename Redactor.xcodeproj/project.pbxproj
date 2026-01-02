@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		SRCDOC000100000000000001 /* SourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRCDOC000100000000000002 /* SourceDocument.swift */; };
 		047A4256A36B91FEE8806193 /* SourceSans3-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */; };
 		0688AF41B2C3D4E5F6A7B8C9 /* AllNumbersRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */; };
 		0699BF52C3D4E5F6A7B8C9D1 /* EmailRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */; };
@@ -94,6 +95,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		SRCDOC000100000000000002 /* SourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDocument.swift; sourceTree = "<group>"; };
 		01915D69A51DDDEA81FD955A /* EntityType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityType.swift; sourceTree = "<group>"; };
 		06463A5E2CDA5C7A80638837 /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
 		0930F3E57AF670171CFA140C /* DateRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateRecognizer.swift; sourceTree = "<group>"; };
@@ -275,6 +277,7 @@
 				C0FAD264CF63B5F813E89B8B /* Entity.swift */,
 				A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */,
 				01915D69A51DDDEA81FD955A /* EntityType.swift */,
+				SRCDOC000100000000000002 /* SourceDocument.swift */,
 				E39AA02B94C43190B3535E10 /* WorkflowPhase.swift */,
 			);
 			path = Models;
@@ -556,6 +559,7 @@
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* HighlightCacheManager.swift in Sources */,
 				26F2EED833E35BEF64B2D0C3 /* BertNERService.swift in Sources */,
 				XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */,
+				SRCDOC000100000000000001 /* SourceDocument.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

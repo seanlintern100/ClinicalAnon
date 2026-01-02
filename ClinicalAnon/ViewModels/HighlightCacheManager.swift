@@ -152,25 +152,38 @@ class HighlightCacheManager: ObservableObject {
         _ text: String,
         allEntities: [Entity]
     ) -> AttributedString {
-        var attributedString = MarkdownParser.parseToAttributedString(text, baseFont: .systemFont(ofSize: 14))
-        attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
+        // Start with markdown-parsed NSAttributedString for safe UTF-16 index handling
+        let nsAttrString = MarkdownParser.parseToNSAttributedString(text, baseFont: .systemFont(ofSize: 14))
+        let mutableAttrString = NSMutableAttributedString(attributedString: nsAttrString)
+        let nsText = mutableAttrString.string as NSString
 
+        // Set base foreground color
+        mutableAttrString.addAttribute(
+            .foregroundColor,
+            value: NSColor(DesignSystem.Colors.textPrimary),
+            range: NSRange(location: 0, length: nsText.length)
+        )
+
+        // Find and highlight each entity's original text
         for entity in allEntities {
             let originalText = entity.originalText
-            var searchStart = attributedString.startIndex
+            var searchStart = 0
 
-            while searchStart < attributedString.endIndex {
-                let searchRange = searchStart..<attributedString.endIndex
-                if let range = attributedString[searchRange].range(of: originalText, options: [.caseInsensitive]) {
-                    attributedString[range].backgroundColor = NSColor(entity.type.highlightColor)
-                    attributedString[range].foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
-                    searchStart = range.upperBound
-                } else {
+            while searchStart < nsText.length {
+                let searchRange = NSRange(location: searchStart, length: nsText.length - searchStart)
+                let foundRange = nsText.range(of: originalText, options: [.caseInsensitive], range: searchRange)
+
+                if foundRange.location == NSNotFound {
                     break
                 }
+
+                mutableAttrString.addAttribute(.backgroundColor, value: NSColor(entity.type.highlightColor), range: foundRange)
+                mutableAttrString.addAttribute(.foregroundColor, value: NSColor(DesignSystem.Colors.textPrimary), range: foundRange)
+
+                searchStart = foundRange.location + foundRange.length
             }
         }
 
-        return attributedString
+        return AttributedString(mutableAttrString)
     }
 }

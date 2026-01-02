@@ -215,13 +215,132 @@ class SwiftNERService {
             )
         }
 
+        // PHASE 4: Fuzzy matching for name misspellings
+        let fuzzyFindings = findNameMisspellings(in: text, existingNames: existingEntities.filter { $0.type.isPerson })
+
+        // Combine findings
+        let allFindings = newFindings + fuzzyFindings
+
         #if DEBUG
         let elapsed = Date().timeIntervalSince(startTime)
         print("✅ Deep Scan: Completed in \(String(format: "%.2f", elapsed))s")
-        print("   Found \(withAllOccurrences.count) total, \(newFindings.count) new (delta)")
+        print("   Found \(withAllOccurrences.count) total, \(newFindings.count) new (delta), \(fuzzyFindings.count) fuzzy matches")
         #endif
 
-        return newFindings
+        return allFindings
+    }
+
+    // MARK: - Fuzzy Name Matching
+
+    /// Find potential misspellings of known names in text
+    /// Uses Levenshtein distance to find words that are 1-2 edits away from known names
+    private func findNameMisspellings(in text: String, existingNames: [Entity]) -> [PIIFinding] {
+        // Collect unique name strings (first names and full names)
+        var knownNames: Set<String> = []
+        for entity in existingNames {
+            let name = entity.originalText
+            // Only consider names with 4+ characters for fuzzy matching (reduce false positives)
+            if name.count >= 4 {
+                knownNames.insert(name)
+            }
+            // Also add first names from multi-word names
+            let words = name.split(separator: " ")
+            if let firstName = words.first, firstName.count >= 4 {
+                knownNames.insert(String(firstName))
+            }
+        }
+
+        guard !knownNames.isEmpty else { return [] }
+
+        // Extract capitalized words from text as candidates for misspelling check
+        let wordPattern = "\\b[A-Z][a-z]{3,}\\b"  // Capitalized words, 4+ chars
+        guard let regex = try? NSRegularExpression(pattern: wordPattern, options: []) else {
+            return []
+        }
+
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        var findings: [PIIFinding] = []
+        var foundMisspellings: Set<String> = []
+
+        // Already known names (exact matches to skip)
+        let knownLower = Set(knownNames.map { $0.lowercased() })
+
+        for match in matches {
+            let word = nsText.substring(with: match.range)
+            let wordLower = word.lowercased()
+
+            // Skip if already a known name (exact match)
+            if knownLower.contains(wordLower) { continue }
+
+            // Skip if already found this misspelling
+            if foundMisspellings.contains(wordLower) { continue }
+
+            // Skip common words and clinical terms
+            if isCommonWord(word) || isClinicalTerm(word) { continue }
+
+            // Check against each known name
+            for knownName in knownNames {
+                let distance = levenshteinDistance(wordLower, knownName.lowercased())
+
+                // Accept if edit distance is 1-2 (depending on name length)
+                let maxDistance = knownName.count >= 6 ? 2 : 1
+
+                if distance > 0 && distance <= maxDistance {
+                    #if DEBUG
+                    print("  🔍 Fuzzy match: '\(word)' ≈ '\(knownName)' (distance: \(distance))")
+                    #endif
+
+                    findings.append(PIIFinding(
+                        text: word,
+                        suggestedType: .personOther,
+                        reason: "Possible misspelling of '\(knownName)'",
+                        confidence: 0.7
+                    ))
+                    foundMisspellings.insert(wordLower)
+                    break  // Found a match, no need to check other names
+                }
+            }
+        }
+
+        return findings
+    }
+
+    /// Calculate Levenshtein distance between two strings
+    private func levenshteinDistance(_ s1: String, _ s2: String) -> Int {
+        let s1Array = Array(s1)
+        let s2Array = Array(s2)
+        let m = s1Array.count
+        let n = s2Array.count
+
+        // Early termination if difference is too large
+        if abs(m - n) > 2 { return abs(m - n) }
+
+        if m == 0 { return n }
+        if n == 0 { return m }
+
+        // Use two rows instead of full matrix for memory efficiency
+        var prevRow = Array(0...n)
+        var currRow = Array(repeating: 0, count: n + 1)
+
+        for i in 1...m {
+            currRow[0] = i
+
+            for j in 1...n {
+                let cost = s1Array[i - 1] == s2Array[j - 1] ? 0 : 1
+                currRow[j] = min(
+                    prevRow[j] + 1,      // deletion
+                    currRow[j - 1] + 1,  // insertion
+                    prevRow[j - 1] + cost // substitution
+                )
+            }
+
+            swap(&prevRow, &currRow)
+        }
+
+        return prevRow[n]
     }
 
     // MARK: - Chunk Processing

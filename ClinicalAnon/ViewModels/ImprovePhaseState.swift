@@ -52,6 +52,15 @@ class ImprovePhaseState: ObservableObject {
     // Track what redacted text was used for AI generation
     private var lastProcessedRedactedText: String = ""
 
+    // MARK: - Multi-Document Support
+
+    @Published var sourceDocuments: [SourceDocument] = []
+    @Published var selectedDocumentId: UUID?  // For preview in sidebar
+
+    var selectedDocument: SourceDocument? {
+        sourceDocuments.first { $0.id == selectedDocumentId }
+    }
+
     // MARK: - Sheet States
 
     @Published var showPromptEditor: Bool = false
@@ -90,25 +99,55 @@ class ImprovePhaseState: ObservableObject {
         return hasGeneratedOutput && lastProcessedRedactedText != getText()
     }
 
+    /// Format all source documents for AI prompt
+    func formatSourceDocumentsForAI() -> String {
+        sourceDocuments.map { doc in
+            """
+            === \(doc.name)\(doc.description.isEmpty ? "" : " (\(doc.description))") ===
+
+            \(doc.redactedText)
+            """
+        }.joined(separator: "\n\n")
+    }
+
     // MARK: - Actions
 
     /// Process text with AI using selected document type
     func processWithAI() {
+        #if DEBUG
+        print("🤖 processWithAI called")
+        #endif
+
         guard let getText = getRedactedText else {
+            #if DEBUG
+            print("🔴 processWithAI: getRedactedText callback is nil")
+            #endif
             aiError = "No text provider configured"
             return
         }
 
         let inputForAI = getText()
         guard !inputForAI.isEmpty else {
+            #if DEBUG
+            print("🔴 processWithAI: inputForAI is empty")
+            #endif
             aiError = "No redacted text to process"
             return
         }
 
         guard let docType = selectedDocumentType else {
+            #if DEBUG
+            print("🔴 processWithAI: selectedDocumentType is nil")
+            #endif
             aiError = "No document type selected"
             return
         }
+
+        #if DEBUG
+        print("🤖 AI Processing: Starting...")
+        print("   Document type: \(docType.name) (id: \(docType.id))")
+        print("   Input length: \(inputForAI.count) chars")
+        #endif
 
         currentAITask?.cancel()
         aiService.cancel()
@@ -127,20 +166,43 @@ class ImprovePhaseState: ObservableObject {
         docTypeWithInstructions.customInstructions = customInstructions
         let fullPrompt = docTypeWithInstructions.buildPrompt(with: sliderSettings)
 
+        #if DEBUG
+        print("   Prompt length: \(fullPrompt.count) chars")
+        print("   Prompt preview: \(String(fullPrompt.prefix(200)))...")
+        #endif
+
         currentAITask = Task {
             do {
+                #if DEBUG
+                print("🤖 AI Processing: Starting stream...")
+                #endif
+
                 let stream = aiService.processStreaming(text: inputForAI, prompt: fullPrompt)
 
+                var chunkCount = 0
                 for try await chunk in stream {
-                    if Task.isCancelled { break }
+                    if Task.isCancelled {
+                        #if DEBUG
+                        print("🤖 AI Processing: Cancelled after \(chunkCount) chunks")
+                        #endif
+                        break
+                    }
                     aiOutput += chunk
+                    chunkCount += 1
                 }
+
+                #if DEBUG
+                print("🤖 AI Processing: Stream complete - \(chunkCount) chunks, \(aiOutput.count) chars")
+                #endif
 
                 currentDocument = aiOutput
                 isInRefinementMode = true
                 chatHistory.append((role: "assistant", content: aiOutput))
                 isAIProcessing = false
             } catch {
+                #if DEBUG
+                print("🤖 AI Processing: ERROR - \(error.localizedDescription)")
+                #endif
                 if !Task.isCancelled {
                     aiError = error.localizedDescription
                     isAIProcessing = false
@@ -290,6 +352,10 @@ class ImprovePhaseState: ObservableObject {
         isAIProcessing = false
         lastProcessedRedactedText = ""
         aiService.resetContext()
+
+        // Clear multi-document state
+        sourceDocuments.removeAll()
+        selectedDocumentId = nil
     }
 
     // MARK: - Sheet Actions

@@ -15,8 +15,8 @@ class BedrockService: ObservableObject {
 
     // MARK: - Proxy Configuration
 
-    /// Lambda proxy endpoint for Bedrock calls
-    private let proxyEndpoint = "https://h9zrh24qaj.execute-api.ap-southeast-2.amazonaws.com/prod/invoke"
+    /// Lambda Function URL for Bedrock calls (bypasses API Gateway 29s timeout limit)
+    private let proxyEndpoint = "https://h7qgngqj752gsfujntpvqj22ky0urohg.lambda-url.ap-southeast-2.on.aws/"
 
     /// Endpoint to fetch current API key (rotates weekly)
     private let getKeyEndpoint = "https://h9zrh24qaj.execute-api.ap-southeast-2.amazonaws.com/prod/get-api-key"
@@ -270,7 +270,7 @@ class BedrockService: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(currentApiKey, forHTTPHeaderField: "x-api-key")
-        request.timeoutInterval = 120  // 2 minute timeout for long responses
+        request.timeoutInterval = 180  // 3 minute timeout for long responses (Lambda has 2 min)
 
         // Build request body
         var body: [String: Any] = [
@@ -295,8 +295,20 @@ class BedrockService: ObservableObject {
 
         // Parse response
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            #if DEBUG
+            print("🔴 Bedrock: Failed to parse JSON response")
+            print("   Raw data: \(String(data: data, encoding: .utf8) ?? "nil")")
+            #endif
             throw AppError.emptyResponse
         }
+
+        #if DEBUG
+        print("🔵 Bedrock response status: \(httpResponse.statusCode)")
+        print("   Response keys: \(json.keys)")
+        if json["error"] != nil {
+            print("   Error: \(json["error"] ?? "nil")")
+        }
+        #endif
 
         // Check for error response
         if let error = json["error"] as? String {
@@ -319,6 +331,10 @@ class BedrockService: ObservableObject {
             return text
         }
 
+        #if DEBUG
+        print("🔴 Bedrock: No content.text in response")
+        print("   Full response: \(json)")
+        #endif
         throw AppError.emptyResponse
     }
 }

@@ -139,6 +139,17 @@ struct RedactPhaseView: View {
                     .font(DesignSystem.Typography.subheading)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
+                // Show saved document count badge
+                if !viewModel.sourceDocuments.isEmpty {
+                    Text("\(viewModel.sourceDocuments.count) doc\(viewModel.sourceDocuments.count == 1 ? "" : "s") saved")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(DesignSystem.Colors.primaryTeal.opacity(0.1))
+                        .cornerRadius(4)
+                }
+
                 Spacer()
 
                 if let result = viewModel.result {
@@ -313,6 +324,18 @@ struct RedactPhaseView: View {
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(viewModel.isRunningDeepScan)
                         .help("Run Apple NER with lower confidence (0.75) to catch additional names")
+
+                        // Add More Docs button
+                        Button(action: { viewModel.saveCurrentDocumentAndAddMore() }) {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                Image(systemName: "plus.doc")
+                                Text("Add More Docs")
+                            }
+                            .font(DesignSystem.Typography.body)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(!viewModel.canContinueFromRedact || viewModel.hasPendingChanges)
+                        .help("Save this document and add another source document")
 
                         Button(action: { viewModel.continueToNextPhase() }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {

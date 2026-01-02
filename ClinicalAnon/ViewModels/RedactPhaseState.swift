@@ -73,6 +73,12 @@ class RedactPhaseState: ObservableObject {
     @Published var justCopiedOriginal: Bool = false
     @Published var hasCopiedRedacted: Bool = false
 
+    // MARK: - Multi-Document Support
+
+    @Published var sourceDocuments: [SourceDocument] = []
+
+    var nextDocumentNumber: Int { sourceDocuments.count + 1 }
+
     // Clipboard auto-clear
     private var clipboardClearTask: DispatchWorkItem?
 
@@ -108,15 +114,22 @@ class RedactPhaseState: ObservableObject {
 
     /// Dynamically generated redacted text based on active entities
     var displayedRedactedText: String {
+        // Return cached value - cache is updated after analysis and entity changes
+        return cachedRedactedText
+    }
+
+    /// Force update of redacted text cache (call after analysis or entity changes)
+    func refreshRedactedTextCache() {
         if redactedTextNeedsUpdate {
             updateRedactedTextCache()
         }
-        return cachedRedactedText
     }
 
     /// Whether Continue button should be enabled
     var canContinue: Bool {
-        result != nil && !hasPendingChanges
+        let hasCurrentDoc = result != nil && !hasPendingChanges
+        let hasSavedDocs = !sourceDocuments.isEmpty
+        return hasCurrentDoc || hasSavedDocs
     }
 
     // MARK: - Actions
@@ -151,6 +164,9 @@ class RedactPhaseState: ObservableObject {
             updateTask.cancel()
             updateFromEngine()
 
+            // Update redacted text cache now (not lazily during view render)
+            refreshRedactedTextCache()
+
             isProcessing = false
             successMessage = "Anonymization complete! Found \(result?.entityCount ?? 0) entities."
             autoHideSuccess()
@@ -176,6 +192,7 @@ class RedactPhaseState: ObservableObject {
         piiReviewFindings.removeAll()
         bertNERFindings.removeAll()
         xlmrNERFindings.removeAll()
+        deepScanFindings.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
@@ -183,6 +200,8 @@ class RedactPhaseState: ObservableObject {
         bertNERError = nil
         isRunningXLMRNER = false
         xlmrNERError = nil
+        isRunningDeepScan = false
+        deepScanError = nil
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -192,6 +211,56 @@ class RedactPhaseState: ObservableObject {
 
         hasCopiedRedacted = false
         hasPendingChanges = false
+
+        // Clear multi-document state
+        sourceDocuments.removeAll()
+    }
+
+    // MARK: - Multi-Document Actions
+
+    /// Save current document and clear for adding another
+    /// NOTE: Does NOT clear engine.entityMapping to preserve consistent codes across docs
+    func saveCurrentDocumentAndClearForNext() {
+        guard let result = result else { return }
+
+        let doc = SourceDocument(
+            documentNumber: nextDocumentNumber,
+            name: "Document \(nextDocumentNumber)",
+            description: "",
+            originalText: result.originalText,
+            redactedText: displayedRedactedText,
+            entities: activeEntities
+        )
+        sourceDocuments.append(doc)
+
+        // Clear for next document but preserve entity mapping
+        inputText = ""
+        self.result = nil
+        excludedEntityIds.removeAll()
+        _excludedIds.removeAll()
+        customEntities.removeAll()
+        piiReviewFindings.removeAll()
+        bertNERFindings.removeAll()
+        xlmrNERFindings.removeAll()
+        deepScanFindings.removeAll()
+        entitiesToRemove.removeAll()
+        cachedRedactedText = ""
+        redactedTextNeedsUpdate = true
+        hasPendingChanges = false
+        hasCopiedRedacted = false
+        // NOTE: Do NOT call engine.clearSession() - preserve EntityMapping
+    }
+
+    /// Delete a source document by ID
+    func deleteSourceDocument(id: UUID) {
+        sourceDocuments.removeAll { $0.id == id }
+    }
+
+    /// Update description for a source document
+    func updateSourceDocumentDescription(id: UUID, description: String) {
+        if let idx = sourceDocuments.firstIndex(where: { $0.id == id }) {
+            sourceDocuments[idx].description = description
+        }
     }
 
     // MARK: - Entity Management
@@ -840,8 +909,9 @@ class RedactPhaseState: ObservableObject {
         }
     }
 
-    /// Force cache invalidation (called when entities change externally)
+    /// Force cache invalidation and refresh (called when entities change externally)
     func invalidateCache() {
         redactedTextNeedsUpdate = true
+        refreshRedactedTextCache()
     }
 }

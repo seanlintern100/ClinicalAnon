@@ -59,7 +59,12 @@ class WorkflowViewModel: ObservableObject {
 
         // Configure callbacks
         improveState.getRedactedText = { [weak self] in
-            self?.redactState.displayedRedactedText ?? ""
+            guard let self = self else { return "" }
+            // Use formatted source documents if available, otherwise fall back to current redacted text
+            if !self.improveState.sourceDocuments.isEmpty {
+                return self.improveState.formatSourceDocumentsForAI()
+            }
+            return self.redactState.displayedRedactedText
         }
 
         restoreState.getAIOutput = { [weak self] in
@@ -103,30 +108,48 @@ class WorkflowViewModel: ObservableObject {
     }
 
     // MARK: - Bindable Properties (need @Published for SwiftUI $ bindings)
-    // These sync with state objects via didSet
+    // These sync with state objects via didSet, wrapped in Task to avoid "Publishing changes from within view updates" warning
 
     @Published var inputText: String = "" {
-        didSet { redactState.inputText = inputText }
+        didSet {
+            let value = inputText
+            Task { @MainActor in redactState.inputText = value }
+        }
     }
 
     @Published var showingAddCustom: Bool = false {
-        didSet { redactState.showingAddCustom = showingAddCustom }
+        didSet {
+            let value = showingAddCustom
+            Task { @MainActor in redactState.showingAddCustom = value }
+        }
     }
 
     @Published var refinementInput: String = "" {
-        didSet { improveState.refinementInput = refinementInput }
+        didSet {
+            let value = refinementInput
+            Task { @MainActor in improveState.refinementInput = value }
+        }
     }
 
     @Published var customInstructions: String = "" {
-        didSet { improveState.customInstructions = customInstructions }
+        didSet {
+            let value = customInstructions
+            Task { @MainActor in improveState.customInstructions = value }
+        }
     }
 
     @Published var showPromptEditor: Bool = false {
-        didSet { improveState.showPromptEditor = showPromptEditor }
+        didSet {
+            let value = showPromptEditor
+            Task { @MainActor in improveState.showPromptEditor = value }
+        }
     }
 
     @Published var showAddCustomCategory: Bool = false {
-        didSet { improveState.showAddCustomCategory = showAddCustomCategory }
+        didSet {
+            let value = showAddCustomCategory
+            Task { @MainActor in improveState.showAddCustomCategory = value }
+        }
     }
 
     // MARK: - Forwarded Properties (Redact Phase)
@@ -179,6 +202,10 @@ class WorkflowViewModel: ObservableObject {
     var justCopiedOriginal: Bool { redactState.justCopiedOriginal }
     var hasCopiedRedacted: Bool { redactState.hasCopiedRedacted }
     var hasPendingChanges: Bool { redactState.hasPendingChanges }
+
+    // MARK: - Forwarded Properties (Multi-Document)
+
+    var sourceDocuments: [SourceDocument] { redactState.sourceDocuments }
 
     // MARK: - Forwarded Properties (Improve Phase)
 
@@ -257,6 +284,19 @@ class WorkflowViewModel: ObservableObject {
         switch currentPhase {
         case .redact:
             guard canContinueFromRedact else { return }
+
+            // If there's a current unsaved document, save it first
+            if redactState.result != nil {
+                redactState.saveCurrentDocumentAndClearForNext()
+            }
+
+            // Transfer source documents to improve phase
+            improveState.sourceDocuments = redactState.sourceDocuments
+
+            // Clear ViewModel's inputText since it's a separate property
+            inputText = ""
+            cacheManager.clearAll()
+
             currentPhase = .improve
         case .improve:
             guard canContinueFromImprove else { return }
@@ -270,6 +310,8 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Redact Phase Actions
 
     func analyze() async {
+        // Ensure inputText is synced before analyzing (since didSet is now async)
+        redactState.inputText = inputText
         await redactState.analyze()
 
         // Rebuild cache using strong reference to cacheManager
@@ -396,6 +438,23 @@ class WorkflowViewModel: ObservableObject {
                 restoredText: nil
             )
         }
+    }
+
+    // MARK: - Multi-Document Actions
+
+    func saveCurrentDocumentAndAddMore() {
+        redactState.saveCurrentDocumentAndClearForNext()
+        cacheManager.clearAll()
+        // Also clear the ViewModel's inputText since it's a separate @Published property
+        inputText = ""
+    }
+
+    func deleteSourceDocument(id: UUID) {
+        redactState.deleteSourceDocument(id: id)
+    }
+
+    func updateSourceDocumentDescription(id: UUID, description: String) {
+        redactState.updateSourceDocumentDescription(id: id, description: description)
     }
 
     // MARK: - Improve Phase Actions
