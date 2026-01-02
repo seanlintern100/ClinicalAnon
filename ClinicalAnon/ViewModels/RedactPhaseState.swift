@@ -329,8 +329,8 @@ class RedactPhaseState: ObservableObject {
             return
         }
 
-        let existingCount = allEntities.filter { $0.type == type }.count
-        let code = type.replacementCode(for: existingCount)
+        // Get replacement code from engine (this also registers it for restore)
+        let code = engine.entityMapping.getReplacementCode(for: trimmedText, type: type)
 
         let entity = Entity(
             originalText: trimmedText,
@@ -341,7 +341,6 @@ class RedactPhaseState: ObservableObject {
         )
 
         customEntities.append(entity)
-        _ = engine.entityMapping.getReplacementCode(for: trimmedText, type: type)
         redactedTextNeedsUpdate = true
 
         // Note: Cache rebuild is now handled by WorkflowViewModel.addCustomEntity()
@@ -456,8 +455,8 @@ class RedactPhaseState: ObservableObject {
                 }
                 print("DEBUG processPIIFindings: '\(finding.text)' found at \(positions.count) positions, adding")
 
-                let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count + newEntities.filter { $0.type == finding.suggestedType }.count
-                let code = finding.suggestedType.replacementCode(for: existingCount)
+                // Get replacement code from engine (this also registers it for restore)
+                let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
 
                 let entity = Entity(
                     originalText: finding.text,
@@ -559,10 +558,8 @@ class RedactPhaseState: ObservableObject {
             let positions = findAllOccurrences(of: finding.text, in: originalText)
             guard !positions.isEmpty else { continue }
 
-            // Get next available replacement code
-            let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count +
-                               newEntities.filter { $0.type == finding.suggestedType }.count
-            let code = finding.suggestedType.replacementCode(for: existingCount)
+            // Get replacement code from engine (this also registers it for restore)
+            let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
 
             let entity = Entity(
                 originalText: finding.text,
@@ -649,10 +646,8 @@ class RedactPhaseState: ObservableObject {
             let positions = findAllOccurrences(of: finding.text, in: originalText)
             guard !positions.isEmpty else { continue }
 
-            // Get next available replacement code
-            let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count +
-                               newEntities.filter { $0.type == finding.suggestedType }.count
-            let code = finding.suggestedType.replacementCode(for: existingCount)
+            // Get replacement code from engine (this also registers it for restore)
+            let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
 
             let entity = Entity(
                 originalText: finding.text,
@@ -720,10 +715,8 @@ class RedactPhaseState: ObservableObject {
             let positions = findAllOccurrences(of: finding.text, in: originalText)
             guard !positions.isEmpty else { continue }
 
-            // Get next available replacement code
-            let existingCount = allEntities.filter { $0.type == finding.suggestedType }.count +
-                               newEntities.filter { $0.type == finding.suggestedType }.count
-            let code = finding.suggestedType.replacementCode(for: existingCount)
+            // Get replacement code from engine (this also registers it for restore)
+            let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
 
             let entity = Entity(
                 originalText: finding.text,
