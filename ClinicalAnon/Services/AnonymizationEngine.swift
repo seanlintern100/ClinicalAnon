@@ -332,6 +332,15 @@ class AnonymizationEngine: ObservableObject {
 
     /// Apply entity mapping to ensure consistency
     private func applyEntityMapping(to entities: [Entity]) -> [Entity] {
+        // First pass: register all full names (2+ words) as person anchors
+        // This sets up variant tracking before we assign codes
+        for entity in entities where entity.type.isPerson {
+            let words = entity.originalText.components(separatedBy: " ").filter { !$0.isEmpty }
+            if words.count >= 2 {
+                _ = entityMapping.registerPersonAnchor(fullName: entity.originalText, type: entity.type)
+            }
+        }
+
         var mappedEntities: [Entity] = []
 
         for entity in entities {
@@ -341,14 +350,23 @@ class AnonymizationEngine: ObservableObject {
                 type: entity.type
             )
 
-            // Create new entity with consistent code
+            // For person entities, try to find and assign variant label
+            var nameVariant: NameVariant? = nil
+            if entity.type.isPerson {
+                if let (_, variant) = entityMapping.findVariant(for: entity.originalText) {
+                    nameVariant = variant
+                }
+            }
+
+            // Create new entity with consistent code and variant
             let mappedEntity = Entity(
                 id: entity.id,
                 originalText: entity.originalText,
                 replacementCode: consistentCode,
                 type: entity.type,
                 positions: entity.positions,
-                confidence: entity.confidence
+                confidence: entity.confidence,
+                nameVariant: nameVariant
             )
 
             mappedEntities.append(mappedEntity)

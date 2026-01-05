@@ -208,8 +208,6 @@ class TextReplacer {
                         confidence: entity.confidence
                     )
                     extendedEntities.append(extended)
-
-                    print("🔧 Fixed partial leak: '\(fullMatch)' → '\(entity.replacementCode)' (full: '\(fullOriginal)')")
                 }
             }
         }

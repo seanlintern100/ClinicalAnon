@@ -353,7 +353,7 @@ struct ImprovePhaseView: View {
                 .padding(DesignSystem.Spacing.small)
             }
         }
-        .frame(width: 390)
+        .frame(width: 270)
         .background(DesignSystem.Colors.surface)
     }
 
@@ -822,16 +822,34 @@ private struct DetectedDocumentRow: View {
 
     @State private var isExpanded: Bool = false  // Start collapsed
 
-    // Strip redundant header from summary for display (keep in memory storage)
+    // Strip redundant header lines from summary for display (keep in memory storage)
     private var displaySummary: String {
-        let lines = document.summary.components(separatedBy: "\n")
+        var lines = document.summary.components(separatedBy: "\n")
 
-        // Skip first line if it's a redundant header like "Clinical Document Extraction: ..."
-        if let firstLine = lines.first?.lowercased(),
-           firstLine.contains("extraction:") || firstLine.contains("summary:") {
-            return lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        // Remove leading header lines that duplicate the document title
+        while let firstLine = lines.first {
+            let trimmed = firstLine.trimmingCharacters(in: .whitespaces)
+            let lower = trimmed.lowercased()
+
+            // Skip if it's a markdown header or contains redundant title patterns
+            let isHeader = trimmed.hasPrefix("#")
+            let isRedundantTitle = lower.contains("extraction") ||
+                                   lower.contains("key information") ||
+                                   lower.contains("clinical document") ||
+                                   lower.contains("summary:") ||
+                                   lower.contains("document summary")
+
+            // Also skip empty lines at the start
+            let isEmpty = trimmed.isEmpty
+
+            if isHeader || isRedundantTitle || isEmpty {
+                lines.removeFirst()
+            } else {
+                break
+            }
         }
-        return document.summary
+
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // Check if summary is long enough to need expansion

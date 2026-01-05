@@ -21,11 +21,14 @@ struct RestorePhaseView: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            // Sidebar: Restored entities (left side)
+            restoredEntitiesSidebar
+
             // Main content: Final output
             finalOutputPane
-
-            // Sidebar: Restored entities
-            restoredEntitiesSidebar
+        }
+        .sheet(isPresented: $viewModel.restoreState.showEditReplacementModal) {
+            EditReplacementModal(viewModel: viewModel)
         }
     }
 
@@ -164,7 +167,11 @@ struct RestorePhaseView: View {
             ScrollView {
                 LazyVStack(spacing: DesignSystem.Spacing.xs) {
                     ForEach(viewModel.restoredEntities) { entity in
-                        RestoredEntityRow(entity: entity)
+                        RestoredEntityRow(
+                            entity: entity,
+                            overrideText: viewModel.restoreState.replacementOverrides[entity.replacementCode],
+                            onEdit: { viewModel.restoreState.startEditingReplacement(entity) }
+                        )
                     }
                 }
                 .padding(DesignSystem.Spacing.small)
@@ -194,23 +201,47 @@ struct RestorePhaseView: View {
 private struct RestoredEntityRow: View {
 
     let entity: Entity
+    let overrideText: String?
+    let onEdit: () -> Void
+
+    /// Display text - uses override if available, otherwise original
+    private var displayText: String {
+        overrideText ?? entity.originalText
+    }
+
+    /// Whether this entity has a custom override
+    private var hasOverride: Bool {
+        overrideText != nil
+    }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(DesignSystem.Colors.success)
+            Image(systemName: hasOverride ? "pencil.circle.fill" : "checkmark.circle.fill")
+                .foregroundColor(hasOverride ? .orange : DesignSystem.Colors.success)
                 .font(.system(size: 12))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(entity.replacementCode)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                HStack(spacing: 4) {
+                    Text(entity.replacementCode)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                    if let variant = entity.nameVariant {
+                        Text(variant.displayName)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(entity.type.highlightColor.opacity(0.8))
+                            .cornerRadius(3)
+                    }
+                }
 
                 HStack(spacing: 4) {
                     Text("→")
                         .foregroundColor(DesignSystem.Colors.textSecondary)
-                    Text(entity.originalText)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text(displayText)
+                        .foregroundColor(hasOverride ? .orange : DesignSystem.Colors.textPrimary)
                 }
                 .font(.system(size: 11))
             }
@@ -221,8 +252,102 @@ private struct RestoredEntityRow: View {
         .padding(.horizontal, DesignSystem.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(entity.type.highlightColor.opacity(0.1))
+                .fill(hasOverride ? Color.orange.opacity(0.1) : entity.type.highlightColor.opacity(0.1))
         )
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("Edit Replacement", systemImage: "pencil")
+            }
+        }
+    }
+}
+
+// MARK: - Edit Replacement Modal
+
+struct EditReplacementModal: View {
+
+    @ObservedObject var viewModel: WorkflowViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.large) {
+            // Header
+            HStack {
+                Text("Edit Replacement")
+                    .font(DesignSystem.Typography.heading)
+
+                Spacer()
+
+                Button(action: { viewModel.restoreState.cancelReplacementEdit() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Entity info
+            if let entity = viewModel.restoreState.entityBeingEdited {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    HStack {
+                        Text("Placeholder:")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                        Text(entity.replacementCode)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(entity.type.highlightColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(entity.type.highlightColor.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+
+                    HStack {
+                        Text("Original:")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                        Text(entity.originalText)
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DesignSystem.Spacing.medium)
+                .background(DesignSystem.Colors.surface)
+                .cornerRadius(8)
+            }
+
+            // Edit field
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Replacement text:")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                TextField("Enter replacement text", text: $viewModel.restoreState.editedReplacementText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 14))
+            }
+
+            // Buttons
+            HStack {
+                Button("Cancel") {
+                    viewModel.restoreState.cancelReplacementEdit()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Spacer()
+
+                Button("Apply") {
+                    viewModel.restoreState.applyReplacementEdit()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(viewModel.restoreState.editedReplacementText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(DesignSystem.Spacing.large)
+        .frame(width: 400)
     }
 }
 

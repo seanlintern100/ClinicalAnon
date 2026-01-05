@@ -28,6 +28,16 @@ class RestorePhaseState: ObservableObject {
 
     @Published var errorMessage: String?
 
+    // MARK: - Edit Replacement State
+
+    @Published var showEditReplacementModal: Bool = false
+    @Published var entityBeingEdited: Entity?
+    @Published var editedReplacementText: String = ""
+
+    /// Custom overrides: [replacementCode: customText]
+    /// When user edits a replacement, store the custom text here
+    @Published var replacementOverrides: [String: String] = [:]
+
     // MARK: - Services
 
     private let reidentifier = TextReidentifier()
@@ -79,10 +89,66 @@ class RestorePhaseState: ObservableObject {
         hasRestoredText = false
         justCopiedRestored = false
         errorMessage = nil
+        replacementOverrides.removeAll()
+        showEditReplacementModal = false
+        entityBeingEdited = nil
+        editedReplacementText = ""
     }
 
     func dismissError() {
         errorMessage = nil
+    }
+
+    // MARK: - Edit Replacement Actions
+
+    /// Start editing a replacement - opens modal with current text
+    func startEditingReplacement(_ entity: Entity) {
+        entityBeingEdited = entity
+        // Use override if exists, otherwise use original text
+        editedReplacementText = replacementOverrides[entity.replacementCode] ?? entity.originalText
+        showEditReplacementModal = true
+    }
+
+    /// Apply the edited replacement text
+    func applyReplacementEdit() {
+        guard let entity = entityBeingEdited else { return }
+
+        // Store the override
+        replacementOverrides[entity.replacementCode] = editedReplacementText
+
+        // Rebuild restored text with new override
+        rebuildRestoredText()
+
+        // Close modal
+        showEditReplacementModal = false
+        entityBeingEdited = nil
+    }
+
+    /// Cancel editing - close modal without saving
+    func cancelReplacementEdit() {
+        showEditReplacementModal = false
+        entityBeingEdited = nil
+        editedReplacementText = ""
+    }
+
+    /// Rebuild restored text using current overrides
+    func rebuildRestoredText() {
+        guard let getOutput = getAIOutput, let getMapping = getEntityMapping else { return }
+
+        let aiOutput = getOutput()
+        guard !aiOutput.isEmpty else { return }
+
+        guard let mapping = getMapping() else { return }
+
+        // Restore with overrides
+        finalRestoredText = reidentifier.restoreWithOverrides(
+            text: aiOutput,
+            using: mapping,
+            overrides: replacementOverrides
+        )
+
+        // Rebuild cache
+        cacheManager?.rebuildRestoredCache(restoredText: finalRestoredText)
     }
 
     // MARK: - Private Methods

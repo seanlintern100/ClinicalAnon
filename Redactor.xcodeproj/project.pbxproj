@@ -83,6 +83,7 @@
 		MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = MEMSTOR001000000000000002 /* MemoryStorage.swift */; };
 		SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */; };
 		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
+		DATENORM001000000000000001 /* DateNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DATENORM001000000000000002 /* DateNormalizer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -174,6 +175,7 @@
 		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
 		XLMR0005000000000000000002 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "tokenizer.json"; sourceTree = "<group>"; };
 		MEMSTOR001000000000000002 /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
+		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -348,6 +350,7 @@
 				CHUNK0002000000000000001 /* ChunkManager.swift */,
 				A1E99991AD176BB9F3A8DE67 /* TextReidentifier.swift */,
 				F110215B1181B8B98076418E /* TextReplacer.swift */,
+				DATENORM001000000000000002 /* DateNormalizer.swift */,
 				AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */,
 				374312736FC628C9B01D43D2 /* AWS */,
 				D90BD4EEC63338BFD6F5017D /* Recognizers */,
@@ -564,6 +567,7 @@
 				XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */,
 				SRCDOC000100000000000001 /* SourceDocument.swift in Sources */,
 				MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */,
+				DATENORM001000000000000001 /* DateNormalizer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

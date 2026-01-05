@@ -9,6 +9,66 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Duplicate Detection Models
+
+enum DuplicateConfidence: String {
+    case high = "High"
+    case low = "Low"
+}
+
+struct DuplicateGroup: Identifiable {
+    let id = UUID()
+    let primary: Entity  // The most complete name (anchor)
+    let matches: [Entity]  // Entities to merge into primary
+    let confidence: DuplicateConfidence
+    var isSelected: Bool = true  // Default to selected for convenience
+}
+
+struct NameComponents {
+    let original: String
+    let normalized: String  // Lowercase, trimmed
+    let parts: [String]     // Split by space, titles removed
+    let firstName: String?
+    let lastName: String?
+    let middleNames: [String]
+    let hasTitle: Bool
+
+    static let titles = ["mr", "mrs", "ms", "dr", "prof", "miss", "mr.", "mrs.", "ms.", "dr.", "prof."]
+
+    init(from text: String) {
+        self.original = text
+        self.normalized = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Remove titles
+        var parts = normalized.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        let hasTitle = !parts.isEmpty && Self.titles.contains(parts[0])
+        if hasTitle {
+            parts.removeFirst()
+        }
+        self.hasTitle = hasTitle
+        self.parts = parts
+
+        // Extract name components
+        if parts.count >= 1 {
+            self.firstName = parts[0]
+        } else {
+            self.firstName = nil
+        }
+
+        if parts.count >= 2 {
+            self.lastName = parts[parts.count - 1]
+        } else {
+            self.lastName = nil
+        }
+
+        if parts.count >= 3 {
+            self.middleNames = Array(parts[1..<parts.count - 1])
+        } else {
+            self.middleNames = []
+        }
+    }
+}
+
 // MARK: - Redact Phase State
 
 /// State management for the Redact (anonymization) phase
@@ -78,6 +138,259 @@ class RedactPhaseState: ObservableObject {
     @Published var showingAddCustom: Bool = false
     @Published var prefilledText: String? = nil
 
+    // Duplicate Finder
+    @Published var showDuplicateFinderModal: Bool = false
+    @Published var duplicateGroups: [DuplicateGroup] = []
+
+    // MARK: - Duplicate Detection
+
+    /// Find potential duplicate person entities based on name overlap
+    /// High confidence: Full name (2+ parts) exists as anchor with matching components
+    /// Low confidence: Partial matches without full name anchor
+    /// Never shown: Different first names + same last name (family filter)
+    /// Never shown: Ambiguous partial names (shared across multiple anchors)
+    func findPotentialDuplicates() -> [DuplicateGroup] {
+        // Filter to person entities only
+        let personEntities = allEntities.filter { $0.type.isPerson && !isEntityExcluded($0) }
+        guard personEntities.count >= 2 else { return [] }
+
+        // Extract name components for each entity
+        var entityComponents: [(entity: Entity, components: NameComponents)] = []
+        for entity in personEntities {
+            let components = NameComponents(from: entity.originalText)
+            // Skip entities with no usable name parts (e.g., just "Dr")
+            guard !components.parts.isEmpty else { continue }
+            entityComponents.append((entity, components))
+        }
+
+        // Find full names (2+ parts) to use as anchors
+        let fullNames = entityComponents.filter { $0.components.parts.count >= 2 }
+
+        // Build sets of shared first/last names (names appearing in multiple anchors)
+        // These are ambiguous and should NOT be auto-matched in duplicate finder
+        let firstNameGroups = Dictionary(grouping: fullNames) { $0.components.firstName?.lowercased() ?? "" }
+        let lastNameGroups = Dictionary(grouping: fullNames) { $0.components.lastName?.lowercased() ?? "" }
+
+        let sharedFirstNames = Set(firstNameGroups.filter { $0.key != "" && $0.value.count > 1 }.keys)
+        let sharedLastNames = Set(lastNameGroups.filter { $0.key != "" && $0.value.count > 1 }.keys)
+
+
+        var groups: [DuplicateGroup] = []
+        var processedEntityIds: Set<UUID> = []
+
+        // Track ambiguous matches separately (for low confidence groups)
+        var ambiguousMatches: [UUID: [(anchor: Entity, match: Entity)]] = [:]
+
+        // High confidence: Match against full names
+        for fullName in fullNames {
+            guard !processedEntityIds.contains(fullName.entity.id) else { continue }
+
+            var matches: [Entity] = []
+
+            for other in entityComponents {
+                guard other.entity.id != fullName.entity.id else { continue }
+                guard !processedEntityIds.contains(other.entity.id) else { continue }
+
+                // Skip if same replacement code (already merged)
+                if other.entity.replacementCode == fullName.entity.replacementCode { continue }
+
+                // Apply family filter: different first name + same last name = skip
+                if let fullFirst = fullName.components.firstName,
+                   let otherFirst = other.components.firstName,
+                   let fullLast = fullName.components.lastName,
+                   let otherLast = other.components.lastName {
+                    // Both have first and last names
+                    if fullFirst != otherFirst && fullLast == otherLast {
+                        // Different people (family members), skip
+                        continue
+                    }
+                }
+
+                // Check for component overlap (with shared name filtering)
+                let matchResult = isNameMatch(fullName: fullName.components, partial: other.components,
+                                              sharedFirstNames: sharedFirstNames, sharedLastNames: sharedLastNames)
+
+                switch matchResult {
+                case .match:
+                    matches.append(other.entity)
+                    processedEntityIds.insert(other.entity.id)
+                case .ambiguousMatch:
+                    // Track ambiguous match for low confidence group
+                    // Key by the partial name entity so we can show all possible anchors
+                    if ambiguousMatches[other.entity.id] == nil {
+                        ambiguousMatches[other.entity.id] = []
+                    }
+                    ambiguousMatches[other.entity.id]?.append((anchor: fullName.entity, match: other.entity))
+                case .noMatch:
+                    break
+                }
+            }
+
+            if !matches.isEmpty {
+                processedEntityIds.insert(fullName.entity.id)
+                groups.append(DuplicateGroup(
+                    primary: fullName.entity,
+                    matches: matches,
+                    confidence: .high
+                ))
+            }
+        }
+
+        // Convert ambiguous matches to low confidence groups
+        // Each partial name that matched multiple anchors gets shown with all possible matches
+        for (partialId, matchPairs) in ambiguousMatches {
+            guard !processedEntityIds.contains(partialId) else { continue }
+            guard let firstPair = matchPairs.first else { continue }
+
+            // Group by the partial name (the ambiguous one) as primary
+            // Show all possible anchor matches
+            let anchors = matchPairs.map { $0.anchor }.filter { !processedEntityIds.contains($0.id) }
+            guard !anchors.isEmpty else { continue }
+
+            processedEntityIds.insert(partialId)
+            groups.append(DuplicateGroup(
+                primary: firstPair.match,  // The partial name is the primary
+                matches: anchors,           // The full names are the matches
+                confidence: .low
+            ))
+        }
+
+        // Low confidence: Partial matches without full name anchor
+        let partialNames = entityComponents.filter { $0.components.parts.count == 1 }
+        var lowConfidenceGroups: [UUID: (primary: Entity, matches: [Entity])] = [:]
+
+        for partial in partialNames {
+            guard !processedEntityIds.contains(partial.entity.id) else { continue }
+
+            for other in partialNames {
+                guard other.entity.id != partial.entity.id else { continue }
+                guard !processedEntityIds.contains(other.entity.id) else { continue }
+
+                // Skip if same replacement code
+                if other.entity.replacementCode == partial.entity.replacementCode { continue }
+
+                // Check for partial overlap (e.g., "Sean" and "Sean V")
+                if partial.components.firstName == other.components.firstName ||
+                   partial.components.parts[0].hasPrefix(other.components.parts[0]) ||
+                   other.components.parts[0].hasPrefix(partial.components.parts[0]) {
+
+                    // Group by the longer name
+                    let (primary, match) = partial.components.parts[0].count >= other.components.parts[0].count
+                        ? (partial.entity, other.entity)
+                        : (other.entity, partial.entity)
+
+                    if var existing = lowConfidenceGroups[primary.id] {
+                        if !existing.matches.contains(where: { $0.id == match.id }) {
+                            existing.matches.append(match)
+                            lowConfidenceGroups[primary.id] = existing
+                        }
+                    } else {
+                        lowConfidenceGroups[primary.id] = (primary: primary, matches: [match])
+                    }
+                }
+            }
+        }
+
+        // Convert low confidence groups and filter out single matches
+        for (_, group) in lowConfidenceGroups {
+            guard !processedEntityIds.contains(group.primary.id) else { continue }
+            guard !group.matches.allSatisfy({ processedEntityIds.contains($0.id) }) else { continue }
+
+            let validMatches = group.matches.filter { !processedEntityIds.contains($0.id) }
+            if !validMatches.isEmpty {
+                processedEntityIds.insert(group.primary.id)
+                for match in validMatches {
+                    processedEntityIds.insert(match.id)
+                }
+                groups.append(DuplicateGroup(
+                    primary: group.primary,
+                    matches: validMatches,
+                    confidence: .low
+                ))
+            }
+        }
+
+        // Sort: high confidence first, then alphabetically by primary name
+        return groups.sorted { a, b in
+            if a.confidence != b.confidence {
+                return a.confidence == .high
+            }
+            return a.primary.originalText.lowercased() < b.primary.originalText.lowercased()
+        }
+    }
+
+    /// Match result for name comparison
+    enum NameMatchResult {
+        case noMatch
+        case match
+        case ambiguousMatch  // Matches but shared across multiple anchors - show as low confidence
+    }
+
+    /// Check if a partial name matches components of a full name
+    /// Returns .ambiguousMatch for shared names (shown as low confidence for user decision)
+    private func isNameMatch(fullName: NameComponents, partial: NameComponents,
+                             sharedFirstNames: Set<String>, sharedLastNames: Set<String>) -> NameMatchResult {
+        let fullParts = Set(fullName.parts)
+        let partialParts = partial.parts
+
+
+        // Track if this is an ambiguous match (shared name)
+        var isAmbiguous = false
+
+        // AMBIGUITY CHECK: Single-word names shared across multiple anchors
+        // E.g., "Sean" when both "Sean Lintern" and "Sean Versteegh" exist
+        // These are NOT blocked - they're shown as low confidence for user decision
+        if partialParts.count == 1 {
+            if let partialFirst = partial.firstName?.lowercased(),
+               sharedFirstNames.contains(partialFirst) {
+                isAmbiguous = true
+            }
+            if let partialLast = partial.lastName?.lowercased(),
+               sharedLastNames.contains(partialLast) {
+                isAmbiguous = true
+            }
+        }
+
+        // Title + last name match (e.g., "Mr Versteegh" matches "Sean Versteegh")
+        if partial.hasTitle, let partialLast = partial.lastName, let fullLast = fullName.lastName {
+            if partialLast == fullLast {
+                if sharedLastNames.contains(partialLast.lowercased()) {
+                    return .ambiguousMatch
+                }
+                return .match
+            }
+        }
+
+        // First name only match (e.g., "Sean" matches "Sean Versteegh")
+        if partialParts.count == 1, let partialFirst = partial.firstName {
+            if fullParts.contains(partialFirst) {
+                return isAmbiguous ? .ambiguousMatch : .match
+            }
+        }
+
+        // First + last match (e.g., "Sean Versteegh" matches "Sean Michael Versteegh")
+        if partialParts.count == 2,
+           let partialFirst = partial.firstName,
+           let partialLast = partial.lastName,
+           let fullFirst = fullName.firstName,
+           let fullLast = fullName.lastName {
+            if partialFirst == fullFirst && partialLast == fullLast {
+                return .match
+            }
+        }
+
+        // Any component overlap (single word matches any part)
+        if partialParts.count == 1 {
+            for part in partialParts {
+                if fullParts.contains(part) {
+                    return isAmbiguous ? .ambiguousMatch : .match
+                }
+            }
+        }
+
+        return .noMatch
+    }
+
     // Copy button feedback
     @Published var justCopiedAnonymized: Bool = false
     @Published var justCopiedOriginal: Bool = false
@@ -120,6 +433,55 @@ class RedactPhaseState: ObservableObject {
     /// Check if an entity is excluded
     func isEntityExcluded(_ entity: Entity) -> Bool {
         _excludedIds.contains(entity.id)
+    }
+
+    /// Update nameVariant for an entity matching the given text
+    /// Searches all entity sources and updates the first match found
+    /// Returns true if an entity was updated
+    @discardableResult
+    private mutating func updateEntityVariant(matchingText text: String, variant: NameVariant) -> Bool {
+        let textLower = text.lowercased()
+
+        // Check result.entities
+        if var r = result {
+            if let idx = r.entities.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
+                r.entities[idx].nameVariant = variant
+                result = r
+                return true
+            }
+        }
+
+        // Check customEntities
+        if let idx = customEntities.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
+            customEntities[idx].nameVariant = variant
+            return true
+        }
+
+        // Check piiReviewFindings
+        if let idx = piiReviewFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
+            piiReviewFindings[idx].nameVariant = variant
+            return true
+        }
+
+        // Check bertNERFindings
+        if let idx = bertNERFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
+            bertNERFindings[idx].nameVariant = variant
+            return true
+        }
+
+        // Check xlmrNERFindings
+        if let idx = xlmrNERFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
+            xlmrNERFindings[idx].nameVariant = variant
+            return true
+        }
+
+        // Check deepScanFindings
+        if let idx = deepScanFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
+            deepScanFindings[idx].nameVariant = variant
+            return true
+        }
+
+        return false
     }
 
     /// Dynamically generated redacted text based on active entities
@@ -339,51 +701,28 @@ class RedactPhaseState: ObservableObject {
 
     /// Merge alias entity into primary entity
     /// The alias is removed and its positions are consolidated into the primary
+    /// Also updates any sibling entities that share the alias's replacement code
     func mergeEntities(alias: Entity, into primary: Entity) {
         guard alias.type == primary.type else { return }
 
-        // Find and update the primary entity with combined positions
-        // Check in result entities
-        if let result = result, let idx = result.entities.firstIndex(where: { $0.id == primary.id }) {
-            var updatedEntity = result.entities[idx]
-            updatedEntity.positions.append(contentsOf: alias.positions)
-            self.result?.entities[idx] = updatedEntity
+        let aliasCode = alias.replacementCode
+        let primaryCode = primary.replacementCode
+
+        // Find all sibling entities that share the alias's replacement code
+        // These are connected components that should also be updated
+        let siblings = allEntities.filter { $0.replacementCode == aliasCode && $0.id != alias.id }
+
+        // Find and update the primary entity with combined positions from alias
+        addPositionsToPrimary(primaryId: primary.id, newPositions: alias.positions)
+
+        // Update sibling entities to use the primary's replacement code
+        // This preserves the connected components relationship
+        for sibling in siblings {
+            updateEntityReplacementCode(entityId: sibling.id, newCode: primaryCode)
         }
 
-        // Check in custom entities
-        if let idx = customEntities.firstIndex(where: { $0.id == primary.id }) {
-            customEntities[idx].positions.append(contentsOf: alias.positions)
-        }
-
-        // Check in PII review findings
-        if let idx = piiReviewFindings.firstIndex(where: { $0.id == primary.id }) {
-            piiReviewFindings[idx].positions.append(contentsOf: alias.positions)
-        }
-
-        // Check in BERT NER findings
-        if let idx = bertNERFindings.firstIndex(where: { $0.id == primary.id }) {
-            bertNERFindings[idx].positions.append(contentsOf: alias.positions)
-        }
-
-        // Check in XLM-R NER findings
-        if let idx = xlmrNERFindings.firstIndex(where: { $0.id == primary.id }) {
-            xlmrNERFindings[idx].positions.append(contentsOf: alias.positions)
-        }
-
-        // Check in deep scan findings
-        if let idx = deepScanFindings.firstIndex(where: { $0.id == primary.id }) {
-            deepScanFindings[idx].positions.append(contentsOf: alias.positions)
-        }
-
-        // Remove alias from all entity lists
-        if let result = result {
-            self.result?.entities.removeAll { $0.id == alias.id }
-        }
-        customEntities.removeAll { $0.id == alias.id }
-        piiReviewFindings.removeAll { $0.id == alias.id }
-        bertNERFindings.removeAll { $0.id == alias.id }
-        xlmrNERFindings.removeAll { $0.id == alias.id }
-        deepScanFindings.removeAll { $0.id == alias.id }
+        // Remove alias from all entity lists (it's now merged into primary)
+        removeEntityFromAllLists(entityId: alias.id)
 
         // Remove alias from excluded set if it was excluded
         _excludedIds.remove(alias.id)
@@ -394,7 +733,80 @@ class RedactPhaseState: ObservableObject {
 
         #if DEBUG
         print("RedactPhaseState.mergeEntities: Merged '\(alias.originalText)' into '\(primary.originalText)'")
+        if !siblings.isEmpty {
+            print("RedactPhaseState.mergeEntities: Updated \(siblings.count) sibling(s) from \(aliasCode) to \(primaryCode)")
+        }
         #endif
+    }
+
+    /// Add positions to primary entity across all entity lists
+    private func addPositionsToPrimary(primaryId: UUID, newPositions: [[Int]]) {
+        if let result = result, let idx = result.entities.firstIndex(where: { $0.id == primaryId }) {
+            self.result?.entities[idx].positions.append(contentsOf: newPositions)
+        }
+        if let idx = customEntities.firstIndex(where: { $0.id == primaryId }) {
+            customEntities[idx].positions.append(contentsOf: newPositions)
+        }
+        if let idx = piiReviewFindings.firstIndex(where: { $0.id == primaryId }) {
+            piiReviewFindings[idx].positions.append(contentsOf: newPositions)
+        }
+        if let idx = bertNERFindings.firstIndex(where: { $0.id == primaryId }) {
+            bertNERFindings[idx].positions.append(contentsOf: newPositions)
+        }
+        if let idx = xlmrNERFindings.firstIndex(where: { $0.id == primaryId }) {
+            xlmrNERFindings[idx].positions.append(contentsOf: newPositions)
+        }
+        if let idx = deepScanFindings.firstIndex(where: { $0.id == primaryId }) {
+            deepScanFindings[idx].positions.append(contentsOf: newPositions)
+        }
+    }
+
+    /// Update an entity's replacement code and recalculate variant across all entity lists
+    private func updateEntityReplacementCode(entityId: UUID, newCode: String) {
+        // Helper to update code and recalculate variant based on new anchor
+        func updateEntity(_ entity: inout Entity) {
+            entity.replacementCode = newCode
+            // Recalculate variant based on matching anchor
+            if entity.type.isPerson {
+                if let (_, variant) = engine.entityMapping.findVariant(for: entity.originalText) {
+                    entity.nameVariant = variant
+                } else {
+                    entity.nameVariant = nil
+                }
+            }
+        }
+
+        if var r = result, let idx = r.entities.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&r.entities[idx])
+            result = r
+        }
+        if let idx = customEntities.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&customEntities[idx])
+        }
+        if let idx = piiReviewFindings.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&piiReviewFindings[idx])
+        }
+        if let idx = bertNERFindings.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&bertNERFindings[idx])
+        }
+        if let idx = xlmrNERFindings.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&xlmrNERFindings[idx])
+        }
+        if let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&deepScanFindings[idx])
+        }
+    }
+
+    /// Remove an entity from all entity lists
+    private func removeEntityFromAllLists(entityId: UUID) {
+        if result != nil {
+            self.result?.entities.removeAll { $0.id == entityId }
+        }
+        customEntities.removeAll { $0.id == entityId }
+        piiReviewFindings.removeAll { $0.id == entityId }
+        bertNERFindings.removeAll { $0.id == entityId }
+        xlmrNERFindings.removeAll { $0.id == entityId }
+        deepScanFindings.removeAll { $0.id == entityId }
     }
 
     func openAddCustomEntity(withText text: String? = nil) {
@@ -662,14 +1074,28 @@ class RedactPhaseState: ObservableObject {
 
             newEntities.append(entity)
 
-            // Add component entities (first name, last name) with same replacement code
+            // Add component entities (first name, last name) with variant labels
             for componentEntity in componentEntities {
-                // Skip if component already exists
-                let componentExists = allEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
-                    || newEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
-                if !componentExists {
-                    newEntities.append(componentEntity)
+                let componentTextLower = componentEntity.originalText.lowercased()
+
+                // Try to update existing entity's variant first
+                if let variant = componentEntity.nameVariant {
+                    if updateEntityVariant(matchingText: componentEntity.originalText, variant: variant) {
+                        continue  // Updated existing entity
+                    }
                 }
+
+                // Check if component exists in newEntities
+                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
+                    // Update variant if existing has none
+                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
+                        newEntities[idx].nameVariant = variant
+                    }
+                    continue
+                }
+
+                // Component doesn't exist, add it
+                newEntities.append(componentEntity)
             }
         }
 
@@ -760,14 +1186,28 @@ class RedactPhaseState: ObservableObject {
 
             newEntities.append(entity)
 
-            // Add component entities (first name, last name) with same replacement code
+            // Add component entities (first name, last name) with variant labels
             for componentEntity in componentEntities {
-                // Skip if component already exists
-                let componentExists = allEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
-                    || newEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
-                if !componentExists {
-                    newEntities.append(componentEntity)
+                let componentTextLower = componentEntity.originalText.lowercased()
+
+                // Try to update existing entity's variant first
+                if let variant = componentEntity.nameVariant {
+                    if updateEntityVariant(matchingText: componentEntity.originalText, variant: variant) {
+                        continue  // Updated existing entity
+                    }
                 }
+
+                // Check if component exists in newEntities
+                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
+                    // Update variant if existing has none
+                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
+                        newEntities[idx].nameVariant = variant
+                    }
+                    continue
+                }
+
+                // Component doesn't exist, add it
+                newEntities.append(componentEntity)
             }
         }
 
@@ -850,14 +1290,28 @@ class RedactPhaseState: ObservableObject {
 
             newEntities.append(entity)
 
-            // Add component entities (first name, last name) with same replacement code
+            // Add component entities (first name, last name) with variant labels
             for componentEntity in componentEntities {
-                // Skip if component already exists
-                let componentExists = allEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
-                    || newEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
-                if !componentExists {
-                    newEntities.append(componentEntity)
+                let componentTextLower = componentEntity.originalText.lowercased()
+
+                // Try to update existing entity's variant first
+                if let variant = componentEntity.nameVariant {
+                    if updateEntityVariant(matchingText: componentEntity.originalText, variant: variant) {
+                        continue  // Updated existing entity
+                    }
                 }
+
+                // Check if component exists in newEntities
+                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
+                    // Update variant if existing has none
+                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
+                        newEntities[idx].nameVariant = variant
+                    }
+                    continue
+                }
+
+                // Component doesn't exist, add it
+                newEntities.append(componentEntity)
             }
         }
 
@@ -1028,7 +1482,7 @@ class RedactPhaseState: ObservableObject {
     }
 
     /// Find all occurrences of entity text AND its name components (first/last names)
-    /// Returns main entity positions plus separate entities for name components (same replacement code)
+    /// Returns main entity positions plus separate entities for name components with variant-aware codes
     private func findAllNameOccurrences(of entityText: String, type: EntityType, in text: String) -> (mainPositions: [[Int]], componentEntities: [Entity]) {
         // Find main entity occurrences
         let mainPositions = findAllOccurrences(of: entityText, in: text)
@@ -1038,15 +1492,94 @@ class RedactPhaseState: ObservableObject {
         // Only extract components for person names
         guard type.isPerson else { return (mainPositions, []) }
 
-        let words = entityText.split(separator: " ")
+        // Strip title and get name parts
+        let stripped = RedactedPerson.stripTitle(entityText)
+        let words = stripped.split(separator: " ").map { String($0) }
         guard words.count >= 2 else { return (mainPositions, []) }
 
-        // Get replacement code for parent (ensures same code for all components)
-        let parentCode = engine.entityMapping.getReplacementCode(for: entityText, type: type)
+        // Register this as a person anchor to enable variant tracking
+        guard let person = engine.entityMapping.registerPersonAnchor(fullName: entityText, type: type) else {
+            // Fallback to old behavior if registration fails
+            let parentCode = engine.entityMapping.getReplacementCode(for: entityText, type: type)
+            return createComponentEntitiesLegacy(entityText: entityText, type: type, text: text, parentCode: parentCode, mainPositions: mainPositions)
+        }
+
+        // Extract first name with variant code
+        let firstName = words[0]
+        if firstName.count >= 3 {
+            let positions = findAllOccurrences(of: firstName, in: text)
+            if !positions.isEmpty {
+                componentEntities.append(Entity(
+                    originalText: firstName,
+                    replacementCode: person.placeholder(for: .first),
+                    type: type,
+                    positions: positions,
+                    confidence: 0.9,
+                    nameVariant: .first
+                ))
+            }
+        }
+
+        // Extract last name with variant code
+        let lastName = words.last!
+        if lastName.count >= 3 && lastName != firstName {
+            let positions = findAllOccurrences(of: lastName, in: text)
+            if !positions.isEmpty {
+                componentEntities.append(Entity(
+                    originalText: lastName,
+                    replacementCode: person.placeholder(for: .last),
+                    type: type,
+                    positions: positions,
+                    confidence: 0.9,
+                    nameVariant: .last
+                ))
+            }
+        }
+
+        // Extract middle name(s) if present
+        if words.count >= 3 {
+            let middleNames = words[1..<words.count-1].joined(separator: " ")
+            if middleNames.count >= 2 {
+                let positions = findAllOccurrences(of: middleNames, in: text)
+                if !positions.isEmpty {
+                    componentEntities.append(Entity(
+                        originalText: middleNames,
+                        replacementCode: person.placeholder(for: .middle),
+                        type: type,
+                        positions: positions,
+                        confidence: 0.9,
+                        nameVariant: .middle
+                    ))
+                }
+            }
+        }
+
+        // Check for formal address (Title + Last) in text
+        if let title = RedactedPerson.extractTitle(entityText) {
+            let formalForm = "\(title) \(lastName)"
+            let positions = findAllOccurrences(of: formalForm, in: text)
+            if !positions.isEmpty {
+                componentEntities.append(Entity(
+                    originalText: formalForm,
+                    replacementCode: person.placeholder(for: .formal),
+                    type: type,
+                    positions: positions,
+                    confidence: 0.95,
+                    nameVariant: .formal
+                ))
+            }
+        }
+
+        return (mainPositions, componentEntities)
+    }
+
+    /// Legacy fallback for component entity creation (no variant support)
+    private func createComponentEntitiesLegacy(entityText: String, type: EntityType, text: String, parentCode: String, mainPositions: [[Int]]) -> (mainPositions: [[Int]], componentEntities: [Entity]) {
+        var componentEntities: [Entity] = []
+        let words = entityText.split(separator: " ").map { String($0) }
 
         // Extract first name
-        let firstName = String(words[0])
-        if firstName.count >= 3 {
+        if let firstName = words.first, firstName.count >= 3 {
             let positions = findAllOccurrences(of: firstName, in: text)
             if !positions.isEmpty {
                 componentEntities.append(Entity(
@@ -1060,19 +1593,16 @@ class RedactPhaseState: ObservableObject {
         }
 
         // Extract last name
-        if let lastName = words.last {
-            let lastNameStr = String(lastName)
-            if lastNameStr.count >= 3 && lastNameStr != firstName {
-                let positions = findAllOccurrences(of: lastNameStr, in: text)
-                if !positions.isEmpty {
-                    componentEntities.append(Entity(
-                        originalText: lastNameStr,
-                        replacementCode: parentCode,
-                        type: type,
-                        positions: positions,
-                        confidence: 0.9
-                    ))
-                }
+        if let lastName = words.last, lastName.count >= 3 && words.count >= 2 && lastName != words.first {
+            let positions = findAllOccurrences(of: lastName, in: text)
+            if !positions.isEmpty {
+                componentEntities.append(Entity(
+                    originalText: lastName,
+                    replacementCode: parentCode,
+                    type: type,
+                    positions: positions,
+                    confidence: 0.9
+                ))
             }
         }
 

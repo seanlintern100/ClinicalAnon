@@ -8,6 +8,37 @@
 
 import Foundation
 
+// MARK: - Name Variant
+
+/// Represents different forms of a person's name for contextual replacement
+enum NameVariant: String, Codable, CaseIterable {
+    case full = "FULL"              // "Sean Michael Versteegh"
+    case firstLast = "FIRST_LAST"   // "Sean Versteegh" (no middle)
+    case first = "FIRST"            // "Sean"
+    case last = "LAST"              // "Versteegh"
+    case middle = "MIDDLE"          // "Michael"
+    case formal = "FORMAL"          // "Mr Versteegh" (title + last)
+    case firstMiddle = "FIRST_MID"  // "Sean Michael"
+
+    /// Human-readable display name
+    var displayName: String {
+        switch self {
+        case .full: return "Full Name"
+        case .firstLast: return "First & Last"
+        case .first: return "First Name"
+        case .last: return "Last Name"
+        case .middle: return "Middle Name"
+        case .formal: return "Formal"
+        case .firstMiddle: return "First & Middle"
+        }
+    }
+
+    /// Suffix for replacement code (e.g., "_FIRST" for [PERSON_A_FIRST])
+    var codeSuffix: String {
+        return "_\(rawValue)"
+    }
+}
+
 // MARK: - Entity Model
 
 /// Represents a single piece of personally identifiable information (PII) detected in text
@@ -21,8 +52,8 @@ struct Entity: Identifiable, Codable, Hashable {
     /// The original text that was detected (e.g., "Jane Smith")
     let originalText: String
 
-    /// The replacement code (e.g., "[CLIENT_A]")
-    let replacementCode: String
+    /// The replacement code (e.g., "[CLIENT_A]" or "[CLIENT_A_FIRST]")
+    var replacementCode: String
 
     /// The type of entity
     let type: EntityType
@@ -35,6 +66,10 @@ struct Entity: Identifiable, Codable, Hashable {
     /// Optional because not all detection methods provide confidence
     let confidence: Double?
 
+    /// For person entities: which variant of the name this represents
+    /// nil for non-person entities or when variant hasn't been determined
+    var nameVariant: NameVariant?
+
     // MARK: - Initialization
 
     init(
@@ -43,7 +78,8 @@ struct Entity: Identifiable, Codable, Hashable {
         replacementCode: String,
         type: EntityType,
         positions: [[Int]],
-        confidence: Double? = nil
+        confidence: Double? = nil,
+        nameVariant: NameVariant? = nil
     ) {
         self.id = id
         self.originalText = originalText
@@ -51,6 +87,7 @@ struct Entity: Identifiable, Codable, Hashable {
         self.type = type
         self.positions = positions
         self.confidence = confidence
+        self.nameVariant = nameVariant
     }
 
     // MARK: - Computed Properties
@@ -67,6 +104,9 @@ struct Entity: Identifiable, Codable, Hashable {
 
     /// Display text for UI lists
     var displayText: String {
+        if let variant = nameVariant {
+            return "\(originalText) → \(replacementCode) (\(variant.displayName))"
+        }
         return "\(originalText) → \(replacementCode)"
     }
 
@@ -74,6 +114,23 @@ struct Entity: Identifiable, Codable, Hashable {
     var shortDisplay: String {
         let typeIcon = type.iconName
         return "\(typeIcon) \(originalText)"
+    }
+
+    /// Variant display label for sidebar (e.g., "First Name", "Full Name")
+    var variantLabel: String? {
+        return nameVariant?.displayName
+    }
+
+    /// Base replacement code without variant suffix (e.g., "[PERSON_A]" from "[PERSON_A_FIRST]")
+    var baseReplacementCode: String {
+        // Remove variant suffix if present
+        for variant in NameVariant.allCases {
+            let suffix = variant.codeSuffix + "]"
+            if replacementCode.hasSuffix(suffix) {
+                return String(replacementCode.dropLast(suffix.count)) + "]"
+            }
+        }
+        return replacementCode
     }
 
     // MARK: - Helper Methods

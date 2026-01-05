@@ -8,6 +8,131 @@
 
 import Foundation
 
+// MARK: - Redacted Person
+
+/// Represents a redacted person with parsed name components for variant-aware replacement
+struct RedactedPerson: Codable {
+    let baseId: String           // "PERSON_A" (without brackets)
+    let full: String             // "Sean Michael Versteegh"
+    let first: String            // "Sean"
+    let last: String             // "Versteegh"
+    let middle: String?          // "Michael"
+    let detectedTitle: String?   // "Mr", "Dr", etc.
+
+    /// First + Middle name combination (e.g., "Sean Michael")
+    var firstMiddle: String? {
+        guard let mid = middle else { return nil }
+        return "\(first) \(mid)"
+    }
+
+    /// First + Last name (e.g., "Sean Versteegh")
+    var firstLast: String {
+        "\(first) \(last)"
+    }
+
+    /// Formal address (Title + Last, e.g., "Mr Versteegh")
+    var formal: String {
+        let title = detectedTitle ?? "Mr"
+        return "\(title) \(last)"
+    }
+
+    /// Generate placeholder for a specific variant (e.g., "[PERSON_A_FIRST]")
+    func placeholder(for variant: NameVariant) -> String {
+        "[\(baseId)\(variant.codeSuffix)]"
+    }
+
+    /// Get the original text for a specific variant
+    func text(for variant: NameVariant) -> String {
+        switch variant {
+        case .full: return full
+        case .first: return first
+        case .last: return last
+        case .middle: return middle ?? ""
+        case .firstLast: return firstLast
+        case .firstMiddle: return firstMiddle ?? first
+        case .formal: return formal
+        }
+    }
+
+    /// Detect which variant a given text represents for this person
+    /// Strips titles before matching
+    func detectVariant(for text: String) -> NameVariant? {
+        let stripped = RedactedPerson.stripTitle(text).lowercased()
+        let hasTitle = RedactedPerson.hasTitle(text)
+
+        // Match longest first to avoid partial matches
+        if stripped == full.lowercased() { return .full }
+        if let fm = firstMiddle?.lowercased(), stripped == fm { return .firstMiddle }
+        if stripped == firstLast.lowercased() { return .firstLast }
+
+        // Title + Last = formal
+        if hasTitle && stripped == last.lowercased() { return .formal }
+
+        if stripped == first.lowercased() { return .first }
+        if let mid = middle?.lowercased(), stripped == mid { return .middle }
+        if stripped == last.lowercased() { return .last }
+
+        return nil
+    }
+
+    // MARK: - Static Helpers
+
+    static let titles = ["mr", "mrs", "ms", "dr", "prof", "miss", "mr.", "mrs.", "ms.", "dr.", "prof."]
+
+    /// Check if text starts with a title
+    static func hasTitle(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return titles.contains { lower.hasPrefix($0 + " ") }
+    }
+
+    /// Strip title from text
+    static func stripTitle(_ text: String) -> String {
+        let parts = text.components(separatedBy: " ").filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return text }
+
+        if titles.contains(parts[0].lowercased()) {
+            return parts.dropFirst().joined(separator: " ")
+        }
+        return text
+    }
+
+    /// Extract detected title from text
+    static func extractTitle(_ text: String) -> String? {
+        let parts = text.components(separatedBy: " ").filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+
+        let firstPart = parts[0].lowercased()
+        if titles.contains(firstPart) {
+            // Return with original casing but standardized (no period)
+            return parts[0].replacingOccurrences(of: ".", with: "").capitalized
+        }
+        return nil
+    }
+
+    /// Parse a full name string into RedactedPerson
+    /// - Parameters:
+    ///   - fullName: The complete name (e.g., "Mr Sean Michael Versteegh")
+    ///   - baseId: The base ID without brackets (e.g., "PERSON_A")
+    static func parse(fullName: String, baseId: String) -> RedactedPerson {
+        let detectedTitle = extractTitle(fullName)
+        let stripped = stripTitle(fullName)
+        let parts = stripped.components(separatedBy: " ").filter { !$0.isEmpty }
+
+        let first = parts.first ?? stripped
+        let last = parts.count >= 2 ? parts.last! : first
+        let middle: String? = parts.count >= 3 ? parts[1..<parts.count-1].joined(separator: " ") : nil
+
+        return RedactedPerson(
+            baseId: baseId,
+            full: stripped,
+            first: first,
+            last: last,
+            middle: middle,
+            detectedTitle: detectedTitle
+        )
+    }
+}
+
 // MARK: - Entity Mapping
 
 /// Maintains consistent mappings between original entities and replacement codes
@@ -24,6 +149,10 @@ class EntityMapping: ObservableObject {
 
     /// Counter for each entity type to generate sequential codes (A, B, C, etc.)
     private var counters: [EntityType: Int] = [:]
+
+    /// Stored RedactedPerson objects for variant-aware replacement
+    /// Key: base ID (e.g., "PERSON_A"), Value: RedactedPerson
+    @Published private(set) var redactedPersons: [String: RedactedPerson] = [:]
 
     // MARK: - Public Methods
 
@@ -59,6 +188,127 @@ class EntityMapping: ObservableObject {
         counters[type] = counter + 1
 
         return code
+    }
+
+    /// Get or create a variant-aware replacement code for a person name
+    /// - Parameters:
+    ///   - originalText: The original text to map
+    ///   - type: The entity type (must be a person type)
+    ///   - variant: The name variant (first, last, full, etc.)
+    /// - Returns: Tuple of (replacement code with variant suffix, detected variant)
+    func getVariantReplacementCode(for originalText: String, type: EntityType, variant: NameVariant? = nil) -> (code: String, variant: NameVariant?) {
+        guard type.isPerson else {
+            return (getReplacementCode(for: originalText, type: type), nil)
+        }
+
+        let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Check if this matches an existing RedactedPerson
+        for (baseId, person) in redactedPersons {
+            if let detectedVariant = person.detectVariant(for: originalText) {
+                let variantCode = person.placeholder(for: detectedVariant)
+                // Store mapping
+                mappings[key] = (original: originalText, replacement: variantCode)
+                return (variantCode, detectedVariant)
+            }
+        }
+
+        // Check existing mappings
+        if let existing = mappings[key] {
+            // Try to detect variant from the code
+            let detectedVariant = detectVariantFromCode(existing.replacement)
+            return (existing.replacement, detectedVariant)
+        }
+
+        // No existing match - create new person entry if this is a full name (2+ parts)
+        let stripped = RedactedPerson.stripTitle(originalText)
+        let parts = stripped.components(separatedBy: " ").filter { !$0.isEmpty }
+
+        if parts.count >= 2 {
+            // This is a full name - create RedactedPerson and store
+            let counter = counters[type] ?? 0
+            let baseCode = type.replacementCode(for: counter)
+            let baseId = String(baseCode.dropFirst().dropLast()) // Remove [ and ]
+
+            let person = RedactedPerson.parse(fullName: originalText, baseId: baseId)
+            redactedPersons[baseId] = person
+
+            // Use explicit variant or detect it
+            let finalVariant = variant ?? (parts.count > 2 ? NameVariant.full : NameVariant.firstLast)
+            let variantCode = person.placeholder(for: finalVariant)
+
+            mappings[key] = (original: originalText, replacement: variantCode)
+            counters[type] = counter + 1
+
+            #if DEBUG
+            print("EntityMapping: Created RedactedPerson '\(person.full)' with baseId \(baseId)")
+            #endif
+
+            return (variantCode, finalVariant)
+        } else {
+            // Single name - use regular code (no variant)
+            let code = getReplacementCode(for: originalText, type: type)
+            return (code, nil)
+        }
+    }
+
+    /// Detect variant from a replacement code (e.g., "[PERSON_A_FIRST]" -> .first)
+    private func detectVariantFromCode(_ code: String) -> NameVariant? {
+        for variant in NameVariant.allCases {
+            if code.contains(variant.codeSuffix + "]") {
+                return variant
+            }
+        }
+        return nil
+    }
+
+    /// Get RedactedPerson for a base ID
+    func getPerson(for baseId: String) -> RedactedPerson? {
+        return redactedPersons[baseId]
+    }
+
+    /// Find which variant a text represents across all registered persons
+    /// Returns (person, variant) if found, nil otherwise
+    func findVariant(for text: String) -> (person: RedactedPerson, variant: NameVariant)? {
+        for (_, person) in redactedPersons {
+            if let variant = person.detectVariant(for: text) {
+                return (person, variant)
+            }
+        }
+        return nil
+    }
+
+    /// Register a full name as anchor and get its RedactedPerson
+    /// Call this when you detect a full name to set up variant tracking
+    func registerPersonAnchor(fullName: String, type: EntityType) -> RedactedPerson? {
+        guard type.isPerson else { return nil }
+
+        let stripped = RedactedPerson.stripTitle(fullName)
+        let parts = stripped.components(separatedBy: " ").filter { !$0.isEmpty }
+        guard parts.count >= 2 else { return nil }
+
+        // Check if already registered
+        for (_, person) in redactedPersons {
+            if person.full.lowercased() == stripped.lowercased() {
+                return person
+            }
+        }
+
+        // Create new
+        let counter = counters[type] ?? 0
+        let baseCode = type.replacementCode(for: counter)
+        let baseId = String(baseCode.dropFirst().dropLast())
+
+        let person = RedactedPerson.parse(fullName: fullName, baseId: baseId)
+        redactedPersons[baseId] = person
+        counters[type] = counter + 1
+
+        // Store mapping for the full name
+        let key = fullName.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let variantCode = person.placeholder(for: parts.count > 2 ? .full : .firstLast)
+        mappings[key] = (original: fullName, replacement: variantCode)
+
+        return person
     }
 
     /// Find if this text is related to an existing mapped name (component or extension)
@@ -115,6 +365,7 @@ class EntityMapping: ObservableObject {
     func clearAll() {
         mappings.removeAll()
         counters.removeAll()
+        redactedPersons.removeAll()
     }
 
     /// Get all mappings as a sorted array

@@ -606,8 +606,22 @@ class ImprovePhaseState: ObservableObject {
             When in doubt: If the user is asking you to DO something to the document, return the document.
             If the user is asking you to EXPLAIN or DISCUSS something, use [CONVERSATION].
 
-            You have access to the memory system with the original source documents.
-            Use it to retrieve details if needed.
+            MEMORY TOOL USAGE - BE EFFICIENT:
+
+            You have:
+            - The current document (being refined)
+            - Summaries of all source documents (embedded in context)
+            - Access to full source documents via memory tool IF NEEDED
+
+            For simple edits (grammar, formatting, tone, restructuring, paragraph changes):
+            - Just make the edit directly. Do NOT use the memory tool.
+
+            For requests needing source information (add detail from original, check what report said):
+            - Check the summaries to identify which specific document has the info
+            - Use memory tool to read ONLY that specific document
+            - Stop reading once you have what you need
+
+            Do NOT read all documents for every request. Most refinements need zero memory lookups.
             """
 
         // Build recent conversation context (last 6 turns max)

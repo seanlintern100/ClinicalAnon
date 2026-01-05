@@ -710,6 +710,9 @@ class AIAssistantService: ObservableObject {
         return """
 
         ## Cross-Document Notes
+
+        *Note: These observations may reflect natural changes over time rather than true contradictions. Consider within your broader clinical understanding of the person and context of these reports.*
+
         \(result)
         """
     }

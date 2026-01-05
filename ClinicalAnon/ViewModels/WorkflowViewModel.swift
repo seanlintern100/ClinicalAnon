@@ -27,7 +27,7 @@ class WorkflowViewModel: ObservableObject {
 
     var redactState: RedactPhaseState
     let improveState: ImprovePhaseState
-    let restoreState: RestorePhaseState
+    var restoreState: RestorePhaseState
     let cacheManager: HighlightCacheManager
 
     // MARK: - Workflow Navigation
@@ -238,15 +238,21 @@ class WorkflowViewModel: ObservableObject {
     var allEntities: [Entity] { redactState.allEntities }
     var activeEntities: [Entity] { redactState.activeEntities }
 
-    /// All entities for restore display - combines sourceDocuments + current active entities
+    /// Entities actually restored in the output - only those whose placeholders appear in the AI output
     /// Deduplicates by originalText to avoid showing same entity multiple times
     var restoredEntities: [Entity] {
+        let output = aiOutput
+        guard !output.isEmpty else { return [] }
+
         var seen = Set<String>()
         var result: [Entity] = []
 
         // First add entities from source documents (multi-doc flow)
         for doc in improveState.sourceDocuments {
             for entity in doc.entities {
+                // Only include if placeholder appears in AI output
+                guard output.contains(entity.replacementCode) else { continue }
+
                 let key = entity.originalText.lowercased()
                 if !seen.contains(key) {
                     seen.insert(key)
@@ -257,6 +263,9 @@ class WorkflowViewModel: ObservableObject {
 
         // Then add current active entities (single-doc flow or unsaved current doc)
         for entity in redactState.activeEntities {
+            // Only include if placeholder appears in AI output
+            guard output.contains(entity.replacementCode) else { continue }
+
             let key = entity.originalText.lowercased()
             if !seen.contains(key) {
                 seen.insert(key)
@@ -401,6 +410,33 @@ class WorkflowViewModel: ObservableObject {
                 replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
+        }
+    }
+
+    /// Open the duplicate finder modal
+    func openDuplicateFinder() {
+        redactState.showDuplicateFinderModal = true
+    }
+
+    /// Merge multiple duplicate groups at once
+    func mergeDuplicateGroups(_ groups: [DuplicateGroup]) {
+        for group in groups {
+            // Merge each match into the primary entity
+            for match in group.matches {
+                mergeEntities(alias: match, into: group.primary)
+            }
+        }
+
+        // Show success message
+        let totalMerged = groups.reduce(0) { $0 + $1.matches.count }
+        redactState.successMessage = "Merged \(totalMerged) duplicate\(totalMerged == 1 ? "" : "s") into \(groups.count) group\(groups.count == 1 ? "" : "s")"
+
+        // Auto-hide success message
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await MainActor.run {
+                redactState.successMessage = nil
+            }
         }
     }
 
@@ -559,6 +595,16 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Restore Phase Actions
 
     func restoreNamesFromAIOutput() {
+        // Ensure all source document entities are in the mapping for multi-doc flow
+        for doc in improveState.sourceDocuments {
+            for entity in doc.entities {
+                engine.entityMapping.addMapping(
+                    originalText: entity.originalText,
+                    replacementCode: entity.replacementCode
+                )
+            }
+        }
+
         restoreState.restoreNamesFromAIOutput()
         // Rebuild restored text cache using strong reference
         if !restoreState.finalRestoredText.isEmpty {

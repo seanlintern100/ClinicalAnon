@@ -20,8 +20,9 @@ class TextReidentifier {
     /// - Parameters:
     ///   - text: Text containing placeholders like [PERSON_A]
     ///   - mapping: EntityMapping with placeholder → original mappings
+    ///   - normalizeDates: Whether to normalize dates to dd/MM/yyyy format (default: true)
     /// - Returns: Text with real names restored
-    func restore(text: String, using mapping: EntityMapping) -> String {
+    func restore(text: String, using mapping: EntityMapping, normalizeDates: Bool = true) -> String {
         var result = text
 
         // Get all mappings from EntityMapping
@@ -52,6 +53,62 @@ class TextReidentifier {
                 print("  ✓ Replaced \(mapping.placeholder) → '\(mapping.original)' (\(occurrences) times)")
                 #endif
             }
+        }
+
+        // Normalize dates to dd/MM/yyyy format
+        if normalizeDates {
+            result = DateNormalizer.normalizeAllDates(in: result)
+        }
+
+        return result
+    }
+
+    /// Replace all placeholders with original text, using overrides where specified
+    /// - Parameters:
+    ///   - text: Text containing placeholders like [PERSON_A]
+    ///   - mapping: EntityMapping with placeholder → original mappings
+    ///   - overrides: Dictionary of [replacementCode: customText] for manual edits
+    ///   - normalizeDates: Whether to normalize dates to dd/MM/yyyy format (default: true)
+    /// - Returns: Text with names restored, using overrides where available
+    func restoreWithOverrides(text: String, using mapping: EntityMapping, overrides: [String: String], normalizeDates: Bool = true) -> String {
+        var result = text
+
+        // Get all mappings from EntityMapping
+        let allMappings = mapping.allMappings
+
+        // Create reverse mapping: [PERSON_A] → "John" (or override if exists)
+        let reverseMappings = allMappings.map { mapping -> (placeholder: String, original: String) in
+            let replacement = overrides[mapping.replacement] ?? mapping.original
+            return (placeholder: mapping.replacement, original: replacement)
+        }
+
+        // Sort by placeholder length (longest first to avoid partial replacements)
+        let sorted = reverseMappings.sorted { $0.placeholder.count > $1.placeholder.count }
+
+        #if DEBUG
+        let overrideCount = overrides.count
+        print("🔄 TextReidentifier: Restoring \(sorted.count) placeholders (\(overrideCount) overrides)")
+        #endif
+
+        // Replace each placeholder with original/override text
+        for mapping in sorted {
+            let occurrences = result.occurrences(of: mapping.placeholder)
+            if occurrences > 0 {
+                result = result.replacingOccurrences(
+                    of: mapping.placeholder,
+                    with: mapping.original
+                )
+                #if DEBUG
+                let isOverride = overrides[mapping.placeholder] != nil
+                let marker = isOverride ? "📝" : "✓"
+                print("  \(marker) Replaced \(mapping.placeholder) → '\(mapping.original)' (\(occurrences) times)")
+                #endif
+            }
+        }
+
+        // Normalize dates to dd/MM/yyyy format
+        if normalizeDates {
+            result = DateNormalizer.normalizeAllDates(in: result)
         }
 
         return result

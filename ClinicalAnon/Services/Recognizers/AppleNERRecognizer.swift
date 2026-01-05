@@ -89,9 +89,6 @@ class AppleNERRecognizer: EntityRecognizer {
             let entityType: EntityType? = mapAppleTag(tag, text: name)
 
             if let type = entityType {
-                #if DEBUG
-                print("  🏷️ Apple NER: '\(name)' → \(type) (confidence: \(String(format: "%.2f", confidence)))")
-                #endif
                 entities.append(Entity(
                     originalText: name,
                     replacementCode: "",
@@ -172,10 +169,6 @@ class AppleNERRecognizer: EntityRecognizer {
                     positions: [[extendedStart, position[1]]],
                     confidence: entity.confidence
                 ))
-
-                #if DEBUG
-                print("  ✓ Extended '\(entity.originalText)' with name-word '\(nameWord)'")
-                #endif
             } else {
                 result.append(entity)
             }
