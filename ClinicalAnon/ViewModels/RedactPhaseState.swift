@@ -237,22 +237,22 @@ class RedactPhaseState: ObservableObject {
         }
 
         // Convert ambiguous matches to low confidence groups
-        // Each partial name that matched multiple anchors gets shown with all possible matches
+        // Create one group per anchor - full name is primary, partial is merged into it
         for (partialId, matchPairs) in ambiguousMatches {
             guard !processedEntityIds.contains(partialId) else { continue }
-            guard let firstPair = matchPairs.first else { continue }
 
-            // Group by the partial name (the ambiguous one) as primary
-            // Show all possible anchor matches
-            let anchors = matchPairs.map { $0.anchor }.filter { !processedEntityIds.contains($0.id) }
-            guard !anchors.isEmpty else { continue }
+            // Create a group for each anchor (full name as primary)
+            // User can choose which full name the partial should merge into
+            for matchPair in matchPairs {
+                guard !processedEntityIds.contains(matchPair.anchor.id) else { continue }
 
+                groups.append(DuplicateGroup(
+                    primary: matchPair.anchor,   // Full name as primary (more detail)
+                    matches: [matchPair.match],  // Partial name merged into it (less detail)
+                    confidence: .low
+                ))
+            }
             processedEntityIds.insert(partialId)
-            groups.append(DuplicateGroup(
-                primary: firstPair.match,  // The partial name is the primary
-                matches: anchors,           // The full names are the matches
-                confidence: .low
-            ))
         }
 
         // Low confidence: Partial matches without full name anchor

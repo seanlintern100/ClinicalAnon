@@ -648,10 +648,10 @@ private struct EntityTypeSection: View {
             .background(color.opacity(0.08))
             .cornerRadius(4)
 
-            // Entity rows
+            // Entity rows (sorted alphabetically)
             if isExpanded {
                 VStack(spacing: 2) {
-                    ForEach(entities) { entity in
+                    ForEach(entities.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() }) { entity in
                         RedactEntityRow(
                             entity: entity,
                             isExcluded: viewModel.isEntityExcluded(entity),
