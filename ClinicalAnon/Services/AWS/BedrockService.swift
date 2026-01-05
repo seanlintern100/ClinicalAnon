@@ -312,7 +312,7 @@ class BedrockService: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(currentApiKey, forHTTPHeaderField: "x-api-key")
-        request.timeoutInterval = 180
+        request.timeoutInterval = 300  // 5 min to match Lambda timeout
 
         // Build request body with tools
         var body: [String: Any] = [
@@ -440,7 +440,7 @@ class BedrockService: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(currentApiKey, forHTTPHeaderField: "x-api-key")
-        request.timeoutInterval = 180  // 3 minute timeout for long responses (Lambda has 2 min)
+        request.timeoutInterval = 300  // 5 min to match Lambda timeout
 
         // Build request body
         var body: [String: Any] = [

@@ -415,9 +415,11 @@ class ImprovePhaseState: ObservableObject {
                 }
             }
 
-            // Process with memory tool
-            let result = try await aiService.processWithMemory(
-                userMessage: "Please process these clinical documents according to the instructions.",
+            // Generate report directly (no agentic loop - faster, avoids timeout)
+            // Refinements will use processWithMemory for document lookups
+            let result = try await aiService.generateReport(
+                summaries: detectedDocuments,
+                crossDocNotes: crossDocumentNotes,
                 systemPrompt: prompt
             )
 

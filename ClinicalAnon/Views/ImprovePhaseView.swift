@@ -601,7 +601,7 @@ private struct ChatMessageView: View {
         if isSystem {
             // System messages: centered warning/info banner
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                MarkdownText(content)
+                MarkdownText(content, fontSize: 11)
                     .textSelection(.enabled)
             }
             .padding(DesignSystem.Spacing.small)
@@ -822,9 +822,21 @@ private struct DetectedDocumentRow: View {
 
     @State private var isExpanded: Bool = false  // Start collapsed
 
+    // Strip redundant header from summary for display (keep in memory storage)
+    private var displaySummary: String {
+        let lines = document.summary.components(separatedBy: "\n")
+
+        // Skip first line if it's a redundant header like "Clinical Document Extraction: ..."
+        if let firstLine = lines.first?.lowercased(),
+           firstLine.contains("extraction:") || firstLine.contains("summary:") {
+            return lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return document.summary
+    }
+
     // Check if summary is long enough to need expansion
     private var summaryNeedsExpansion: Bool {
-        document.summary.count > 80
+        displaySummary.count > 80
     }
 
     // Extract document number from id (e.g., "doc1" -> "1", "doc12" -> "12")
@@ -880,10 +892,9 @@ private struct DetectedDocumentRow: View {
                 }
             }
 
-            // Summary section with markdown support
-            if !document.summary.isEmpty {
-                Text(MarkdownParser.parseToAttributedString(document.summary))
-                    .font(.system(size: 9))
+            // Summary section with markdown support (header stripped for display)
+            if !displaySummary.isEmpty {
+                Text(MarkdownParser.parseToAttributedString(displaySummary, baseFont: .systemFont(ofSize: 9)))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .lineLimit(isExpanded ? nil : 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -902,14 +913,16 @@ private struct DetectedDocumentRow: View {
 
 private struct MarkdownText: View {
     let text: String
+    let fontSize: CGFloat
 
-    init(_ text: String) {
+    init(_ text: String, fontSize: CGFloat = 14) {
         self.text = text
+        self.fontSize = fontSize
     }
 
     var body: some View {
         // Use custom MarkdownParser for proper heading support (## headers)
-        Text(MarkdownParser.parseToAttributedString(text))
+        Text(MarkdownParser.parseToAttributedString(text, baseFont: .systemFont(ofSize: fontSize)))
             .foregroundColor(DesignSystem.Colors.textPrimary)
     }
 }

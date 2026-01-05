@@ -68,6 +68,11 @@ struct RedactPhaseView: View {
                 }
             )
         }
+        .alert("Deep Scan Complete", isPresented: $viewModel.redactState.showDeepScanCompleteMessage) {
+            Button("OK") { }
+        } message: {
+            Text("Found \(viewModel.redactState.deepScanFindingsCount) additional term(s). These are shown but not active — tick any you want to redact, then click Apply Changes.")
+        }
     }
 
     // MARK: - Original Text Pane

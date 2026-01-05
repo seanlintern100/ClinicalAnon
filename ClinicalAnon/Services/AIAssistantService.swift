@@ -670,34 +670,39 @@ class AIAssistantService: ObservableObject {
         }.joined(separator: "\n\n")
 
         let prompt = """
-        Review these document summaries for clinically significant inconsistencies:
+        Review these document summaries for clinically significant contradictions:
 
         \(combinedSummaries)
 
-        Focus on issues relevant to psychology report writing:
-        - Conflicting diagnoses or diagnostic impressions
-        - Different accounts of symptom onset or duration
-        - Inconsistent cognitive/IQ assessments across reports
-        - Contradictory information about trauma history
-        - Conflicting medication histories or treatment responses
-        - Different accounts of functional impairment levels
-        - Discrepant risk assessments (self-harm, violence)
+        PRIORITY - Flag contradictions in:
+        - Diagnostic opinions and formulations (e.g., different diagnoses for same presentation)
+        - Clinical assessments and conclusions (e.g., conflicting cognitive/IQ findings)
+        - Opinions on causation or prognosis
+        - Severity ratings or functional impairment levels
+        - Risk assessments (self-harm, violence)
+        - Treatment recommendations that conflict
 
-        Only flag issues that would affect clinical synthesis. Ignore minor date discrepancies or typos.
-        List significant inconsistencies as bullet points. If none found, respond with "No significant inconsistencies noted."
+        IGNORE:
+        - Date/timeline discrepancies (dates are redacted and different placeholders may represent the same date)
+        - Minor factual differences that don't affect clinical opinion
+        - Typos or formatting differences
+
+        Provide up to 5 significant contradictions maximum. Only include issues that genuinely conflict and would affect clinical synthesis. Fewer is fine if there aren't 5 significant issues.
+        If none found, respond with "No significant contradictions noted."
         """
 
-        let systemPrompt = "You are a clinical psychologist reviewing source documents. Flag contradictions that would affect report writing. Be specific about which documents conflict and why it matters clinically."
+        let systemPrompt = "You are a clinical psychologist reviewing source documents. Flag contradictions in clinical opinions and diagnoses that would affect report writing. Focus on conflicting professional opinions, not dates or timelines. Be specific about which documents conflict and why it matters clinically."
 
         let result = try await bedrockService.invoke(
             systemPrompt: systemPrompt,
             userMessage: prompt,
             model: credentialsManager.selectedModel,
-            maxTokens: 500
+            maxTokens: 800
         )
 
-        // Only return if there are actual inconsistencies to flag
-        if result.lowercased().contains("no significant inconsistencies") ||
+        // Only return if there are actual contradictions to flag
+        if result.lowercased().contains("no significant") ||
+           result.lowercased().contains("no contradictions") ||
            result.lowercased().contains("no inconsistencies") {
             return ""
         }
@@ -707,6 +712,72 @@ class AIAssistantService: ObservableObject {
         ## Cross-Document Notes
         \(result)
         """
+    }
+
+    /// Generate report from summaries (no agentic loop, single call - faster, no timeout)
+    func generateReport(summaries: [DetectedDocument], crossDocNotes: String, systemPrompt: String) async throws -> String {
+        guard bedrockService.isConfigured else {
+            throw AppError.aiNotConfigured
+        }
+
+        isProcessing = true
+        error = nil
+        currentOutput = ""
+
+        defer { isProcessing = false }
+
+        // Build prompt with embedded summaries
+        var summaryText = "# Document Summaries\n\n"
+        for doc in summaries {
+            summaryText += "## \(doc.id.uppercased()): \(doc.title)\n"
+            summaryText += "**Type:** \(doc.type) | **Date:** \(doc.date ?? "N/A")\n\n"
+            summaryText += "\(doc.summary)\n\n---\n\n"
+        }
+
+        if !crossDocNotes.isEmpty {
+            summaryText += "\n\(crossDocNotes)\n"
+        }
+
+        let fullPrompt = """
+        \(systemPrompt)
+
+        \(summaryText)
+
+        ## Report Writing Approach
+
+        You are writing a psychology report. The summaries above contain detailed extractions from all source documents.
+
+        CRITICAL - Synthesise, don't summarise:
+        - DO NOT structure your report by source document (e.g., "Report A says... Report B says...")
+        - DO organise thematically (e.g., medical history, psychological functioning, social context, recommendations)
+        - Weave information from multiple sources together into cohesive sections
+        - When sources agree, state the finding once with confidence
+        - When sources differ, note this and use clinical judgement about what to include
+        - Draw on ALL relevant information from the summaries - don't leave out important details
+
+        The goal is a single, coherent clinical narrative that reads as original work, not a summary of summaries.
+
+        ## Output Rules
+        - Output ONLY the requested clinical content (report, summary, notes, etc.)
+        - No meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
+        - Start directly with the report content
+        - Use redacted placeholders (e.g., [PERSON_A], [ORG_B]) as they appear in the source documents
+        """
+
+        #if DEBUG
+        print("🤖 generateReport: Single call with \(summaries.count) summaries embedded")
+        #endif
+
+        // Single Bedrock call, no tool use
+        let result = try await bedrockService.invoke(
+            systemPrompt: fullPrompt,
+            userMessage: "Generate the clinical report now.",
+            model: credentialsManager.selectedModel,
+            maxTokens: 8000
+        )
+
+        currentOutput = result
+        return result
     }
 
     /// Build system prompt for memory mode with embedded summaries

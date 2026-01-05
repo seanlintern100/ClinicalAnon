@@ -232,6 +232,8 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - Use occasional direct quotes from source documents to illustrate key points
               (e.g., "As noted by [PERSON_B] in their report dated [DATE_C], '[quoted text]'")
             - Reference quotes with the author's name and report date using redacted placeholders
+            - If source documents conflict, prefer "User's rough notes" or "User's completed notes"
+              over "Report by another person" (the user's notes are likely more current)
 
             Maintain professional, objective tone appropriate for external readers.
             Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
@@ -296,6 +298,8 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - Include amendments only when warranted — Do not suggest changes speculatively
             - Note gaps — If information is insufficient to comment on a goal, state this
             - Quantify where possible — Session counts, timeframes, frequency
+            - If sources conflict, prefer "User's rough notes" or "User's completed notes"
+              over "Report by another person" (the user's notes are likely more current)
 
             Present the review as structured content ready for clinical review. Use clear headings and consistent formatting.
             """,

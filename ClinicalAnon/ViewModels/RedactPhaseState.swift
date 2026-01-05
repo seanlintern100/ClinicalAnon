@@ -58,6 +58,8 @@ class RedactPhaseState: ObservableObject {
     @Published var deepScanFindings: [Entity] = []
     @Published var isRunningDeepScan: Bool = false
     @Published var deepScanError: String?
+    @Published var showDeepScanCompleteMessage: Bool = false
+    @Published var deepScanFindingsCount: Int = 0
 
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
@@ -794,13 +796,24 @@ class RedactPhaseState: ObservableObject {
         )
 
         await MainActor.run {
+            let countBefore = deepScanFindings.count
             processDeepScanFindings(findings, originalText: result.originalText)
+            let newFindingsCount = deepScanFindings.count - countBefore
             isRunningDeepScan = false
 
-            if deepScanFindings.isEmpty {
+            if newFindingsCount == 0 {
                 successMessage = "Deep Scan complete - no additional entities found"
             } else {
-                successMessage = "Deep Scan found \(deepScanFindings.count) additional entity/entities"
+                // Auto-exclude deep scan findings (opt-in model: user must check to include)
+                for entity in deepScanFindings.suffix(newFindingsCount) {
+                    _excludedIds.insert(entity.id)
+                }
+                excludedEntityIds = _excludedIds
+
+                // Show message explaining opt-in workflow
+                deepScanFindingsCount = newFindingsCount
+                showDeepScanCompleteMessage = true
+                successMessage = "Deep Scan found \(newFindingsCount) additional term(s) - select any to redact"
             }
             autoHideSuccess()
             redactedTextNeedsUpdate = true
