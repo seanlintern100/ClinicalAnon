@@ -89,15 +89,36 @@ struct RedactPhaseView: View {
             Divider().opacity(0.15)
 
             // Text content
-            if let result = viewModel.result, let cachedOriginal = viewModel.cachedOriginalAttributed {
-                ScrollView {
-                    Text(cachedOriginal)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DesignSystem.Spacing.medium)
+            if let result = viewModel.result {
+                ZStack(alignment: .topTrailing) {
+                    if let cachedOriginal = viewModel.cachedOriginalAttributed {
+                        ScrollView {
+                            Text(cachedOriginal)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DesignSystem.Spacing.medium)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
+                    } else {
+                        // Show plain text while highlights build
+                        ScrollView {
+                            Text(result.originalText)
+                                .textSelection(.enabled)
+                                .font(.system(size: 14))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DesignSystem.Spacing.medium)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+
+                    // Loading indicator
+                    if viewModel.isBuildingHighlights {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .padding(DesignSystem.Spacing.small)
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
             } else {
                 ZStack(alignment: .topLeading) {
                     if viewModel.inputText.isEmpty {
@@ -177,15 +198,36 @@ struct RedactPhaseView: View {
             Divider().opacity(0.15)
 
             // Redacted text content
-            if let result = viewModel.result, let cachedRedacted = viewModel.cachedRedactedAttributed {
-                ScrollView {
-                    Text(cachedRedacted)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DesignSystem.Spacing.medium)
+            if let result = viewModel.result {
+                ZStack(alignment: .topTrailing) {
+                    if let cachedRedacted = viewModel.cachedRedactedAttributed {
+                        ScrollView {
+                            Text(cachedRedacted)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DesignSystem.Spacing.medium)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
+                    } else {
+                        // Show plain redacted text while highlights build
+                        ScrollView {
+                            Text(viewModel.displayedRedactedText)
+                                .textSelection(.enabled)
+                                .font(.system(size: 14))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DesignSystem.Spacing.medium)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+
+                    // Loading indicator
+                    if viewModel.isBuildingHighlights {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .padding(DesignSystem.Spacing.small)
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
             } else {
                 VStack(spacing: DesignSystem.Spacing.medium) {
                     Spacer()
@@ -583,7 +625,9 @@ private struct EntityTypeSection: View {
                             entity: entity,
                             isExcluded: viewModel.isEntityExcluded(entity),
                             isFromAIReview: isAISection,
-                            onToggle: { viewModel.toggleEntity(entity) }
+                            onToggle: { viewModel.toggleEntity(entity) },
+                            mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id },
+                            onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) }
                         )
                     }
                 }
@@ -601,6 +645,8 @@ private struct RedactEntityRow: View {
     let isExcluded: Bool
     let isFromAIReview: Bool
     let onToggle: () -> Void
+    let mergeTargets: [Entity]
+    let onMerge: (Entity) -> Void
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
@@ -642,6 +688,17 @@ private struct RedactEntityRow: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(isExcluded ? Color.clear : (isFromAIReview ? Color.orange.opacity(0.1) : entity.type.highlightColor.opacity(0.1)))
         )
+        .contextMenu {
+            if !mergeTargets.isEmpty {
+                Menu("Merge with...") {
+                    ForEach(mergeTargets) { target in
+                        Button("\(target.originalText) \(target.replacementCode)") {
+                            onMerge(target)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

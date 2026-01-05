@@ -163,6 +163,33 @@ class EntityMapping: ObservableObject {
         }
     }
 
+    /// Merge one entity's mapping into another (alias → primary)
+    /// The alias will adopt the primary's replacement code
+    /// - Parameters:
+    ///   - alias: The text to merge (will use primary's code)
+    ///   - primary: The text to merge into (keeps its code)
+    /// - Returns: The primary's replacement code, or nil if primary not found
+    func mergeMapping(alias: String, into primary: String) -> String? {
+        let aliasKey = alias.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let primaryKey = primary.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let primaryMapping = mappings[primaryKey] else {
+            #if DEBUG
+            print("EntityMapping.mergeMapping: Primary '\(primary)' not found in mappings")
+            #endif
+            return nil
+        }
+
+        // Point alias to primary's code
+        mappings[aliasKey] = (original: alias, replacement: primaryMapping.replacement)
+
+        #if DEBUG
+        print("EntityMapping.mergeMapping: '\(alias)' merged into '\(primary)' → \(primaryMapping.replacement)")
+        #endif
+
+        return primaryMapping.replacement
+    }
+
     /// Export mappings as JSON string
     func exportAsJSON() -> String? {
         let mappingArray = mappings.map { ["original": $0.value.original, "replacement": $0.value.replacement] }

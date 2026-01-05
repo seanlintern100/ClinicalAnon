@@ -29,7 +29,7 @@ struct Entity: Identifiable, Codable, Hashable {
 
     /// Positions where this entity appears in the original text
     /// Array of [startIndex, endIndex] pairs
-    let positions: [[Int]]
+    var positions: [[Int]]
 
     /// Confidence score from the LLM (0.0 to 1.0)
     /// Optional because not all detection methods provide confidence

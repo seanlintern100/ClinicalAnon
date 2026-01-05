@@ -306,6 +306,66 @@ class RedactPhaseState: ObservableObject {
         hasPendingChanges = false
     }
 
+    /// Merge alias entity into primary entity
+    /// The alias is removed and its positions are consolidated into the primary
+    func mergeEntities(alias: Entity, into primary: Entity) {
+        guard alias.type == primary.type else { return }
+
+        // Find and update the primary entity with combined positions
+        // Check in result entities
+        if let result = result, let idx = result.entities.firstIndex(where: { $0.id == primary.id }) {
+            var updatedEntity = result.entities[idx]
+            updatedEntity.positions.append(contentsOf: alias.positions)
+            self.result?.entities[idx] = updatedEntity
+        }
+
+        // Check in custom entities
+        if let idx = customEntities.firstIndex(where: { $0.id == primary.id }) {
+            customEntities[idx].positions.append(contentsOf: alias.positions)
+        }
+
+        // Check in PII review findings
+        if let idx = piiReviewFindings.firstIndex(where: { $0.id == primary.id }) {
+            piiReviewFindings[idx].positions.append(contentsOf: alias.positions)
+        }
+
+        // Check in BERT NER findings
+        if let idx = bertNERFindings.firstIndex(where: { $0.id == primary.id }) {
+            bertNERFindings[idx].positions.append(contentsOf: alias.positions)
+        }
+
+        // Check in XLM-R NER findings
+        if let idx = xlmrNERFindings.firstIndex(where: { $0.id == primary.id }) {
+            xlmrNERFindings[idx].positions.append(contentsOf: alias.positions)
+        }
+
+        // Check in deep scan findings
+        if let idx = deepScanFindings.firstIndex(where: { $0.id == primary.id }) {
+            deepScanFindings[idx].positions.append(contentsOf: alias.positions)
+        }
+
+        // Remove alias from all entity lists
+        if let result = result {
+            self.result?.entities.removeAll { $0.id == alias.id }
+        }
+        customEntities.removeAll { $0.id == alias.id }
+        piiReviewFindings.removeAll { $0.id == alias.id }
+        bertNERFindings.removeAll { $0.id == alias.id }
+        xlmrNERFindings.removeAll { $0.id == alias.id }
+        deepScanFindings.removeAll { $0.id == alias.id }
+
+        // Remove alias from excluded set if it was excluded
+        _excludedIds.remove(alias.id)
+        excludedEntityIds.remove(alias.id)
+
+        // Mark for cache refresh
+        redactedTextNeedsUpdate = true
+
+        #if DEBUG
+        print("RedactPhaseState.mergeEntities: Merged '\(alias.originalText)' into '\(primary.originalText)'")
+        #endif
+    }
+
     func openAddCustomEntity(withText text: String? = nil) {
         prefilledText = text
         showingAddCustom = true

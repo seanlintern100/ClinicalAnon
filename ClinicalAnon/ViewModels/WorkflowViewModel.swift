@@ -228,6 +228,7 @@ class WorkflowViewModel: ObservableObject {
     var cachedOriginalAttributed: AttributedString? { cacheManager.cachedOriginalAttributed }
     var cachedRedactedAttributed: AttributedString? { cacheManager.cachedRedactedAttributed }
     var cachedRestoredAttributed: AttributedString? { cacheManager.cachedRestoredAttributed }
+    var isBuildingHighlights: Bool { cacheManager.isBuilding }
 
     // MARK: - Computed Properties
 
@@ -361,6 +362,35 @@ class WorkflowViewModel: ObservableObject {
         redactState.toggleEntities(entities)
     }
 
+    /// Merge one entity into another (alias adopts primary's replacement code)
+    /// The alias entity is removed from the list, its positions added to primary
+    func mergeEntities(alias: Entity, into primary: Entity) {
+        guard alias.type == primary.type else {
+            #if DEBUG
+            print("WorkflowViewModel.mergeEntities: Cannot merge different entity types")
+            #endif
+            return
+        }
+
+        // Update the entity mapping so alias uses primary's code
+        _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
+
+        // Merge in RedactPhaseState (consolidates positions, removes alias from list)
+        redactState.mergeEntities(alias: alias, into: primary)
+
+        // Rebuild caches with updated entities
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                restoredText: nil
+            )
+        }
+    }
+
     func applyChanges() {
         redactState.applyChanges()
         if let result = redactState.result {
@@ -376,7 +406,8 @@ class WorkflowViewModel: ObservableObject {
     }
 
     func openAddCustomEntity(withText text: String? = nil) {
-        redactState.openAddCustomEntity(withText: text)
+        prefilledText = text
+        showingAddCustom = true
     }
 
     func addCustomEntity(text: String, type: EntityType) {

@@ -36,17 +36,19 @@ class AWSCredentialsManager: ObservableObject {
 
     @Published var hasCredentials: Bool = true  // Always true with proxy
     @Published var region: String = AWSCredentials.defaultRegion
-    @Published var selectedModel: String = "apac.anthropic.claude-sonnet-4-20250514-v1:0"
+    @Published var selectedModel: String = "au.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
     // MARK: - Defaults
 
-    static let defaultModel = "apac.anthropic.claude-sonnet-4-20250514-v1:0"
+    static let defaultModel = "au.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
     // MARK: - Available Models
+    // Note: Only au. prefix models keep data within Australia (data sovereignty)
+    // Enable in AWS Console → Bedrock → Model access
 
     static let availableModels: [(id: String, name: String)] = [
-        ("apac.anthropic.claude-sonnet-4-20250514-v1:0", "Claude Sonnet 4 (Recommended)"),
-        ("apac.anthropic.claude-3-5-sonnet-20241022-v2:0", "Claude 3.5 Sonnet v2")
+        ("au.anthropic.claude-sonnet-4-5-20250929-v1:0", "Claude Sonnet 4.5 (Recommended)"),
+        ("au.anthropic.claude-haiku-4-5-20251001-v1:0", "Claude Haiku 4.5 (Faster, Lower Cost)")
     ]
 
     // MARK: - Initialization
@@ -75,7 +77,14 @@ class AWSCredentialsManager: ObservableObject {
 
     private func loadSettings() {
         if let savedModel = UserDefaults.standard.string(forKey: SettingsKeys.awsModel) {
-            selectedModel = savedModel
+            // Check if it's the correct AU inference profile format
+            if savedModel.hasPrefix("au.") {
+                selectedModel = savedModel
+            } else {
+                // Migrate to AU inference profile (data stays in Australia)
+                selectedModel = Self.defaultModel
+                UserDefaults.standard.set(Self.defaultModel, forKey: SettingsKeys.awsModel)
+            }
         }
     }
 

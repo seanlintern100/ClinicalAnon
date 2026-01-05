@@ -248,7 +248,177 @@ class BedrockService: ObservableObject {
         }
     }
 
-    // MARK: - Private Proxy Call
+    // MARK: - Invoke with Tools
+
+    /// Send a conversation with tools enabled and get a response that may contain tool use
+    func invokeWithTools(
+        systemPrompt: String?,
+        messages: [[String: Any]],
+        tools: [[String: Any]],
+        model: String,
+        maxTokens: Int = 4096,
+        betas: [String] = ["context-management-2025-06-27"]
+    ) async throws -> AIResponse {
+
+        // Ensure we have an API key
+        if apiKey == nil {
+            await fetchApiKey()
+        }
+
+        guard apiKey != nil else {
+            throw AppError.aiNotConfigured
+        }
+
+        do {
+            let response = try await callProxyWithTools(
+                model: model,
+                messages: messages,
+                systemPrompt: systemPrompt,
+                maxTokens: maxTokens,
+                tools: tools,
+                betas: betas
+            )
+            return response
+        } catch let error as AppError {
+            lastError = error
+            throw error
+        } catch {
+            let appError = AppError.awsInvocationFailed(error.localizedDescription)
+            lastError = appError
+            throw appError
+        }
+    }
+
+    // MARK: - Private Proxy Calls
+
+    private func callProxyWithTools(
+        model: String,
+        messages: [[String: Any]],
+        systemPrompt: String?,
+        maxTokens: Int,
+        tools: [[String: Any]],
+        betas: [String]
+    ) async throws -> AIResponse {
+
+        guard let currentApiKey = apiKey else {
+            throw AppError.aiNotConfigured
+        }
+
+        guard let url = URL(string: proxyEndpoint) else {
+            throw AppError.awsConfigurationFailed("Invalid proxy URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(currentApiKey, forHTTPHeaderField: "x-api-key")
+        request.timeoutInterval = 180
+
+        // Build request body with tools
+        var body: [String: Any] = [
+            "model": model,
+            "messages": messages,
+            "max_tokens": maxTokens,
+            "tools": tools
+        ]
+
+        if !betas.isEmpty {
+            body["betas"] = betas
+        }
+
+        if let system = systemPrompt, !system.isEmpty {
+            body["system"] = system
+        }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        #if DEBUG
+        print("🔵 Bedrock invokeWithTools: Sending request")
+        print("   Model: \(model)")
+        print("   Tools: \(tools.count)")
+        print("   Messages: \(messages.count)")
+        #endif
+
+        // Make request
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AppError.awsInvocationFailed("Invalid response")
+        }
+
+        // Parse response
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            #if DEBUG
+            print("🔴 Bedrock: Failed to parse JSON response")
+            print("   Raw data: \(String(data: data, encoding: .utf8) ?? "nil")")
+            #endif
+            throw AppError.emptyResponse
+        }
+
+        #if DEBUG
+        print("🔵 Bedrock response status: \(httpResponse.statusCode)")
+        print("   Response keys: \(json.keys)")
+        print("   Stop reason: \(json["stop_reason"] ?? "nil")")
+        #endif
+
+        // Check for error response
+        if let error = json["error"] as? String {
+            switch httpResponse.statusCode {
+            case 429:
+                throw AppError.aiThrottled
+            case 403:
+                await fetchApiKey()
+                throw AppError.aiAccessDenied
+            default:
+                throw AppError.awsInvocationFailed(error)
+            }
+        }
+
+        // Parse content blocks
+        guard let content = json["content"] as? [[String: Any]] else {
+            #if DEBUG
+            print("🔴 Bedrock: No content array in response")
+            print("   Full response: \(json)")
+            #endif
+            throw AppError.emptyResponse
+        }
+
+        var textContent: String?
+        var toolUse: ToolUse?
+        let stopReason = json["stop_reason"] as? String
+
+        for block in content {
+            guard let blockType = block["type"] as? String else { continue }
+
+            switch blockType {
+            case "text":
+                if let text = block["text"] as? String {
+                    textContent = text
+                }
+            case "tool_use":
+                if let toolId = block["id"] as? String,
+                   let toolName = block["name"] as? String,
+                   let toolInput = block["input"] as? [String: Any] {
+                    // Convert input to AnyCodable
+                    var codableInput: [String: AnyCodable] = [:]
+                    for (key, value) in toolInput {
+                        codableInput[key] = AnyCodable(value)
+                    }
+                    toolUse = ToolUse(id: toolId, name: toolName, input: codableInput)
+
+                    #if DEBUG
+                    print("🔵 Tool use detected: \(toolName)")
+                    print("   Tool ID: \(toolId)")
+                    print("   Input: \(toolInput)")
+                    #endif
+                }
+            default:
+                break
+            }
+        }
+
+        return AIResponse(text: textContent, toolUse: toolUse, stopReason: stopReason)
+    }
 
     private func callProxy(
         model: String,

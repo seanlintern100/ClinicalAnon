@@ -61,6 +61,13 @@ class ImprovePhaseState: ObservableObject {
         sourceDocuments.first { $0.id == selectedDocumentId }
     }
 
+    // MARK: - Memory Mode (Large Documents)
+
+    @Published var isMemoryMode: Bool = false
+    @Published var detectedDocuments: [DetectedDocument] = []
+    @Published var isDetectingDocuments: Bool = false
+    @Published var memoryModeInitialized: Bool = false
+
     // MARK: - Sheet States
 
     @Published var showPromptEditor: Bool = false
@@ -171,6 +178,20 @@ class ImprovePhaseState: ObservableObject {
         print("   Prompt preview: \(String(fullPrompt.prefix(200)))...")
         #endif
 
+        // Check if we should use memory mode for large documents
+        if aiService.shouldUseMemoryMode(for: inputForAI) {
+            #if DEBUG
+            print("🤖 Input exceeds threshold - switching to memory mode")
+            #endif
+            isMemoryMode = true
+            currentAITask = Task {
+                await processWithMemoryMode(inputForAI, prompt: fullPrompt)
+            }
+            return
+        }
+
+        // Standard processing for smaller documents
+        isMemoryMode = false
         currentAITask = Task {
             do {
                 #if DEBUG
@@ -211,6 +232,75 @@ class ImprovePhaseState: ObservableObject {
         }
     }
 
+    /// Process large documents with memory mode
+    private func processWithMemoryMode(_ text: String, prompt: String) async {
+        do {
+            // Step 1: Detect documents
+            isDetectingDocuments = true
+            #if DEBUG
+            print("🤖 Memory Mode: Detecting documents...")
+            #endif
+
+            detectedDocuments = try await aiService.detectDocumentBoundaries(text)
+
+            #if DEBUG
+            print("🤖 Memory Mode: Detected \(detectedDocuments.count) document(s)")
+            #endif
+
+            // Step 2: Generate summaries for documents without them
+            for i in 0..<detectedDocuments.count {
+                if detectedDocuments[i].summary.isEmpty {
+                    let summary = try await aiService.generateDocumentSummary(
+                        detectedDocuments[i].fullContent,
+                        title: detectedDocuments[i].title,
+                        type: detectedDocuments[i].type
+                    )
+                    detectedDocuments[i].summary = summary
+
+                    #if DEBUG
+                    print("🤖 Memory Mode: Generated summary for \(detectedDocuments[i].title)")
+                    #endif
+                }
+            }
+
+            isDetectingDocuments = false
+
+            // Step 3: Initialize memory storage
+            await aiService.initializeMemoryMode(documents: detectedDocuments)
+            memoryModeInitialized = true
+
+            #if DEBUG
+            print("🤖 Memory Mode: Memory storage initialized")
+            #endif
+
+            // Step 4: Process with memory tool
+            let result = try await aiService.processWithMemory(
+                userMessage: "Please process these clinical documents according to the instructions.",
+                systemPrompt: prompt
+            )
+
+            aiOutput = result
+            currentDocument = result
+            isInRefinementMode = true
+            chatHistory.append((role: "assistant", content: result))
+            isAIProcessing = false
+
+            #if DEBUG
+            print("🤖 Memory Mode: Processing complete - \(result.count) chars")
+            #endif
+
+        } catch {
+            #if DEBUG
+            print("🤖 Memory Mode: ERROR - \(error.localizedDescription)")
+            #endif
+            if !Task.isCancelled {
+                aiError = error.localizedDescription
+                isDetectingDocuments = false
+                isAIProcessing = false
+            }
+        }
+    }
+
     /// Send refinement request to improve the current output
     func sendRefinement() {
         let request = refinementInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -229,6 +319,15 @@ class ImprovePhaseState: ObservableObject {
         previousDocument = currentDocument
         changedLineIndices = []
 
+        // Use memory mode if active
+        if isMemoryMode && memoryModeInitialized {
+            currentAITask = Task {
+                await sendRefinementWithMemory(request)
+            }
+            return
+        }
+
+        // Standard refinement mode
         let docSnapshot = currentDocument
         let userMessage = """
             Here is the current document:
@@ -299,6 +398,63 @@ class ImprovePhaseState: ObservableObject {
         }
     }
 
+    /// Send refinement using memory mode
+    private func sendRefinementWithMemory(_ request: String) async {
+        let systemPrompt = """
+            You are a clinical writing assistant helping refine a document.
+
+            The user has already received a generated document. Now they are requesting changes or asking questions.
+
+            CRITICAL RESPONSE FORMAT:
+            - If responding conversationally (answering questions, giving suggestions, discussing),
+              start your response with exactly: [CONVERSATION]
+            - If providing an updated document, return ONLY the document text with no prefix.
+
+            You have access to the memory system with the original source documents.
+            Use it to retrieve details if needed.
+            """
+
+        let userMessage = """
+            Here is the current document:
+
+            ---
+            \(currentDocument)
+            ---
+
+            User request: \(request)
+
+            If this is an editing request, return the full updated document only.
+            If this is a question or discussion, respond conversationally.
+            """
+
+        do {
+            let result = try await aiService.processWithMemory(
+                userMessage: userMessage,
+                systemPrompt: systemPrompt
+            )
+
+            let conversationMarker = "[CONVERSATION]"
+            if result.hasPrefix(conversationMarker) {
+                let cleanedResult = String(result.dropFirst(conversationMarker.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                aiOutput = cleanedResult
+                chatHistory.append((role: "assistant", content: cleanedResult))
+            } else {
+                aiOutput = result
+                currentDocument = result
+                changedLineIndices = computeChangedLines(from: previousDocument, to: result)
+                chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+            }
+
+            isAIProcessing = false
+        } catch {
+            if !Task.isCancelled {
+                aiError = error.localizedDescription
+                isAIProcessing = false
+            }
+        }
+    }
+
     /// Exit refinement mode
     func exitRefinementMode() {
         isInRefinementMode = false
@@ -326,6 +482,13 @@ class ImprovePhaseState: ObservableObject {
         customInstructions = ""
         aiError = nil
         isAIProcessing = false
+
+        // Reset memory mode state
+        isMemoryMode = false
+        detectedDocuments.removeAll()
+        isDetectingDocuments = false
+        memoryModeInitialized = false
+        aiService.resetMemoryMode()
 
         aiService.resetContext()
     }
@@ -356,6 +519,13 @@ class ImprovePhaseState: ObservableObject {
         // Clear multi-document state
         sourceDocuments.removeAll()
         selectedDocumentId = nil
+
+        // Clear memory mode state
+        isMemoryMode = false
+        detectedDocuments.removeAll()
+        isDetectingDocuments = false
+        memoryModeInitialized = false
+        aiService.resetMemoryMode()
     }
 
     // MARK: - Sheet Actions

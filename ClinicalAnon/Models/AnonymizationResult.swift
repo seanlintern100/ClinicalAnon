@@ -25,7 +25,7 @@ struct AnonymizationResult: Identifiable, Codable {
     let anonymizedText: String
 
     /// All entities detected and replaced
-    let entities: [Entity]
+    var entities: [Entity]
 
     /// Timestamp when this anonymization was performed
     let timestamp: Date

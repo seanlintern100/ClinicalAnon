@@ -80,6 +80,7 @@
 		FD5A5AA7FF1DD4EB05258D63 /* AIAssistantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E8D95843A42C138E6B0D5CA /* AIAssistantService.swift */; };
 		FF5E346E1B05C0B073598613 /* DocumentTypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2551C5C15BE3034D62CB24 /* DocumentTypeManager.swift */; };
 		FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */; };
+		MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = MEMSTOR001000000000000002 /* MemoryStorage.swift */; };
 		SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */; };
 		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
 /* End PBXBuildFile section */
@@ -172,6 +173,7 @@
 		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sentencepiece.bpe.model"; sourceTree = "<group>"; };
 		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
 		XLMR0005000000000000000002 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "tokenizer.json"; sourceTree = "<group>"; };
+		MEMSTOR001000000000000002 /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -340,6 +342,7 @@
 				D283D54D8952DB9D71D72D79 /* EntityDetector.swift */,
 				A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */,
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */,
+				MEMSTOR001000000000000002 /* MemoryStorage.swift */,
 				B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */,
 				9741FCB21B765FA21672D641 /* SwiftNERService.swift */,
 				CHUNK0002000000000000001 /* ChunkManager.swift */,
@@ -560,6 +563,7 @@
 				26F2EED833E35BEF64B2D0C3 /* BertNERService.swift in Sources */,
 				XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */,
 				SRCDOC000100000000000001 /* SourceDocument.swift in Sources */,
+				MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
