@@ -20,6 +20,11 @@ class RedactPhaseState: ObservableObject {
     @Published var inputText: String = ""
     @Published var result: AnonymizationResult?
 
+    // MARK: - Text Classification
+
+    @Published var textInputType: TextInputType = .otherReports
+    @Published var textInputTypeDescription: String = ""  // For "Other" type
+
     // MARK: - Processing State
 
     @Published var isProcessing: Bool = false
@@ -62,6 +67,9 @@ class RedactPhaseState: ObservableObject {
 
     @Published private(set) var cachedRedactedText: String = ""
     private var redactedTextNeedsUpdate: Bool = true
+
+    /// Positions of replacement codes in redacted text (for efficient highlighting)
+    private(set) var replacementPositions: [(range: NSRange, entityType: EntityType)] = []
 
     // MARK: - UI State
 
@@ -232,7 +240,9 @@ class RedactPhaseState: ObservableObject {
             description: "",
             originalText: result.originalText,
             redactedText: displayedRedactedText,
-            entities: activeEntities
+            entities: activeEntities,
+            textInputType: textInputType,
+            textInputTypeDescription: textInputTypeDescription
         )
         sourceDocuments.append(doc)
 
@@ -830,13 +840,14 @@ class RedactPhaseState: ObservableObject {
     private func updateRedactedTextCache() {
         guard let result = result else {
             cachedRedactedText = ""
+            replacementPositions = []
             redactedTextNeedsUpdate = false
             return
         }
 
         // Use NSString for all operations since positions are in UTF-16 (NSRange) coordinates
-        var nsText = result.originalText as NSString
-        var allReplacements: [(start: Int, end: Int, code: String)] = []
+        let nsText = result.originalText as NSString
+        var allReplacements: [(start: Int, end: Int, code: String, entityType: EntityType)] = []
 
         for entity in activeEntities {
             for position in entity.positions {
@@ -846,7 +857,7 @@ class RedactPhaseState: ObservableObject {
 
                 // Validate against NSString length (UTF-16), not String.count (grapheme clusters)
                 guard start >= 0 && end <= nsText.length && start < end else { continue }
-                allReplacements.append((start: start, end: end, code: entity.replacementCode))
+                allReplacements.append((start: start, end: end, code: entity.replacementCode, entityType: entity.type))
             }
         }
 
@@ -854,7 +865,7 @@ class RedactPhaseState: ObservableObject {
         allReplacements.sort { $0.start < $1.start }
 
         // Remove overlapping positions, keeping the longer replacement
-        var nonOverlapping: [(start: Int, end: Int, code: String)] = []
+        var nonOverlapping: [(start: Int, end: Int, code: String, entityType: EntityType)] = []
         for replacement in allReplacements {
             if let last = nonOverlapping.last {
                 // Check if this replacement overlaps with the previous one
@@ -878,19 +889,40 @@ class RedactPhaseState: ObservableObject {
             }
         }
 
-        // Sort in descending order for replacement (process end-to-start)
-        // This ensures earlier replacements don't shift positions of later ones
-        nonOverlapping.sort { $0.start > $1.start }
+        // nonOverlapping is sorted ascending by start - perfect for single-pass build
+        // Build result in one pass instead of repeated string copies (O(n) vs O(n*m))
+        var resultParts: [String] = []
+        var newReplacementPositions: [(range: NSRange, entityType: EntityType)] = []
+        var currentInputPosition = 0
+        var currentOutputPosition = 0
 
         for replacement in nonOverlapping {
-            guard replacement.start >= 0 && replacement.end <= nsText.length else { continue }
+            // Add text before this replacement
+            if currentInputPosition < replacement.start {
+                let beforeLength = replacement.start - currentInputPosition
+                let beforeRange = NSRange(location: currentInputPosition, length: beforeLength)
+                resultParts.append(nsText.substring(with: beforeRange))
+                currentOutputPosition += beforeLength
+            }
 
-            // Use NSString operations to maintain UTF-16 coordinate consistency
-            let range = NSRange(location: replacement.start, length: replacement.end - replacement.start)
-            nsText = nsText.replacingCharacters(in: range, with: replacement.code) as NSString
+            // Add replacement code and track its position in output
+            let codeLength = (replacement.code as NSString).length
+            let codeRange = NSRange(location: currentOutputPosition, length: codeLength)
+            newReplacementPositions.append((range: codeRange, entityType: replacement.entityType))
+            resultParts.append(replacement.code)
+
+            currentOutputPosition += codeLength
+            currentInputPosition = replacement.end
         }
 
-        cachedRedactedText = nsText as String
+        // Add remaining text after last replacement
+        if currentInputPosition < nsText.length {
+            let afterRange = NSRange(location: currentInputPosition, length: nsText.length - currentInputPosition)
+            resultParts.append(nsText.substring(with: afterRange))
+        }
+
+        cachedRedactedText = resultParts.joined()
+        replacementPositions = newReplacementPositions
         redactedTextNeedsUpdate = false
     }
 

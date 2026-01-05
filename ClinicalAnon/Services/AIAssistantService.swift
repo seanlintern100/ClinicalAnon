@@ -191,20 +191,51 @@ class AIAssistantService: ObservableObject {
     }
 
     /// Detect document boundaries in large text using AI
+    /// For documents under 600K chars, sends full text for accurate detection
+    /// For very large documents (>600K chars), uses chunked detection with overlap
     func detectDocumentBoundaries(_ text: String) async throws -> [DetectedDocument] {
         guard bedrockService.isConfigured else {
             throw AppError.aiNotConfigured
         }
 
-        // Send first ~4K chars + last ~1K chars for analysis
-        let sample = String(text.prefix(4000)) + "\n\n[...]\n\n" + String(text.suffix(1000))
+        // Very large documents (>600K chars, ~150K tokens) need chunked detection
+        if text.count > 600_000 {
+            #if DEBUG
+            print("⚠️ Very large document (\(text.count / 1000)K chars) - using chunked detection")
+            #endif
+            return try await detectBoundariesChunked(text, chunkSize: 250_000, overlap: 20_000)
+        }
+
+        // Standard detection: send full text with line numbers
+        #if DEBUG
+        print("🔵 Document detection: analyzing \(text.count / 1000)K chars")
+        #endif
+        return try await detectBoundariesFullText(text)
+    }
+
+    /// Detect boundaries by sending full text to AI
+    private func detectBoundariesFullText(_ text: String) async throws -> [DetectedDocument] {
+        let lines = text.components(separatedBy: .newlines)
+
+        // Add line numbers to full text for accurate boundary detection
+        var numberedText = ""
+        for (index, line) in lines.enumerated() {
+            numberedText += "[\(index + 1)] \(line)\n"
+        }
 
         let prompt = """
-        Analyze this text sample from a clinical document bundle.
+        Analyze this clinical document text and identify ALL SEPARATE DOCUMENTS within it.
 
-        Does it contain MULTIPLE SEPARATE DOCUMENTS (e.g., multiple letters, reports, or notes)?
+        Look for document boundaries indicated by:
+        - Different authors or signatures (e.g., "Dr Smith", "Signed by")
+        - Document headers/titles (e.g., "REPORT", "Assessment", "Progress Notes", "Letter")
+        - Different dates that indicate separate documents
+        - Letterheads or organisation names
+        - Clear changes in document type or format
 
-        If YES, return a JSON array describing each document:
+        IMPORTANT: There may be 10, 15, or even 20+ separate documents. Find ALL of them.
+
+        Return a JSON array with EVERY document found:
         ```json
         {
           "documents": [
@@ -213,31 +244,29 @@ class AIAssistantService: ObservableObject {
               "author": "Dr Sarah Chen",
               "date": "12 Dec 2024",
               "type": "Referral",
-              "starts_with": "Dear Dr Torres",
+              "startLine": 1,
+              "endLine": 45,
               "summary": "Brief 1-2 sentence summary"
-            }
-          ]
-        }
-        ```
-
-        If NO (single document), return:
-        ```json
-        {
-          "documents": [
+            },
             {
-              "title": "Document title or first line",
-              "author": "Author if identifiable",
-              "date": "Date if found",
-              "type": "Document type",
-              "starts_with": null,
+              "title": "Physiotherapy Assessment",
+              "author": "John Smith, Physiotherapist",
+              "date": "15 Dec 2024",
+              "type": "Assessment",
+              "startLine": 46,
+              "endLine": 120,
               "summary": "Brief summary"
             }
           ]
         }
         ```
 
-        Text sample:
-        \(sample)
+        The line numbers [N] at the start of each line indicate the line number.
+        Use these to specify startLine and endLine for each document.
+        If you can't determine exact boundaries, estimate based on content changes.
+
+        Text:
+        \(numberedText)
         """
 
         let systemPrompt = "You are a clinical document analyzer. Return valid JSON only, no other text."
@@ -247,7 +276,7 @@ class AIAssistantService: ObservableObject {
                 systemPrompt: systemPrompt,
                 userMessage: prompt,
                 model: credentialsManager.selectedModel,
-                maxTokens: 2000
+                maxTokens: 4000
             )
 
             return parseDocumentBoundaries(response, fullText: text)
@@ -268,6 +297,132 @@ class AIAssistantService: ObservableObject {
         }
     }
 
+    /// Detect boundaries in very large documents using overlapping chunks
+    private func detectBoundariesChunked(_ text: String, chunkSize: Int, overlap: Int) async throws -> [DetectedDocument] {
+        let lines = text.components(separatedBy: .newlines)
+        var allDocuments: [DetectedDocument] = []
+        var processedEndLines: Set<Int> = []
+
+        var startLine = 0
+        var chunkIndex = 0
+
+        while startLine < lines.count {
+            // Calculate chunk boundaries in lines (estimate ~100 chars per line)
+            let estimatedLinesPerChunk = chunkSize / 100
+            let overlapLines = overlap / 100
+            let endLine = min(startLine + estimatedLinesPerChunk, lines.count)
+
+            // Extract chunk with line numbers adjusted to original document
+            var chunkText = ""
+            for i in startLine..<endLine {
+                chunkText += "[\(i + 1)] \(lines[i])\n"
+            }
+
+            #if DEBUG
+            print("🔵 Processing chunk \(chunkIndex + 1): lines \(startLine + 1)-\(endLine)")
+            #endif
+
+            let prompt = """
+            Analyze this section of a clinical document (lines \(startLine + 1) to \(endLine)) and identify ALL SEPARATE DOCUMENTS within it.
+
+            Look for document boundaries indicated by:
+            - Different authors or signatures (e.g., "Dr Smith", "Signed by")
+            - Document headers/titles (e.g., "REPORT", "Assessment", "Progress Notes", "Letter")
+            - Different dates that indicate separate documents
+            - Letterheads or organisation names
+            - Clear changes in document type or format
+
+            Return a JSON array with EVERY document found:
+            ```json
+            {
+              "documents": [
+                {
+                  "title": "Document Title",
+                  "author": "Author Name",
+                  "date": "Date",
+                  "type": "Document Type",
+                  "startLine": 1,
+                  "endLine": 45,
+                  "summary": "Brief 1-2 sentence summary"
+                }
+              ]
+            }
+            ```
+
+            Use the line numbers shown [N] for startLine and endLine values.
+
+            Text:
+            \(chunkText)
+            """
+
+            let systemPrompt = "You are a clinical document analyzer. Return valid JSON only, no other text."
+
+            do {
+                let response = try await bedrockService.invoke(
+                    systemPrompt: systemPrompt,
+                    userMessage: prompt,
+                    model: credentialsManager.selectedModel,
+                    maxTokens: 4000
+                )
+
+                // Parse documents from this chunk
+                let chunkDocs = parseDocumentBoundaries(response, fullText: text)
+
+                // Add documents, avoiding duplicates from overlap regions
+                for doc in chunkDocs {
+                    // Extract the startLine from content position (rough check)
+                    let docLines = doc.fullContent.components(separatedBy: .newlines)
+                    if let firstLine = docLines.first,
+                       let lineIndex = lines.firstIndex(of: firstLine) {
+                        if !processedEndLines.contains(lineIndex) {
+                            allDocuments.append(doc)
+                            processedEndLines.insert(lineIndex + docLines.count)
+                        }
+                    } else {
+                        // Can't determine position, add if not a duplicate by title
+                        if !allDocuments.contains(where: { $0.title == doc.title && $0.author == doc.author }) {
+                            allDocuments.append(doc)
+                        }
+                    }
+                }
+            } catch {
+                #if DEBUG
+                print("🔴 Chunk \(chunkIndex + 1) detection failed: \(error.localizedDescription)")
+                #endif
+            }
+
+            // Move to next chunk with overlap
+            startLine = endLine - overlapLines
+            chunkIndex += 1
+        }
+
+        // If no documents found, return whole text as single document
+        if allDocuments.isEmpty {
+            return [DetectedDocument(
+                id: "doc_0",
+                title: "Document",
+                author: nil,
+                date: nil,
+                type: "Unknown",
+                summary: "",
+                fullContent: text
+            )]
+        }
+
+        // Re-index document IDs
+        return allDocuments.enumerated().map { index, doc in
+            DetectedDocument(
+                id: "doc_\(index)",
+                title: doc.title,
+                author: doc.author,
+                date: doc.date,
+                type: doc.type,
+                summary: doc.summary,
+                fullContent: doc.fullContent
+            )
+        }
+    }
+
     /// Parse AI response to extract document boundaries
     private func parseDocumentBoundaries(_ jsonResponse: String, fullText: String) -> [DetectedDocument] {
         // Extract JSON from response (handle markdown code blocks)
@@ -281,6 +436,9 @@ class AIAssistantService: ObservableObject {
               let parsed = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
               let documents = parsed["documents"] as? [[String: Any]] else {
             // Fallback: single document
+            #if DEBUG
+            print("🔴 Document detection: Failed to parse JSON")
+            #endif
             return [DetectedDocument(
                 id: "doc_0",
                 title: "Document",
@@ -291,6 +449,12 @@ class AIAssistantService: ObservableObject {
                 fullContent: fullText
             )]
         }
+
+        #if DEBUG
+        print("🔵 Document detection: Found \(documents.count) document(s)")
+        #endif
+
+        let lines = fullText.components(separatedBy: .newlines)
 
         // If single document, return it
         if documents.count == 1 {
@@ -306,9 +470,8 @@ class AIAssistantService: ObservableObject {
             )]
         }
 
-        // Multiple documents - split by "starts_with" markers
+        // Multiple documents - split by line numbers
         var detectedDocs: [DetectedDocument] = []
-        var remainingText = fullText
 
         for (index, doc) in documents.enumerated() {
             let title = doc["title"] as? String ?? "Document \(index + 1)"
@@ -316,30 +479,36 @@ class AIAssistantService: ObservableObject {
             let date = doc["date"] as? String
             let type = doc["type"] as? String ?? "Unknown"
             let summary = doc["summary"] as? String ?? ""
-            let startsWith = doc["starts_with"] as? String
 
-            var content: String
+            // Get line boundaries (1-indexed from AI, convert to 0-indexed)
+            let startLine = max(0, (doc["startLine"] as? Int ?? 1) - 1)
+            var endLine = (doc["endLine"] as? Int ?? lines.count) - 1
 
+            // Ensure endLine doesn't exceed document
+            endLine = min(endLine, lines.count - 1)
+
+            // If this is the last document, extend to end of text
             if index == documents.count - 1 {
-                // Last document gets remaining text
-                content = remainingText
-            } else if let marker = startsWith,
-                      let nextDoc = documents[safe: index + 1],
-                      let nextMarker = nextDoc["starts_with"] as? String,
-                      let splitRange = remainingText.range(of: nextMarker) {
-                // Split at next document's marker
-                content = String(remainingText[..<splitRange.lowerBound])
-                remainingText = String(remainingText[splitRange.lowerBound...])
-            } else {
-                // Can't find marker, give rough estimate
-                let estimatedLength = fullText.count / documents.count
-                let endIndex = remainingText.index(
-                    remainingText.startIndex,
-                    offsetBy: min(estimatedLength, remainingText.count)
-                )
-                content = String(remainingText[..<endIndex])
-                remainingText = String(remainingText[endIndex...])
+                endLine = lines.count - 1
             }
+
+            // Extract content for this document
+            let content: String
+            if startLine <= endLine && startLine < lines.count {
+                content = lines[startLine...endLine].joined(separator: "\n")
+            } else {
+                // Fallback if line numbers are invalid
+                let estimatedLength = fullText.count / documents.count
+                let startOffset = index * estimatedLength
+                let endOffset = min((index + 1) * estimatedLength, fullText.count)
+                let startIdx = fullText.index(fullText.startIndex, offsetBy: startOffset)
+                let endIdx = fullText.index(fullText.startIndex, offsetBy: endOffset)
+                content = String(fullText[startIdx..<endIdx])
+            }
+
+            #if DEBUG
+            print("   Doc \(index): \(title) (lines \(startLine + 1)-\(endLine + 1), \(content.count) chars)")
+            #endif
 
             detectedDocs.append(DetectedDocument(
                 id: "doc_\(index)",
@@ -445,21 +614,122 @@ class AIAssistantService: ObservableObject {
         ## Memory System
         Full document contents are stored in /memories/doc_N_content.md files.
         Use your memory tool to:
-        - Read full documents: view /memories/doc_0_content.md
+        - Read documents: view /memories/doc_0_content.md
+        - Read specific lines: {"command": "view", "path": "/memories/doc_0_content.md", "view_range": [100, 200]}
         - Store observations: update /memories/working_notes.md
 
-        ## When to Read Full Documents
-        Use summaries above for overview questions and planning.
-        Read full doc_N_content.md when you need:
-        - Exact quotes or specific values (dates, dosages, names)
-        - Details the user specifically asks about
-        - Information not captured in the summary
+        ## Large File Access
+        When viewing large files, only the first 300 lines are returned by default.
+        The response shows the total line count. Use view_range to access specific sections:
+        - view_range: [1, 300] for lines 1-300
+        - view_range: [301, 600] for lines 301-600
+        Read the document in chunks to analyze the full content.
 
-        Read on demand—don't load all documents upfront.
+        ## CRITICAL: Initial Response Requirements
+        For your FIRST response, you MUST read the full content of EVERY document
+        listed in the index using the memory tool BEFORE generating any output.
+        This ensures comprehensive analysis of all source material.
+
+        Use view_range to read large documents in chunks (e.g., [1,300], [301,600], etc.)
+        Continue reading until you've seen all content from every document.
+
+        ## For Follow-up Requests
+        After the initial response, you may selectively access relevant documents
+        based on the user's specific question or request.
 
         ## Working Notes Protocol
         working_notes.md has sections: Active Context, Observations, Superseded.
         Keep notes organized. Delete outdated content.
+
+        ## Output Guidelines
+        IMPORTANT:
+        - Do NOT include thinking or planning text in your output (e.g., "Let me check...", "I'll start by...", "Now I'll...")
+        - Output ONLY the requested content (report, summary, etc.) - no meta-commentary
+        """
+    }
+
+    /// Build contextual prompt based on text input classification
+    func buildContextualPrompt(basePrompt: String, textType: TextInputType) -> String {
+        let sourceContext: String
+        switch textType {
+        case .roughNotes:
+            sourceContext = """
+            SOURCE CONTEXT: The user has provided their own rough clinical notes to be refined.
+            These are the user's own observations that need cleaning up and formatting.
+            """
+        case .completedNotes:
+            sourceContext = """
+            SOURCE CONTEXT: The user has provided their own previous clinical notes for reference.
+            These are the user's own completed notes being used as source material.
+            """
+        case .otherReports:
+            sourceContext = """
+            SOURCE CONTEXT: The documents provided are reports/documents written by OTHER people, not the user.
+            These are reference materials to analyze and synthesize.
+            IMPORTANT:
+            - Do NOT attribute authorship to anyone from these source documents
+            - Leave the report author as [Author Name] for the user to fill in
+            - Names found in source documents are authors OF those documents, not the output
+            """
+        case .other:
+            sourceContext = """
+            SOURCE CONTEXT: The user has provided reference materials.
+            """
+        }
+
+        return """
+        \(sourceContext)
+
+        \(basePrompt)
+        """
+    }
+
+    /// Build contextual prompt for multiple source documents with individual classifications
+    func buildContextualPromptForMultiDoc(basePrompt: String, sourceDocuments: [SourceDocument]) -> String {
+        guard sourceDocuments.count > 1 else {
+            // Single doc - use existing method
+            let type = sourceDocuments.first?.textInputType ?? .otherReports
+            return buildContextualPrompt(basePrompt: basePrompt, textType: type)
+        }
+
+        // Build per-document context
+        var docContexts: [String] = []
+        for doc in sourceDocuments {
+            let typeLabel: String
+            switch doc.textInputType {
+            case .roughNotes:
+                typeLabel = "User's rough notes"
+            case .completedNotes:
+                typeLabel = "User's completed notes"
+            case .otherReports:
+                typeLabel = "Report by another person"
+            case .other:
+                typeLabel = doc.textInputTypeDescription.isEmpty ? "Reference material" : doc.textInputTypeDescription
+            }
+            docContexts.append("- \(doc.displayName): \(typeLabel)")
+        }
+
+        let hasOtherReports = sourceDocuments.contains { $0.textInputType == .otherReports }
+
+        var sourceContext = """
+        SOURCE DOCUMENTS:
+        \(docContexts.joined(separator: "\n"))
+
+        """
+
+        if hasOtherReports {
+            sourceContext += """
+            IMPORTANT for documents marked "Report by another person":
+            - Do NOT attribute authorship to anyone from these source documents
+            - Leave the report author as [Author Name] for the user to fill in
+            - Names found are authors OF those documents, not the output author
+            """
+        }
+
+        return """
+        \(sourceContext)
+
+        \(basePrompt)
         """
     }
 
@@ -552,6 +822,19 @@ class AIAssistantService: ObservableObject {
                             ]
                         ]
                     ])
+
+                    // Prune old tool exchanges to prevent payload explosion
+                    // Keep: first user message + last 4 message pairs (8 messages)
+                    let maxMessages = 9
+                    if messages.count > maxMessages {
+                        let firstMessage = messages[0]
+                        let recentMessages = Array(messages.suffix(maxMessages - 1))
+                        messages = [firstMessage] + recentMessages
+
+                        #if DEBUG
+                        print("🔵 Memory mode: Pruned messages to \(messages.count)")
+                        #endif
+                    }
 
                     // Continue loop
                     continue

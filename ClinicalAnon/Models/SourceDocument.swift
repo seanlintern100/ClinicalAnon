@@ -18,6 +18,8 @@ struct SourceDocument: Identifiable, Codable {
     let redactedText: String          // Redacted version with placeholders
     let entities: [Entity]            // Entities detected in this document
     let timestamp: Date               // When document was added
+    var textInputType: TextInputType  // Classification of document type
+    var textInputTypeDescription: String  // Custom description if type is .other
 
     /// Display name combining name and description
     var displayName: String {
@@ -37,7 +39,9 @@ struct SourceDocument: Identifiable, Codable {
         originalText: String,
         redactedText: String,
         entities: [Entity],
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        textInputType: TextInputType = .otherReports,
+        textInputTypeDescription: String = ""
     ) {
         self.id = id
         self.documentNumber = documentNumber
@@ -47,5 +51,7 @@ struct SourceDocument: Identifiable, Codable {
         self.redactedText = redactedText
         self.entities = entities
         self.timestamp = timestamp
+        self.textInputType = textInputType
+        self.textInputTypeDescription = textInputTypeDescription
     }
 }

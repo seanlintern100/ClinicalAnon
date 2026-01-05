@@ -8,6 +8,38 @@
 
 import Foundation
 
+// MARK: - Text Input Type
+
+/// Classification of input text to help AI understand source material
+enum TextInputType: String, CaseIterable, Codable {
+    case roughNotes = "Rough clinical notes"
+    case completedNotes = "Previous completed clinical notes"
+    case otherReports = "Reports by other people"
+    case other = "Other"
+
+    var description: String {
+        switch self {
+        case .roughNotes:
+            return "Your own rough notes that need refining"
+        case .completedNotes:
+            return "Your own previous notes for reference"
+        case .otherReports:
+            return "Reports or documents written by others"
+        case .other:
+            return "Other reference materials"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .roughNotes: return "note.text"
+        case .completedNotes: return "doc.text.fill"
+        case .otherReports: return "person.2.fill"
+        case .other: return "doc.questionmark"
+        }
+    }
+}
+
 // MARK: - Slider Settings
 
 struct SliderSettings: Codable, Equatable {

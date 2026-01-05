@@ -25,7 +25,7 @@ class WorkflowViewModel: ObservableObject {
 
     // MARK: - Phase State Objects
 
-    let redactState: RedactPhaseState
+    var redactState: RedactPhaseState
     let improveState: ImprovePhaseState
     let restoreState: RestorePhaseState
     let cacheManager: HighlightCacheManager
@@ -69,6 +69,10 @@ class WorkflowViewModel: ObservableObject {
 
         restoreState.getAIOutput = { [weak self] in
             self?.improveState.aiOutput ?? ""
+        }
+
+        improveState.getTextInputType = { [weak self] in
+            self?.redactState.textInputType ?? .otherReports
         }
 
         restoreState.getEntityMapping = { [weak self] in
@@ -228,7 +232,6 @@ class WorkflowViewModel: ObservableObject {
     var cachedOriginalAttributed: AttributedString? { cacheManager.cachedOriginalAttributed }
     var cachedRedactedAttributed: AttributedString? { cacheManager.cachedRedactedAttributed }
     var cachedRestoredAttributed: AttributedString? { cacheManager.cachedRestoredAttributed }
-    var isBuildingHighlights: Bool { cacheManager.isBuilding }
 
     // MARK: - Computed Properties
 
@@ -332,6 +335,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -386,6 +390,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -400,6 +405,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -419,6 +425,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -433,6 +440,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -447,6 +455,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -461,6 +470,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -475,6 +485,7 @@ class WorkflowViewModel: ObservableObject {
                 activeEntities: redactState.activeEntities,
                 excludedIds: redactState.excludedEntityIds,
                 redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
         }
@@ -583,6 +594,7 @@ class WorkflowViewModel: ObservableObject {
             activeEntities: activeEntities,
             excludedIds: excludedEntityIds,
             redactedText: displayedRedactedText,
+            replacementPositions: redactState.replacementPositions,
             restoredText: finalRestoredText.isEmpty ? nil : finalRestoredText
         )
     }

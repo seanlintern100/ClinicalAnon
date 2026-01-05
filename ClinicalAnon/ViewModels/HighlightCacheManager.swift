@@ -12,7 +12,6 @@ import AppKit
 // MARK: - Highlight Cache Manager
 
 /// Manages cached AttributedStrings for original, redacted, and restored text
-/// Uses background thread processing for large documents
 @MainActor
 class HighlightCacheManager: ObservableObject {
 
@@ -22,108 +21,64 @@ class HighlightCacheManager: ObservableObject {
     @Published private(set) var cachedRedactedAttributed: AttributedString?
     @Published private(set) var cachedRestoredAttributed: AttributedString?
 
-    /// Indicates if a background build is in progress
-    @Published private(set) var isBuilding: Bool = false
-
     // Store entities for restored text rebuilding
     private var storedAllEntities: [Entity] = []
 
-    // Cancellable build task
-    private var buildTask: Task<Void, Never>?
-
     // MARK: - Public Methods
 
-    /// Rebuild all highlight caches (runs on background thread)
+    /// Rebuild all highlight caches
     func rebuildAllCaches(
         originalText: String?,
         allEntities: [Entity],
         activeEntities: [Entity],
         excludedIds: Set<UUID>,
         redactedText: String,
+        replacementPositions: [(range: NSRange, entityType: EntityType)],
         restoredText: String?
     ) {
-        // Cancel any in-progress build
-        buildTask?.cancel()
-
         storedAllEntities = allEntities
-        isBuilding = true
 
-        // Capture values for background thread (avoid capturing self)
-        let original = originalText
-        let entities = allEntities
-        let active = activeEntities
-        let excluded = excludedIds
-        let redacted = redactedText
-        let restored = restoredText
-
-        buildTask = Task.detached(priority: .userInitiated) { [weak self] in
-            // Build on background thread
-            let originalAttr: AttributedString? = original.map { text in
-                Self.buildOriginalAttributedBackground(
-                    text,
-                    allEntities: entities,
-                    excludedIds: excluded
-                )
-            }
-
-            let redactedAttr = Self.buildRedactedAttributedBackground(
-                redacted,
-                activeEntities: active
+        // Build original attributed string
+        if let original = originalText {
+            cachedOriginalAttributed = buildOriginalAttributed(
+                original,
+                allEntities: allEntities,
+                excludedIds: excludedIds
             )
+        } else {
+            cachedOriginalAttributed = nil
+        }
 
-            let restoredAttr: AttributedString? = {
-                guard let text = restored, !text.isEmpty else { return nil }
-                return Self.buildRestoredAttributedBackground(text, allEntities: entities)
-            }()
+        // Build redacted attributed string using pre-calculated positions (O(m) vs O(n*m))
+        cachedRedactedAttributed = buildRedactedAttributed(
+            redactedText,
+            replacementPositions: replacementPositions
+        )
 
-            // Check cancellation before updating UI
-            guard !Task.isCancelled else { return }
-
-            // Update on main thread
-            await MainActor.run {
-                self?.cachedOriginalAttributed = originalAttr
-                self?.cachedRedactedAttributed = redactedAttr
-                self?.cachedRestoredAttributed = restoredAttr
-                self?.isBuilding = false
-            }
+        // Build restored attributed string
+        if let restored = restoredText, !restored.isEmpty {
+            cachedRestoredAttributed = buildRestoredAttributed(restored, allEntities: allEntities)
+        } else {
+            cachedRestoredAttributed = nil
         }
     }
 
     /// Rebuild only the restored text cache
     func rebuildRestoredCache(restoredText: String) {
-        let entities = storedAllEntities
-
-        buildTask?.cancel()
-        isBuilding = true
-
-        buildTask = Task.detached(priority: .userInitiated) { [weak self] in
-            let restoredAttr = Self.buildRestoredAttributedBackground(
-                restoredText,
-                allEntities: entities
-            )
-
-            guard !Task.isCancelled else { return }
-
-            await MainActor.run {
-                self?.cachedRestoredAttributed = restoredAttr
-                self?.isBuilding = false
-            }
-        }
+        cachedRestoredAttributed = buildRestoredAttributed(restoredText, allEntities: storedAllEntities)
     }
 
     /// Clear all caches
     func clearAll() {
-        buildTask?.cancel()
         cachedOriginalAttributed = nil
         cachedRedactedAttributed = nil
         cachedRestoredAttributed = nil
         storedAllEntities = []
-        isBuilding = false
     }
 
-    // MARK: - Static Background Build Methods (Thread-Safe, nonisolated)
+    // MARK: - Private Build Methods
 
-    nonisolated private static func buildOriginalAttributedBackground(
+    private func buildOriginalAttributed(
         _ text: String,
         allEntities: [Entity],
         excludedIds: Set<UUID>
@@ -166,34 +121,32 @@ class HighlightCacheManager: ObservableObject {
         return AttributedString(mutableAttrString)
     }
 
-    nonisolated private static func buildRedactedAttributedBackground(
+    private func buildRedactedAttributed(
         _ text: String,
-        activeEntities: [Entity]
+        replacementPositions: [(range: NSRange, entityType: EntityType)]
     ) -> AttributedString {
-        var attributedString = AttributedString(text)
-        attributedString.font = NSFont.systemFont(ofSize: 14)
-        attributedString.foregroundColor = NSColor.labelColor
+        // Use NSMutableAttributedString for efficient attribute application at known positions
+        let mutableAttrString = NSMutableAttributedString(string: text)
+        let nsText = text as NSString
 
-        for entity in activeEntities {
-            let code = entity.replacementCode
-            var searchStart = attributedString.startIndex
+        // Set base attributes
+        let baseAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14),
+            .foregroundColor: NSColor.labelColor
+        ]
+        mutableAttrString.setAttributes(baseAttributes, range: NSRange(location: 0, length: nsText.length))
 
-            while searchStart < attributedString.endIndex {
-                let searchRange = searchStart..<attributedString.endIndex
-                if let range = attributedString[searchRange].range(of: code) {
-                    attributedString[range].backgroundColor = NSColor(entity.type.highlightColor)
-                    attributedString[range].foregroundColor = NSColor.labelColor
-                    searchStart = range.upperBound
-                } else {
-                    break
-                }
-            }
+        // Apply highlighting at pre-calculated positions (O(m) instead of O(n*m) searches)
+        for (range, entityType) in replacementPositions {
+            // Validate range is within bounds
+            guard range.location >= 0 && range.location + range.length <= nsText.length else { continue }
+            mutableAttrString.addAttribute(.backgroundColor, value: NSColor(entityType.highlightColor), range: range)
         }
 
-        return attributedString
+        return AttributedString(mutableAttrString)
     }
 
-    nonisolated private static func buildRestoredAttributedBackground(
+    private func buildRestoredAttributed(
         _ text: String,
         allEntities: [Entity]
     ) -> AttributedString {

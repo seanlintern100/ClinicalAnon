@@ -82,6 +82,9 @@ class ImprovePhaseState: ObservableObject {
     // Callback to get current redacted text
     var getRedactedText: (() -> String)?
 
+    // Callback to get text input type classification
+    var getTextInputType: (() -> TextInputType)?
+
     // MARK: - Initialization
 
     init(aiService: AIAssistantService) {
@@ -171,17 +174,43 @@ class ImprovePhaseState: ObservableObject {
 
         var docTypeWithInstructions = docType
         docTypeWithInstructions.customInstructions = customInstructions
-        let fullPrompt = docTypeWithInstructions.buildPrompt(with: sliderSettings)
+        let basePrompt = docTypeWithInstructions.buildPrompt(with: sliderSettings)
+
+        // Wrap with contextual prompt based on source documents
+        let fullPrompt: String
+        if sourceDocuments.count > 1 {
+            // Multiple docs - use per-document classifications
+            fullPrompt = aiService.buildContextualPromptForMultiDoc(basePrompt: basePrompt, sourceDocuments: sourceDocuments)
+            #if DEBUG
+            print("   Multi-doc mode: \(sourceDocuments.count) documents with individual classifications")
+            #endif
+        } else {
+            // Single doc - use global classification
+            let textType = getTextInputType?() ?? .otherReports
+            fullPrompt = aiService.buildContextualPrompt(basePrompt: basePrompt, textType: textType)
+            #if DEBUG
+            print("   Text input type: \(textType.rawValue)")
+            #endif
+        }
 
         #if DEBUG
         print("   Prompt length: \(fullPrompt.count) chars")
         print("   Prompt preview: \(String(fullPrompt.prefix(200)))...")
         #endif
 
-        // Check if we should use memory mode for large documents
-        if aiService.shouldUseMemoryMode(for: inputForAI) {
+        // Check if we should use memory mode:
+        // 1. Large documents (exceeds character threshold)
+        // 2. Multiple source documents (always use memory mode for proper separation)
+        let hasMultipleDocs = sourceDocuments.count > 1
+        let isLargeDocument = aiService.shouldUseMemoryMode(for: inputForAI)
+
+        if hasMultipleDocs || isLargeDocument {
             #if DEBUG
-            print("🤖 Input exceeds threshold - switching to memory mode")
+            if hasMultipleDocs {
+                print("🤖 Multiple source documents (\(sourceDocuments.count)) - using memory mode")
+            } else {
+                print("🤖 Input exceeds threshold - switching to memory mode")
+            }
             #endif
             isMemoryMode = true
             currentAITask = Task {
@@ -235,45 +264,143 @@ class ImprovePhaseState: ObservableObject {
     /// Process large documents with memory mode
     private func processWithMemoryMode(_ text: String, prompt: String) async {
         do {
-            // Step 1: Detect documents
             isDetectingDocuments = true
-            #if DEBUG
-            print("🤖 Memory Mode: Detecting documents...")
-            #endif
 
-            detectedDocuments = try await aiService.detectDocumentBoundaries(text)
+            // Different handling based on source document count
+            let largeDocThreshold = 100_000  // Same as memoryModeThreshold
 
-            #if DEBUG
-            print("🤖 Memory Mode: Detected \(detectedDocuments.count) document(s)")
-            #endif
+            if sourceDocuments.count > 1 {
+                // Multiple source documents: Check each for sub-document detection
+                #if DEBUG
+                print("🤖 Memory Mode: Processing \(sourceDocuments.count) source documents")
+                #endif
 
-            // Step 2: Generate summaries for documents without them
-            for i in 0..<detectedDocuments.count {
-                if detectedDocuments[i].summary.isEmpty {
-                    let summary = try await aiService.generateDocumentSummary(
-                        detectedDocuments[i].fullContent,
-                        title: detectedDocuments[i].title,
-                        type: detectedDocuments[i].type
-                    )
-                    detectedDocuments[i].summary = summary
+                var allDetectedDocs: [DetectedDocument] = []
+                var docIndex = 0
 
-                    #if DEBUG
-                    print("🤖 Memory Mode: Generated summary for \(detectedDocuments[i].title)")
-                    #endif
+                for source in sourceDocuments {
+                    if source.redactedText.count >= largeDocThreshold {
+                        // Large doc - detect sub-documents within it
+                        #if DEBUG
+                        print("🤖 Memory Mode: Source '\(source.displayName)' is large (\(source.redactedText.count / 1000)K) - detecting sub-docs")
+                        #endif
+
+                        var subDocs = try await aiService.detectDocumentBoundaries(source.redactedText)
+
+                        // Tag each sub-doc with parent source and update IDs
+                        for i in 0..<subDocs.count {
+                            subDocs[i].sourceDocumentId = source.id
+                            subDocs[i] = DetectedDocument(
+                                id: "doc\(docIndex + 1)",
+                                title: subDocs[i].title,
+                                author: subDocs[i].author,
+                                date: subDocs[i].date,
+                                type: subDocs[i].type,
+                                summary: subDocs[i].summary,
+                                fullContent: subDocs[i].fullContent,
+                                sourceDocumentId: source.id
+                            )
+                            docIndex += 1
+                        }
+
+                        // Generate summaries for sub-docs without them
+                        for i in 0..<subDocs.count {
+                            if subDocs[i].summary.isEmpty {
+                                let summary = try await aiService.generateDocumentSummary(
+                                    subDocs[i].fullContent,
+                                    title: subDocs[i].title,
+                                    type: subDocs[i].type
+                                )
+                                subDocs[i].summary = summary
+                            }
+                        }
+
+                        allDetectedDocs.append(contentsOf: subDocs)
+
+                        #if DEBUG
+                        print("🤖 Memory Mode: Found \(subDocs.count) sub-docs in '\(source.displayName)'")
+                        #endif
+
+                    } else {
+                        // Small doc - use directly as single DetectedDocument
+                        docIndex += 1
+                        let doc = DetectedDocument(
+                            id: "doc\(docIndex)",
+                            title: source.displayName,
+                            author: nil,
+                            date: nil,
+                            type: source.textInputType.rawValue,
+                            summary: source.description.isEmpty ? "Source document" : source.description,
+                            fullContent: source.redactedText,
+                            sourceDocumentId: source.id
+                        )
+
+                        // Generate summary
+                        var docWithSummary = doc
+                        let summary = try await aiService.generateDocumentSummary(
+                            doc.fullContent,
+                            title: doc.title,
+                            type: doc.type
+                        )
+                        docWithSummary.summary = summary
+
+                        allDetectedDocs.append(docWithSummary)
+
+                        #if DEBUG
+                        print("🤖 Memory Mode: Using '\(source.displayName)' directly (small doc)")
+                        #endif
+                    }
+                }
+
+                detectedDocuments = allDetectedDocs
+
+            } else {
+                // Single large document: Run AI detection to find sub-documents
+                #if DEBUG
+                print("🤖 Memory Mode: Detecting documents within single source...")
+                #endif
+
+                detectedDocuments = try await aiService.detectDocumentBoundaries(text)
+
+                #if DEBUG
+                print("🤖 Memory Mode: Detected \(detectedDocuments.count) document(s)")
+                #endif
+
+                // Tag detected documents with source document ID
+                if let sourceId = sourceDocuments.first?.id {
+                    for i in 0..<detectedDocuments.count {
+                        detectedDocuments[i].sourceDocumentId = sourceId
+                    }
+                }
+
+                // Generate summaries for documents without them
+                for i in 0..<detectedDocuments.count {
+                    if detectedDocuments[i].summary.isEmpty {
+                        let summary = try await aiService.generateDocumentSummary(
+                            detectedDocuments[i].fullContent,
+                            title: detectedDocuments[i].title,
+                            type: detectedDocuments[i].type
+                        )
+                        detectedDocuments[i].summary = summary
+
+                        #if DEBUG
+                        print("🤖 Memory Mode: Generated summary for \(detectedDocuments[i].title)")
+                        #endif
+                    }
                 }
             }
 
             isDetectingDocuments = false
 
-            // Step 3: Initialize memory storage
+            // Initialize memory storage
             await aiService.initializeMemoryMode(documents: detectedDocuments)
             memoryModeInitialized = true
 
             #if DEBUG
-            print("🤖 Memory Mode: Memory storage initialized")
+            print("🤖 Memory Mode: Memory storage initialized with \(detectedDocuments.count) documents")
             #endif
 
-            // Step 4: Process with memory tool
+            // Process with memory tool
             let result = try await aiService.processWithMemory(
                 userMessage: "Please process these clinical documents according to the instructions.",
                 systemPrompt: prompt

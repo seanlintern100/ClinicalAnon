@@ -20,6 +20,9 @@ struct DetectedDocument: Identifiable {
     var summary: String
     var fullContent: String
 
+    /// ID of the source document this was detected within (for hierarchy)
+    var sourceDocumentId: UUID?
+
     /// Estimated token count (~4 chars per token)
     var tokenEstimate: Int {
         fullContent.count / 4
@@ -167,14 +170,29 @@ class MemoryStorage: ObservableObject {
             return "File \(path) exceeds maximum line limit of 999,999 lines."
         }
 
-        var output = "Here's the content of \(path) with line numbers:\n"
+        // Limit default view size to prevent payload explosion in memory mode
+        let maxDefaultLines = 300
+        let needsTruncation = range == nil && lines.count > maxDefaultLines
 
+        var output: String
         let startLine = max((range?.first ?? 1) - 1, 0)
-        let endLine = min(range?.last ?? lines.count, lines.count)
+        let endLine: Int
+
+        if needsTruncation {
+            endLine = min(maxDefaultLines, lines.count)
+            output = "Here's the first \(maxDefaultLines) lines of \(path) (total: \(lines.count) lines):\n"
+        } else {
+            endLine = min(range?.last ?? lines.count, lines.count)
+            output = "Here's the content of \(path) with line numbers:\n"
+        }
 
         for i in startLine..<endLine {
             let lineNum = String(format: "%6d", i + 1)
             output += "\(lineNum)\t\(lines[i])\n"
+        }
+
+        if needsTruncation {
+            output += "\n[... \(lines.count - maxDefaultLines) more lines. Use view_range: [start, end] to see specific sections ...]\n"
         }
 
         return output

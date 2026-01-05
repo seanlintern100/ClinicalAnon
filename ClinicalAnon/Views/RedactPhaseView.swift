@@ -16,6 +16,8 @@ struct RedactPhaseView: View {
     // MARK: - Properties
 
     @ObservedObject var viewModel: WorkflowViewModel
+    @State private var showClassificationModal = false
+    @State private var showAddMoreDocsModal = false
 
     // MARK: - Body
 
@@ -44,6 +46,28 @@ struct RedactPhaseView: View {
         .sheet(isPresented: $viewModel.showingAddCustom) {
             AddCustomEntitySheet(viewModel: viewModel)
         }
+        .sheet(isPresented: $showClassificationModal) {
+            TextClassificationModal(
+                selectedType: $viewModel.redactState.textInputType,
+                otherDescription: $viewModel.redactState.textInputTypeDescription,
+                onAnalyze: {
+                    showClassificationModal = false
+                    Task { await viewModel.analyze() }
+                }
+            )
+        }
+        .sheet(isPresented: $showAddMoreDocsModal) {
+            TextClassificationModal(
+                selectedType: $viewModel.redactState.textInputType,
+                otherDescription: $viewModel.redactState.textInputTypeDescription,
+                actionTitle: "Save & Add Another",
+                headerText: "Classify this document before saving",
+                onAnalyze: {
+                    showAddMoreDocsModal = false
+                    viewModel.saveCurrentDocumentAndAddMore()
+                }
+            )
+        }
     }
 
     // MARK: - Original Text Pane
@@ -65,7 +89,7 @@ struct RedactPhaseView: View {
                         .padding(.trailing, DesignSystem.Spacing.small)
                 }
 
-                Button(action: { Task { await viewModel.analyze() } }) {
+                Button(action: { showClassificationModal = true }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         if viewModel.isProcessing {
                             ProgressView()
@@ -90,34 +114,25 @@ struct RedactPhaseView: View {
 
             // Text content
             if let result = viewModel.result {
-                ZStack(alignment: .topTrailing) {
-                    if let cachedOriginal = viewModel.cachedOriginalAttributed {
-                        ScrollView {
-                            Text(cachedOriginal)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DesignSystem.Spacing.medium)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
-                    } else {
-                        // Show plain text while highlights build
-                        ScrollView {
-                            Text(result.originalText)
-                                .textSelection(.enabled)
-                                .font(.system(size: 14))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DesignSystem.Spacing.medium)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let cachedOriginal = viewModel.cachedOriginalAttributed {
+                    ScrollView {
+                        Text(cachedOriginal)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DesignSystem.Spacing.medium)
                     }
-
-                    // Loading indicator
-                    if viewModel.isBuildingHighlights {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .padding(DesignSystem.Spacing.small)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
+                } else {
+                    // Show plain text while highlights build
+                    ScrollView {
+                        Text(result.originalText)
+                            .textSelection(.enabled)
+                            .font(.system(size: 14))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DesignSystem.Spacing.medium)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
                 ZStack(alignment: .topLeading) {
@@ -199,34 +214,25 @@ struct RedactPhaseView: View {
 
             // Redacted text content
             if let result = viewModel.result {
-                ZStack(alignment: .topTrailing) {
-                    if let cachedRedacted = viewModel.cachedRedactedAttributed {
-                        ScrollView {
-                            Text(cachedRedacted)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DesignSystem.Spacing.medium)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
-                    } else {
-                        // Show plain redacted text while highlights build
-                        ScrollView {
-                            Text(viewModel.displayedRedactedText)
-                                .textSelection(.enabled)
-                                .font(.system(size: 14))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DesignSystem.Spacing.medium)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let cachedRedacted = viewModel.cachedRedactedAttributed {
+                    ScrollView {
+                        Text(cachedRedacted)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DesignSystem.Spacing.medium)
                     }
-
-                    // Loading indicator
-                    if viewModel.isBuildingHighlights {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .padding(DesignSystem.Spacing.small)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
+                } else {
+                    // Show plain redacted text while highlights build
+                    ScrollView {
+                        Text(viewModel.displayedRedactedText)
+                            .textSelection(.enabled)
+                            .font(.system(size: 14))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DesignSystem.Spacing.medium)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
                 VStack(spacing: DesignSystem.Spacing.medium) {
@@ -367,8 +373,8 @@ struct RedactPhaseView: View {
                         .disabled(viewModel.isRunningDeepScan)
                         .help("Run Apple NER with lower confidence (0.75) to catch additional names")
 
-                        // Add More Docs button
-                        Button(action: { viewModel.saveCurrentDocumentAndAddMore() }) {
+                        // Add More Docs button - shows classification modal first
+                        Button(action: { showAddMoreDocsModal = true }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
                                 Image(systemName: "doc.badge.plus")
                                 Text("Add More Docs")
@@ -747,6 +753,110 @@ struct AddCustomEntitySheet: View {
         }
         .padding(DesignSystem.Spacing.large)
         .frame(width: 350)
+    }
+}
+
+// MARK: - Text Classification Modal
+
+struct TextClassificationModal: View {
+
+    @Binding var selectedType: TextInputType
+    @Binding var otherDescription: String
+    var actionTitle: String = "Analyze"
+    var headerText: String = "What type of text is this?"
+    let onAnalyze: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.large) {
+            headerSection
+            optionsList
+            otherDescriptionField
+            buttonRow
+        }
+        .padding(DesignSystem.Spacing.large)
+        .frame(width: 450)
+    }
+
+    private var headerSection: some View {
+        VStack(spacing: DesignSystem.Spacing.small) {
+            Text(headerText)
+                .font(DesignSystem.Typography.heading)
+
+            Text("This helps the AI understand how to process your content")
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var optionsList: some View {
+        VStack(spacing: DesignSystem.Spacing.small) {
+            ForEach(TextInputType.allCases, id: \.self) { type in
+                optionButton(for: type)
+            }
+        }
+    }
+
+    private func optionButton(for type: TextInputType) -> some View {
+        let isSelected = selectedType == type
+        return Button(action: { selectedType = type }) {
+            HStack(spacing: DesignSystem.Spacing.medium) {
+                Image(systemName: type.icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.textSecondary)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(type.rawValue)
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+
+                    Text(type.description)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(DesignSystem.Spacing.medium)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                    .fill(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                    .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var otherDescriptionField: some View {
+        if selectedType == .other {
+            TextField("Describe your content...", text: $otherDescription)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var buttonRow: some View {
+        HStack {
+            Button("Cancel") {
+                dismiss()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            Button(actionTitle) {
+                onAnalyze()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+        }
     }
 }
 

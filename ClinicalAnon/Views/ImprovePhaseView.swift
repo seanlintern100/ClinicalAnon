@@ -28,11 +28,14 @@ struct ImprovePhaseView: View {
 
             Divider().opacity(0.3)
 
-            // Content: Sources sidebar (if multiple docs) | Document | Chat
+            // Content: Documents sidebar (hierarchical) | Document | Chat
             HStack(spacing: 0) {
-                // Only show sidebar if multiple source docs
-                if viewModel.improveState.sourceDocuments.count > 1 {
-                    sourceDocumentsSidebar
+                // Show sidebar if: multiple source docs OR any detected docs
+                let hasMultipleSources = viewModel.improveState.sourceDocuments.count > 1
+                let hasDetectedDocs = viewModel.improveState.detectedDocuments.count > 1
+
+                if hasMultipleSources || hasDetectedDocs {
+                    detectedDocumentsSidebar
                     Divider().opacity(0.3)
                 }
                 documentPane
@@ -287,6 +290,69 @@ struct ImprovePhaseView: View {
             }
         }
         .frame(width: 220)
+        .background(DesignSystem.Colors.surface)
+    }
+
+    // MARK: - Documents Sidebar (Hierarchical)
+
+    private var detectedDocumentsSidebar: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                let sourceCount = viewModel.improveState.sourceDocuments.count
+                let detectedCount = viewModel.improveState.detectedDocuments.count
+
+                Text("Documents")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+
+                if detectedCount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 10))
+                        Text("\(detectedCount) detected")
+                            .font(.system(size: 10))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                }
+            }
+            .frame(height: 44)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+
+            Divider().opacity(0.15)
+
+            // Hierarchical document list
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    ForEach(viewModel.improveState.sourceDocuments) { sourceDoc in
+                        // Get detected docs for this source
+                        let childDocs = viewModel.improveState.detectedDocuments.filter {
+                            $0.sourceDocumentId == sourceDoc.id
+                        }
+
+                        DocumentHierarchyRow(
+                            sourceDocument: sourceDoc,
+                            detectedChildren: childDocs
+                        )
+                    }
+
+                    // Show orphan detected docs (no source ID) if any
+                    let orphanDocs = viewModel.improveState.detectedDocuments.filter {
+                        $0.sourceDocumentId == nil
+                    }
+                    if !orphanDocs.isEmpty && viewModel.improveState.sourceDocuments.isEmpty {
+                        ForEach(orphanDocs) { doc in
+                            DetectedDocumentRow(document: doc, indent: 0)
+                        }
+                    }
+                }
+                .padding(DesignSystem.Spacing.small)
+            }
+        }
+        .frame(width: 260)
         .background(DesignSystem.Colors.surface)
     }
 
@@ -643,6 +709,126 @@ private struct SourceDocumentRow: View {
             }
             .padding()
         }
+    }
+}
+
+// MARK: - Document Hierarchy Row
+
+private struct DocumentHierarchyRow: View {
+    let sourceDocument: SourceDocument
+    let detectedChildren: [DetectedDocument]
+
+    @State private var isExpanded: Bool = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Parent source document
+            Button(action: { withAnimation { isExpanded.toggle() } }) {
+                HStack(spacing: 6) {
+                    if !detectedChildren.isEmpty {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .frame(width: 12)
+                    } else {
+                        Spacer().frame(width: 12)
+                    }
+
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sourceDocument.name)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .lineLimit(1)
+
+                        if !detectedChildren.isEmpty {
+                            Text("\(detectedChildren.count) documents detected")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                        } else if !sourceDocument.description.isEmpty {
+                            Text(sourceDocument.description)
+                                .font(.system(size: 10))
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(DesignSystem.Colors.background)
+                )
+            }
+            .buttonStyle(.plain)
+
+            // Child detected documents
+            if isExpanded && !detectedChildren.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(detectedChildren) { doc in
+                        DetectedDocumentRow(document: doc, indent: 1)
+                    }
+                }
+                .padding(.leading, 20)
+            }
+        }
+    }
+}
+
+// MARK: - Detected Document Row
+
+private struct DetectedDocumentRow: View {
+    let document: DetectedDocument
+    var indent: Int = 0
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 9))
+                .foregroundColor(.orange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(document.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    if let author = document.author, !author.isEmpty {
+                        Text(author)
+                            .font(.system(size: 9))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .lineLimit(1)
+                    }
+
+                    if let date = document.date, !date.isEmpty {
+                        Text("• \(date)")
+                            .font(.system(size: 9))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                }
+
+                if !document.summary.isEmpty {
+                    Text(document.summary)
+                        .font(.system(size: 9))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.orange.opacity(0.08))
+        )
     }
 }
 
