@@ -439,7 +439,7 @@ class RedactPhaseState: ObservableObject {
     /// Searches all entity sources and updates the first match found
     /// Returns true if an entity was updated
     @discardableResult
-    private mutating func updateEntityVariant(matchingText text: String, variant: NameVariant) -> Bool {
+    private func updateEntityVariant(matchingText text: String, variant: NameVariant) -> Bool {
         let textLower = text.lowercased()
 
         // Check result.entities
