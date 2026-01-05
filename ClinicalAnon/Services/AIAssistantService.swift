@@ -652,7 +652,7 @@ class AIAssistantService: ObservableObject {
             systemPrompt: systemPrompt,
             userMessage: prompt,
             model: credentialsManager.selectedModel,
-            maxTokens: 1500
+            maxTokens: 800  // Reduced from 1500 to avoid context overflow with many documents
         )
     }
 
