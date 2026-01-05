@@ -625,16 +625,26 @@ class AIAssistantService: ObservableObject {
 
         ## Two-Phase Processing Protocol
 
-        PHASE 1 - READING:
-        - You MUST read ALL documents listed in the index before generating any output
-        - Read each doc_N_content.md file completely (use view_range for large files)
-        - The system will track your progress and notify you when all documents are accessed
-        - Do NOT generate the report until you receive a [PHASE TRANSITION] message
+        PHASE 1 - READING & EXTRACTING:
+        - Read each document using the memory tool
+        - IMMEDIATELY after reading each document, record key information in working_notes.md
+        - Do NOT read multiple documents before extracting—you WILL lose context when pruned
+        - Pattern: Read doc → Extract to notes → Read next doc → Extract → ...
+
+        What to extract to working_notes.md:
+        - Patient identifiers and dates
+        - Diagnoses and clinical impressions
+        - Medications (name, dose, dates, outcomes)
+        - Key findings and abnormal values
+        - Recommendations made
+        - Any concerns or discrepancies between documents
+
+        Your working_notes.md is your PERSISTENT MEMORY. Anything not recorded there may be lost.
 
         PHASE 2 - WRITING:
         - After reading all documents, you will receive a [PHASE TRANSITION] message
-        - Generate the report immediately using all the information gathered
-        - Do NOT continue reading documents unless you need a specific detail
+        - Generate the report using working_notes.md as your primary source
+        - You may re-read specific documents for exact quotes or verification
         - Output ONLY the report content
 
         ## CRITICAL Output Rules
@@ -764,6 +774,8 @@ class AIAssistantService: ObservableObject {
         var docsAccessed: Set<String> = []
         let totalDocCount = memoryStorage.documentCount
         var readingPhaseComplete = false
+        var workingNotesUpdated = false
+        var noteReminderInjected = false
 
         #if DEBUG
         print("🔵 Memory mode: Starting with \(totalDocCount) documents to read")
@@ -793,16 +805,28 @@ class AIAssistantService: ObservableObject {
             // Check if AI wants to use a tool
             if let toolUse = response.toolUse {
                 if toolUse.name == "memory" {
-                    // Track document access
+                    // Track document access and working notes updates
                     if let path = toolUse.inputDict["path"] as? String,
-                       path.contains("/memories/doc_") && path.contains("_content.md") {
-                        // Extract doc ID: "doc_0" from "/memories/doc_0_content.md"
-                        if let filename = path.components(separatedBy: "/").last {
-                            let docId = filename.replacingOccurrences(of: "_content.md", with: "")
-                            docsAccessed.insert(docId)
+                       let command = toolUse.inputDict["command"] as? String {
 
+                        // Track doc reads
+                        if path.contains("/memories/doc_") && path.contains("_content.md") {
+                            if let filename = path.components(separatedBy: "/").last {
+                                let docId = filename.replacingOccurrences(of: "_content.md", with: "")
+                                docsAccessed.insert(docId)
+
+                                #if DEBUG
+                                print("🔵 Memory mode: Accessed \(docId) - now \(docsAccessed.count)/\(totalDocCount)")
+                                #endif
+                            }
+                        }
+
+                        // Track working_notes updates (writes, not reads)
+                        if path.contains("working_notes") &&
+                           (command == "str_replace" || command == "create" || command == "insert") {
+                            workingNotesUpdated = true
                             #if DEBUG
-                            print("🔵 Memory mode: Accessed \(docId) - now \(docsAccessed.count)/\(totalDocCount)")
+                            print("🔵 Memory mode: Working notes updated")
                             #endif
                         }
                     }
@@ -843,19 +867,43 @@ class AIAssistantService: ObservableObject {
                         ]
                     ])
 
-                    // Check for phase transition: all docs accessed
-                    if docsAccessed.count >= totalDocCount && !readingPhaseComplete {
+                    // Reminder: if 3+ docs read but no notes taken yet
+                    if docsAccessed.count >= 3 && !workingNotesUpdated && !noteReminderInjected && !readingPhaseComplete {
+                        noteReminderInjected = true
+
+                        let reminderMessage = """
+                        [REMINDER]
+                        You have read \(docsAccessed.count) documents but have not recorded anything in working_notes.md.
+                        Key information will be lost when context is pruned.
+                        After reading each document, IMMEDIATELY extract and record important details to working_notes.md:
+                        - Patient identifiers and dates
+                        - Diagnoses and clinical impressions
+                        - Key findings, medications, recommendations
+                        Continue reading and extracting.
+                        """
+
+                        messages.append([
+                            "role": "user",
+                            "content": reminderMessage
+                        ])
+
+                        #if DEBUG
+                        print("🔵 Memory mode: Injected note-taking reminder (3+ docs read, no notes)")
+                        #endif
+                    }
+
+                    // Check for phase transition: all docs accessed AND notes updated
+                    if docsAccessed.count >= totalDocCount && workingNotesUpdated && !readingPhaseComplete {
                         readingPhaseComplete = true
 
                         let transitionMessage = """
                         [PHASE TRANSITION]
-                        READING PHASE COMPLETE. You have accessed all \(totalDocCount) documents.
+                        READING PHASE COMPLETE. You have accessed all \(totalDocCount) documents and recorded key information.
 
                         Now proceed to WRITING PHASE:
-                        - Generate the clinical report based on all the information you've gathered
-                        - Do NOT continue reading documents
+                        - Generate the clinical report using your working_notes.md as the primary source
+                        - You may re-read specific documents for exact quotes or verification
                         - Output ONLY the report content - no meta-commentary like "I'll now..." or "Let me..."
-                        - You may use the memory tool to look up specific details if needed
                         """
 
                         messages.append([
@@ -864,7 +912,28 @@ class AIAssistantService: ObservableObject {
                         ])
 
                         #if DEBUG
-                        print("🔵 Memory mode: PHASE TRANSITION - all \(totalDocCount) docs accessed")
+                        print("🔵 Memory mode: PHASE TRANSITION - all \(totalDocCount) docs accessed + notes updated")
+                        #endif
+                    }
+
+                    // Fallback transition: all docs accessed but no notes (still need to proceed)
+                    if docsAccessed.count >= totalDocCount && !workingNotesUpdated && !readingPhaseComplete && loopCount >= 15 {
+                        readingPhaseComplete = true
+
+                        let transitionMessage = """
+                        [PHASE TRANSITION - FALLBACK]
+                        You have accessed all \(totalDocCount) documents but working_notes.md was not updated.
+                        Generate the report using the information you've gathered from recent document reads.
+                        Output ONLY the report content.
+                        """
+
+                        messages.append([
+                            "role": "user",
+                            "content": transitionMessage
+                        ])
+
+                        #if DEBUG
+                        print("🔵 Memory mode: FALLBACK TRANSITION - all docs accessed, no notes, loop \(loopCount)")
                         #endif
                     }
 
@@ -887,20 +956,23 @@ class AIAssistantService: ObservableObject {
                                 .map { "doc_\($0)" }
                                 .filter { !docsAccessed.contains($0) }
                             let remaining = remainingDocs.joined(separator: ", ")
+                            let notesStatus = workingNotesUpdated ? "YES - notes recorded" : "NO - remember to extract key info!"
 
                             let statusMessage: String
                             if remainingDocs.isEmpty {
                                 statusMessage = """
                                 [SYSTEM STATUS]
                                 Documents accessed: \(accessed)
-                                All documents accessed. You may now generate the report.
+                                Working notes updated: \(notesStatus)
+                                All documents accessed. \(workingNotesUpdated ? "Ready to generate report from working_notes.md." : "Extract remaining info to working_notes.md, then generate.")
                                 """
                             } else {
                                 statusMessage = """
                                 [SYSTEM STATUS]
                                 Documents accessed: \(accessed.isEmpty ? "none yet" : accessed)
                                 Documents remaining: \(remaining)
-                                Continue reading the remaining documents before generating output.
+                                Working notes updated: \(notesStatus)
+                                Continue: Read doc → Extract to working_notes.md → Read next doc
                                 """
                             }
 
@@ -910,7 +982,7 @@ class AIAssistantService: ObservableObject {
                             ])
 
                             #if DEBUG
-                            print("🔵 Memory mode: Injected status - \(docsAccessed.count)/\(totalDocCount) accessed")
+                            print("🔵 Memory mode: Injected status - \(docsAccessed.count)/\(totalDocCount) accessed, notes: \(workingNotesUpdated)")
                             #endif
                         }
                     }
@@ -922,9 +994,10 @@ class AIAssistantService: ObservableObject {
                         let timeLimitMessage = """
                         [TIME LIMIT]
                         You have been processing for \(loopCount) iterations.
-                        Documents accessed so far: \(docsAccessed.sorted().joined(separator: ", "))
+                        Documents accessed: \(docsAccessed.sorted().joined(separator: ", "))
+                        Working notes updated: \(workingNotesUpdated ? "YES" : "NO")
 
-                        Generate the best possible report with the information gathered so far.
+                        Generate the best possible report \(workingNotesUpdated ? "using working_notes.md as your source" : "with the information gathered").
                         Output ONLY the report content - no meta-commentary.
                         """
 
