@@ -827,7 +827,7 @@ struct TextClassificationModal: View {
             .padding(DesignSystem.Spacing.medium)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                    .fill(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.surface)
+                    .fill(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
