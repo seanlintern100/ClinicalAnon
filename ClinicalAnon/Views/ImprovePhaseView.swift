@@ -806,7 +806,7 @@ private struct DetectedDocumentRow: View {
     let document: DetectedDocument
     var indent: Int = 0
 
-    @State private var isExpanded: Bool = true  // Start expanded to show full summary
+    @State private var isExpanded: Bool = false  // Start collapsed
 
     // Check if summary is long enough to need expansion
     private var summaryNeedsExpansion: Bool {
