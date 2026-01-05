@@ -67,6 +67,7 @@ class ImprovePhaseState: ObservableObject {
     @Published var detectedDocuments: [DetectedDocument] = []
     @Published var isDetectingDocuments: Bool = false
     @Published var memoryModeInitialized: Bool = false
+    @Published var crossDocumentNotes: String = "" // Inconsistencies to display in chat
 
     // MARK: - Sheet States
 
@@ -247,7 +248,7 @@ class ImprovePhaseState: ObservableObject {
 
                 currentDocument = aiOutput
                 isInRefinementMode = true
-                chatHistory.append((role: "assistant", content: aiOutput))
+                chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
                 isAIProcessing = false
             } catch {
                 #if DEBUG
@@ -400,6 +401,23 @@ class ImprovePhaseState: ObservableObject {
             print("🤖 Memory Mode: Memory storage initialized with \(detectedDocuments.count) documents")
             #endif
 
+            // Check for cross-document inconsistencies (display in chat, not in prompt)
+            if detectedDocuments.count > 1 {
+                let summariesForCheck = detectedDocuments.map { doc in
+                    (docId: doc.id.uppercased(), title: doc.title, summary: doc.summary)
+                }
+                let inconsistencies = try await aiService.checkCrossDocumentInconsistencies(summariesForCheck)
+                if !inconsistencies.isEmpty {
+                    crossDocumentNotes = inconsistencies
+                    // Add to chat as a system note
+                    chatHistory.append((role: "system", content: "⚠️ **Cross-Document Notes**\n\(inconsistencies.replacingOccurrences(of: "## Cross-Document Notes", with: "").trimmingCharacters(in: .whitespacesAndNewlines))"))
+
+                    #if DEBUG
+                    print("🤖 Memory Mode: Found cross-document inconsistencies - flagged in chat")
+                    #endif
+                }
+            }
+
             // Process with memory tool
             let result = try await aiService.processWithMemory(
                 userMessage: "Please process these clinical documents according to the instructions.",
@@ -409,7 +427,7 @@ class ImprovePhaseState: ObservableObject {
             aiOutput = result
             currentDocument = result
             isInRefinementMode = true
-            chatHistory.append((role: "assistant", content: result))
+            chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
             isAIProcessing = false
 
             #if DEBUG
@@ -652,6 +670,12 @@ class ImprovePhaseState: ObservableObject {
         detectedDocuments.removeAll()
         isDetectingDocuments = false
         memoryModeInitialized = false
+        crossDocumentNotes = ""
+        aiService.resetMemoryMode()
+    }
+
+    /// Reset memory mode files on app launch (clears stale files from previous session)
+    func resetMemoryModeOnLaunch() {
         aiService.resetMemoryMode()
     }
 

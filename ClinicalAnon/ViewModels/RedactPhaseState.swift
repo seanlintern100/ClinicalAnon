@@ -229,6 +229,25 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Multi-Document Actions
 
+    /// Save current document without clearing state (for Continue to Improve)
+    /// State is preserved so user can navigate back and see it
+    func saveCurrentDocumentOnly() {
+        guard let result = result else { return }
+
+        let doc = SourceDocument(
+            documentNumber: nextDocumentNumber,
+            name: "Document \(nextDocumentNumber)",
+            description: "",
+            originalText: result.originalText,
+            redactedText: displayedRedactedText,
+            entities: activeEntities,
+            textInputType: textInputType,
+            textInputTypeDescription: textInputTypeDescription
+        )
+        sourceDocuments.append(doc)
+        // Don't clear anything - keep state for back navigation
+    }
+
     /// Save current document and clear for adding another
     /// NOTE: Does NOT clear engine.entityMapping to preserve consistent codes across docs
     func saveCurrentDocumentAndClearForNext() {
@@ -624,8 +643,8 @@ class RedactPhaseState: ObservableObject {
                 continue
             }
 
-            // Find all occurrences in original text
-            let positions = findAllOccurrences(of: finding.text, in: originalText)
+            // Find all occurrences AND extract name components (first/last names)
+            let (positions, componentEntities) = findAllNameOccurrences(of: finding.text, type: finding.suggestedType, in: originalText)
             guard !positions.isEmpty else { continue }
 
             // Get replacement code from engine (this also registers it for restore)
@@ -640,6 +659,16 @@ class RedactPhaseState: ObservableObject {
             )
 
             newEntities.append(entity)
+
+            // Add component entities (first name, last name) with same replacement code
+            for componentEntity in componentEntities {
+                // Skip if component already exists
+                let componentExists = allEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
+                    || newEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
+                if !componentExists {
+                    newEntities.append(componentEntity)
+                }
+            }
         }
 
         // Merge with existing BERT findings, avoiding duplicates
@@ -712,8 +741,8 @@ class RedactPhaseState: ObservableObject {
                 continue
             }
 
-            // Find all occurrences in original text
-            let positions = findAllOccurrences(of: finding.text, in: originalText)
+            // Find all occurrences AND extract name components (first/last names)
+            let (positions, componentEntities) = findAllNameOccurrences(of: finding.text, type: finding.suggestedType, in: originalText)
             guard !positions.isEmpty else { continue }
 
             // Get replacement code from engine (this also registers it for restore)
@@ -728,6 +757,16 @@ class RedactPhaseState: ObservableObject {
             )
 
             newEntities.append(entity)
+
+            // Add component entities (first name, last name) with same replacement code
+            for componentEntity in componentEntities {
+                // Skip if component already exists
+                let componentExists = allEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
+                    || newEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
+                if !componentExists {
+                    newEntities.append(componentEntity)
+                }
+            }
         }
 
         // Merge with existing XLM-R findings, avoiding duplicates
@@ -781,8 +820,8 @@ class RedactPhaseState: ObservableObject {
                 continue
             }
 
-            // Find all occurrences in original text
-            let positions = findAllOccurrences(of: finding.text, in: originalText)
+            // Find all occurrences AND extract name components (first/last names)
+            let (positions, componentEntities) = findAllNameOccurrences(of: finding.text, type: finding.suggestedType, in: originalText)
             guard !positions.isEmpty else { continue }
 
             // Get replacement code from engine (this also registers it for restore)
@@ -797,6 +836,16 @@ class RedactPhaseState: ObservableObject {
             )
 
             newEntities.append(entity)
+
+            // Add component entities (first name, last name) with same replacement code
+            for componentEntity in componentEntities {
+                // Skip if component already exists
+                let componentExists = allEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
+                    || newEntities.contains { $0.originalText.lowercased() == componentEntity.originalText.lowercased() }
+                if !componentExists {
+                    newEntities.append(componentEntity)
+                }
+            }
         }
 
         // Merge with existing deep scan findings, avoiding duplicates
@@ -963,6 +1012,58 @@ class RedactPhaseState: ObservableObject {
         }
 
         return positions
+    }
+
+    /// Find all occurrences of entity text AND its name components (first/last names)
+    /// Returns main entity positions plus separate entities for name components (same replacement code)
+    private func findAllNameOccurrences(of entityText: String, type: EntityType, in text: String) -> (mainPositions: [[Int]], componentEntities: [Entity]) {
+        // Find main entity occurrences
+        let mainPositions = findAllOccurrences(of: entityText, in: text)
+
+        var componentEntities: [Entity] = []
+
+        // Only extract components for person names
+        guard type.isPerson else { return (mainPositions, []) }
+
+        let words = entityText.split(separator: " ")
+        guard words.count >= 2 else { return (mainPositions, []) }
+
+        // Get replacement code for parent (ensures same code for all components)
+        let parentCode = engine.entityMapping.getReplacementCode(for: entityText, type: type)
+
+        // Extract first name
+        let firstName = String(words[0])
+        if firstName.count >= 3 {
+            let positions = findAllOccurrences(of: firstName, in: text)
+            if !positions.isEmpty {
+                componentEntities.append(Entity(
+                    originalText: firstName,
+                    replacementCode: parentCode,
+                    type: type,
+                    positions: positions,
+                    confidence: 0.9
+                ))
+            }
+        }
+
+        // Extract last name
+        if let lastName = words.last {
+            let lastNameStr = String(lastName)
+            if lastNameStr.count >= 3 && lastNameStr != firstName {
+                let positions = findAllOccurrences(of: lastNameStr, in: text)
+                if !positions.isEmpty {
+                    componentEntities.append(Entity(
+                        originalText: lastNameStr,
+                        replacementCode: parentCode,
+                        type: type,
+                        positions: positions,
+                        confidence: 0.9
+                    ))
+                }
+            }
+        }
+
+        return (mainPositions, componentEntities)
     }
 
     private func copyToClipboard(_ text: String) {

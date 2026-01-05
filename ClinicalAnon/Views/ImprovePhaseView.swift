@@ -232,7 +232,7 @@ struct ImprovePhaseView: View {
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
-        .frame(minWidth: 280, idealWidth: 350, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 220, idealWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Source Documents Sidebar
@@ -352,7 +352,7 @@ struct ImprovePhaseView: View {
                 .padding(DesignSystem.Spacing.small)
             }
         }
-        .frame(width: 260)
+        .frame(width: 390)
         .background(DesignSystem.Colors.surface)
     }
 
@@ -579,54 +579,74 @@ private struct ChatMessageView: View {
     var isFirstMessage: Bool = false
 
     private var isUser: Bool { role == "user" }
+    private var isSystem: Bool { role == "system" }
     private var isDocumentUpdate: Bool { content == "[[DOCUMENT_UPDATED]]" }
+    private var isDocumentGenerated: Bool { content == "[[DOCUMENT_GENERATED]]" }
 
     var body: some View {
-        HStack {
-            if isUser {
-                Spacer(minLength: 40)  // Push user messages to right
-            }
-
-            VStack(alignment: isUser ? .trailing : .leading, spacing: DesignSystem.Spacing.xs) {
-                Text(isUser ? "You" : "AI")
-                    .font(DesignSystem.Typography.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(isUser ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
-
-                if role == "assistant" {
-                    if isFirstMessage || isDocumentUpdate {
-                        // Document update: show status with icon
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            Image(systemName: isFirstMessage ? "doc.text.fill" : "arrow.triangle.2.circlepath")
-                                .font(.system(size: 11))
-                                .foregroundColor(DesignSystem.Colors.primaryTeal)
-
-                            Text(isFirstMessage ? "Document generated" : "Document updated")
-                                .font(.system(size: 13))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                    } else {
-                        // Conversational response: show with markdown formatting
-                        MarkdownText(content)
-                            .textSelection(.enabled)
-                    }
-                } else {
-                    // User messages: show full content
-                    Text(content)
-                        .font(.system(size: 13))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                }
+        if isSystem {
+            // System messages: centered warning/info banner
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                MarkdownText(content)
+                    .textSelection(.enabled)
             }
             .padding(DesignSystem.Spacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                    .fill(isUser
-                        ? DesignSystem.Colors.primaryTeal.opacity(0.1)
-                        : DesignSystem.Colors.background)
+                    .fill(Color.orange.opacity(0.15))
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            )
+        } else {
+            HStack {
+                if isUser {
+                    Spacer(minLength: 40)  // Push user messages to right
+                }
 
-            if !isUser {
-                Spacer(minLength: 40)  // Push AI messages to left
+                VStack(alignment: isUser ? .trailing : .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text(isUser ? "You" : "AI")
+                        .font(DesignSystem.Typography.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isUser ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+
+                    if role == "assistant" {
+                        if isFirstMessage || isDocumentGenerated || isDocumentUpdate {
+                            // Document generated/updated: show status with icon
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                Image(systemName: isDocumentUpdate ? "arrow.triangle.2.circlepath" : "doc.text.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+
+                                Text(isDocumentUpdate ? "Document updated" : "Document generated")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        } else {
+                            // Conversational response: show with markdown formatting
+                            MarkdownText(content)
+                                .textSelection(.enabled)
+                        }
+                    } else {
+                        // User messages: show full content
+                        Text(content)
+                            .font(.system(size: 13))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                    }
+                }
+                .padding(DesignSystem.Spacing.small)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                        .fill(isUser
+                            ? DesignSystem.Colors.primaryTeal.opacity(0.1)
+                            : DesignSystem.Colors.background)
+                )
+
+                if !isUser {
+                    Spacer(minLength: 40)  // Push AI messages to left
+                }
             }
         }
     }
@@ -786,45 +806,77 @@ private struct DetectedDocumentRow: View {
     let document: DetectedDocument
     var indent: Int = 0
 
+    @State private var isExpanded: Bool = true  // Start expanded to show full summary
+
+    // Check if summary is long enough to need expansion
+    private var summaryNeedsExpansion: Bool {
+        document.summary.count > 80
+    }
+
+    // Extract document number from id (e.g., "doc1" -> "1", "doc12" -> "12")
+    private var docNumber: String {
+        document.id.replacingOccurrences(of: "doc", with: "").replacingOccurrences(of: "_", with: "")
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 9))
-                .foregroundColor(.orange)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9))
+                    .foregroundColor(.orange)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(document.title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    if let author = document.author, !author.isEmpty {
-                        Text(author)
-                            .font(.system(size: 9))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(document.title)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
                             .lineLimit(1)
+
+                        Text("(Doc \(docNumber))")
+                            .font(.system(size: 10))
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
                     }
 
-                    if let date = document.date, !date.isEmpty {
-                        Text("• \(date)")
-                            .font(.system(size: 9))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    HStack(spacing: 4) {
+                        if let author = document.author, !author.isEmpty {
+                            Text(author)
+                                .font(.system(size: 9))
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .lineLimit(1)
+                        }
+
+                        if let date = document.date, !date.isEmpty {
+                            Text("• \(date)")
+                                .font(.system(size: 9))
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                        }
                     }
                 }
 
-                if !document.summary.isEmpty {
-                    Text(document.summary)
-                        .font(.system(size: 9))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .lineLimit(2)
+                Spacer()
+
+                // Expand/collapse button if summary is long
+                if !document.summary.isEmpty && summaryNeedsExpansion {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
-            Spacer()
+            // Summary section
+            if !document.summary.isEmpty {
+                Text(document.summary)
+                    .font(.system(size: 9))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .lineLimit(isExpanded ? nil : 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color.orange.opacity(0.08))

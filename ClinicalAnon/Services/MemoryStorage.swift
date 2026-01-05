@@ -181,17 +181,33 @@ class MemoryStorage: ObservableObject {
 
         var output: String
         let startLine = max((range?.first ?? 1) - 1, 0)
-        let endLine: Int
+        var endLine: Int
 
         if needsTruncation {
             endLine = min(maxDefaultLines, lines.count)
             output = "Here's the first \(maxDefaultLines) lines of \(path) (total: \(lines.count) lines):\n"
         } else {
-            endLine = min(range?.last ?? lines.count, lines.count)
+            // Handle negative values (like -1 meaning "to end") and invalid ranges
+            let requestedEnd = range?.last ?? lines.count
+            if requestedEnd < 0 {
+                // Negative value means "to end of file"
+                endLine = lines.count
+            } else {
+                endLine = min(requestedEnd, lines.count)
+            }
             output = "Here's the content of \(path) with line numbers:\n"
         }
 
-        for i in startLine..<endLine {
+        // Ensure valid range (endLine >= startLine)
+        if endLine < startLine {
+            endLine = lines.count
+        }
+
+        // Clamp startLine to valid range
+        let safeStartLine = min(startLine, lines.count)
+        let safeEndLine = min(endLine, lines.count)
+
+        for i in safeStartLine..<safeEndLine {
             let lineNum = String(format: "%6d", i + 1)
             output += "\(lineNum)\t\(lines[i])\n"
         }
@@ -419,19 +435,18 @@ class MemoryStorage: ObservableObject {
 
     // MARK: - Document Management
 
-    /// Create index file from detected documents
+    /// Create index file from detected documents (with full summaries for embedding)
     func createIndexFile(from detectedDocs: [DetectedDocument]) {
-        var indexContent = "# Document Index\n\n"
+        var indexContent = "# Document Summaries\n\n"
 
         for doc in detectedDocs {
             indexContent += """
-            ## \(doc.id): \(doc.title)
-            - **Author:** \(doc.author ?? "Unknown")
-            - **Date:** \(doc.date ?? "Not specified")
-            - **Type:** \(doc.type)
-            - **Summary:** \(doc.summary)
-            - **Size:** ~\(doc.tokenEstimate) tokens
-            - **File:** \(doc.id)_content.md
+            ## \(doc.id.uppercased()): \(doc.title)
+            **Type:** \(doc.type) | **Date:** \(doc.date ?? "Not specified") | **File:** \(doc.id)_content.md
+
+            \(doc.summary)
+
+            ---
 
             """
         }

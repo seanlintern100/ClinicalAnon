@@ -300,18 +300,15 @@ class WorkflowViewModel: ObservableObject {
         case .redact:
             guard canContinueFromRedact else { return }
 
-            // If there's a current unsaved document, save it first
+            // Save current document WITHOUT clearing (keep state for back navigation)
             if redactState.result != nil {
-                redactState.saveCurrentDocumentAndClearForNext()
+                redactState.saveCurrentDocumentOnly()
             }
 
             // Transfer source documents to improve phase
             improveState.sourceDocuments = redactState.sourceDocuments
 
-            // Clear ViewModel's inputText since it's a separate property
-            inputText = ""
-            cacheManager.clearAll()
-
+            // DON'T clear inputText or caches - keep them for back navigation
             currentPhase = .improve
         case .improve:
             guard canContinueFromImprove else { return }

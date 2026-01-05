@@ -8,6 +8,7 @@
 
 import Foundation
 import NaturalLanguage
+import AppKit  // For NSSpellChecker
 
 // MARK: - Swift NER Service
 
@@ -218,13 +219,16 @@ class SwiftNERService {
         // PHASE 4: Fuzzy matching for name misspellings
         let fuzzyFindings = findNameMisspellings(in: text, existingNames: existingEntities.filter { $0.type.isPerson })
 
+        // PHASE 5: Non-word detection - capitalized words not in dictionary
+        let nonWordFindings = findNonDictionaryWords(in: text, existingEntities: existingEntities, alreadyFound: newFindings + fuzzyFindings)
+
         // Combine findings
-        let allFindings = newFindings + fuzzyFindings
+        let allFindings = newFindings + fuzzyFindings + nonWordFindings
 
         #if DEBUG
         let elapsed = Date().timeIntervalSince(startTime)
         print("✅ Deep Scan: Completed in \(String(format: "%.2f", elapsed))s")
-        print("   Found \(withAllOccurrences.count) total, \(newFindings.count) new (delta), \(fuzzyFindings.count) fuzzy matches")
+        print("   Found \(withAllOccurrences.count) total, \(newFindings.count) new (delta), \(fuzzyFindings.count) fuzzy matches, \(nonWordFindings.count) non-words")
         #endif
 
         return allFindings
@@ -302,6 +306,65 @@ class SwiftNERService {
                     foundMisspellings.insert(wordLower)
                     break  // Found a match, no need to check other names
                 }
+            }
+        }
+
+        return findings
+    }
+
+    // MARK: - Non-Dictionary Word Detection
+
+    /// Find capitalized words that aren't in the system dictionary
+    /// These are likely names, unusual proper nouns, or non-English words that should be reviewed
+    private func findNonDictionaryWords(in text: String, existingEntities: [Entity], alreadyFound: [PIIFinding]) -> [PIIFinding] {
+        let spellChecker = NSSpellChecker.shared
+
+        // Build set of already-known texts to skip
+        let existingTexts = Set(existingEntities.map { $0.originalText.lowercased() })
+        let alreadyFoundTexts = Set(alreadyFound.map { $0.text.lowercased() })
+
+        // Extract capitalized words (4+ chars to reduce noise)
+        let wordPattern = "\\b[A-Z][a-z]{3,}\\b"
+        guard let regex = try? NSRegularExpression(pattern: wordPattern, options: []) else {
+            return []
+        }
+
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        var findings: [PIIFinding] = []
+        var foundWords: Set<String> = []
+
+        for match in matches {
+            let word = nsText.substring(with: match.range)
+            let wordLower = word.lowercased()
+
+            // Skip if already found or processed
+            if existingTexts.contains(wordLower) { continue }
+            if alreadyFoundTexts.contains(wordLower) { continue }
+            if foundWords.contains(wordLower) { continue }
+
+            // Skip common words and clinical terms
+            if isCommonWord(word) || isClinicalTerm(word) { continue }
+
+            // Check if word is in dictionary using spell checker
+            let misspelledRange = spellChecker.checkSpelling(of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
+
+            // If misspelledRange location is not NSNotFound, word is NOT in dictionary
+            if misspelledRange.location != NSNotFound {
+                foundWords.insert(wordLower)
+
+                findings.append(PIIFinding(
+                    text: word,
+                    suggestedType: .personOther,  // Assume it's a name
+                    reason: "Non-dictionary word (possible name)",
+                    confidence: 0.6  // Lower confidence since it's speculative
+                ))
+
+                #if DEBUG
+                print("  📖 Non-dictionary word: '\(word)'")
+                #endif
             }
         }
 
@@ -391,12 +454,20 @@ class SwiftNERService {
             }
             #endif
 
-            // Extract first name components from multi-word names
+            // Extract first AND last name components from multi-word names
             let words = entity.originalText.split(separator: " ")
             if words.count >= 2 {
+                // First name
                 let firstName = String(words[0])
                 if firstName.count >= 3 && !isCommonWord(firstName) && !isClinicalTerm(firstName) {
                     nameSet.insert(firstName)
+                }
+                // Last name (also important for possessives like "Versteeghs")
+                if let lastName = words.last {
+                    let lastNameStr = String(lastName)
+                    if lastNameStr.count >= 3 && !isCommonWord(lastNameStr) && !isClinicalTerm(lastNameStr) {
+                        nameSet.insert(lastNameStr)
+                    }
                 }
             }
         }
@@ -417,11 +488,24 @@ class SwiftNERService {
         let nsText = text as NSString
         var allPositions: [String: [[Int]]] = [:]
 
+        // Build lowercase set for normalization
+        let nameSetLower = Set(nameSet.map { $0.lowercased() })
+
         let range = NSRange(location: 0, length: nsText.length)
         regex.enumerateMatches(in: text, range: range) { match, _, _ in
             guard let match = match else { return }
             let matchedText = nsText.substring(with: match.range)
-            let key = matchedText.lowercased()
+            var key = matchedText.lowercased()
+
+            // Normalize possessive forms: if "seans" matched but "sean" is the known name, use "sean" as key
+            // This ensures positions for "Seans" are stored under "sean" to match the entity lookup
+            if key.hasSuffix("s") && !nameSetLower.contains(key) {
+                let baseKey = String(key.dropLast())
+                if nameSetLower.contains(baseKey) {
+                    key = baseKey
+                }
+            }
+
             let position = [match.range.location, match.range.location + match.range.length]
             allPositions[key, default: []].append(position)
         }
@@ -455,13 +539,16 @@ class SwiftNERService {
             }
         }
 
-        // Add extracted first names that were found
+        // Add extracted first/last names that were found
         for (key, positions) in allPositions {
             guard !processedKeys.contains(key) else { continue }
 
             // Find parent entity for type/replacement code inheritance
+            // Check both first name (hasPrefix) and last name (hasSuffix)
             let parentEntity = entities.first { entity in
-                entity.type.isPerson && entity.originalText.lowercased().hasPrefix(key + " ")
+                guard entity.type.isPerson else { return false }
+                let lowerName = entity.originalText.lowercased()
+                return lowerName.hasPrefix(key + " ") || lowerName.hasSuffix(" " + key)
             }
 
             if let parent = parentEntity {

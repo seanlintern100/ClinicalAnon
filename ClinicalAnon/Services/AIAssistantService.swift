@@ -279,14 +279,14 @@ class AIAssistantService: ObservableObject {
                 maxTokens: 4000
             )
 
-            return parseDocumentBoundaries(response, fullText: text)
+            return try await parseDocumentBoundaries(response, fullText: text)
         } catch {
             // Fallback: treat as single document
             #if DEBUG
             print("🔴 Document detection failed: \(error.localizedDescription)")
             #endif
             return [DetectedDocument(
-                id: "doc_0",
+                id: "doc1",
                 title: "Document",
                 author: nil,
                 date: nil,
@@ -366,7 +366,7 @@ class AIAssistantService: ObservableObject {
                 )
 
                 // Parse documents from this chunk
-                let chunkDocs = parseDocumentBoundaries(response, fullText: text)
+                let chunkDocs = try await parseDocumentBoundaries(response, fullText: text)
 
                 // Add documents, avoiding duplicates from overlap regions
                 for doc in chunkDocs {
@@ -399,7 +399,7 @@ class AIAssistantService: ObservableObject {
         // If no documents found, return whole text as single document
         if allDocuments.isEmpty {
             return [DetectedDocument(
-                id: "doc_0",
+                id: "doc1",
                 title: "Document",
                 author: nil,
                 date: nil,
@@ -424,7 +424,7 @@ class AIAssistantService: ObservableObject {
     }
 
     /// Parse AI response to extract document boundaries
-    private func parseDocumentBoundaries(_ jsonResponse: String, fullText: String) -> [DetectedDocument] {
+    private func parseDocumentBoundaries(_ jsonResponse: String, fullText: String) async throws -> [DetectedDocument] {
         // Extract JSON from response (handle markdown code blocks)
         var jsonString = jsonResponse
         if let jsonStart = jsonResponse.range(of: "{"),
@@ -440,7 +440,7 @@ class AIAssistantService: ObservableObject {
             print("🔴 Document detection: Failed to parse JSON")
             #endif
             return [DetectedDocument(
-                id: "doc_0",
+                id: "doc1",
                 title: "Document",
                 author: nil,
                 date: nil,
@@ -460,7 +460,7 @@ class AIAssistantService: ObservableObject {
         if documents.count == 1 {
             let doc = documents[0]
             return [DetectedDocument(
-                id: "doc_0",
+                id: "doc1",
                 title: doc["title"] as? String ?? "Document",
                 author: doc["author"] as? String,
                 date: doc["date"] as? String,
@@ -521,14 +521,41 @@ class AIAssistantService: ObservableObject {
             ))
         }
 
-        return processDetectedDocuments(detectedDocs)
+        return try await processDetectedDocuments(detectedDocs)
     }
 
-    /// Process detected documents - chunk large single docs
-    private func processDetectedDocuments(_ documents: [DetectedDocument]) -> [DetectedDocument] {
+    /// Process detected documents - chunk large single docs and generate summaries
+    private func processDetectedDocuments(_ documents: [DetectedDocument]) async throws -> [DetectedDocument] {
         // If we got a single large document, chunk it
         if documents.count == 1 && documents[0].fullContent.count > 50_000 {
-            return splitIntoChunks(documents[0], targetSize: 30_000)
+            var chunks = splitIntoChunks(documents[0], targetSize: 30_000)
+
+            // Generate summaries for each chunk so AI knows what's in each part
+            #if DEBUG
+            print("🔵 Generating summaries for \(chunks.count) chunks...")
+            #endif
+
+            for i in 0..<chunks.count {
+                do {
+                    let summary = try await generateDocumentSummary(
+                        chunks[i].fullContent,
+                        title: chunks[i].title,
+                        type: chunks[i].type
+                    )
+                    chunks[i].summary = summary
+
+                    #if DEBUG
+                    print("   Chunk \(i + 1): \(summary.prefix(60))...")
+                    #endif
+                } catch {
+                    #if DEBUG
+                    print("🔴 Failed to generate summary for chunk \(i + 1): \(error.localizedDescription)")
+                    #endif
+                    // Continue with empty summary if generation fails
+                }
+            }
+
+            return chunks
         }
         return documents
     }
@@ -546,7 +573,7 @@ class AIAssistantService: ObservableObject {
         for para in paragraphs {
             if currentChunk.count + para.count > targetSize && !currentChunk.isEmpty {
                 chunks.append(DetectedDocument(
-                    id: "doc_0_chunk_\(chunkIndex)",
+                    id: "doc1_chunk_\(chunkIndex)",
                     title: "\(doc.title) - Part \(chunkIndex + 1)",
                     author: doc.author,
                     date: doc.date,
@@ -563,7 +590,7 @@ class AIAssistantService: ObservableObject {
 
         if !currentChunk.isEmpty {
             chunks.append(DetectedDocument(
-                id: "doc_0_chunk_\(chunkIndex)",
+                id: "doc1_chunk_\(chunkIndex)",
                 title: "\(doc.title) - Part \(chunkIndex + 1)",
                 author: doc.author,
                 date: doc.date,
@@ -578,80 +605,131 @@ class AIAssistantService: ObservableObject {
 
     /// Generate summary for a document
     func generateDocumentSummary(_ content: String, title: String, type: String) async throws -> String {
-        let truncated = String(content.prefix(8000))
+        // Scale extraction depth: 10 points per 10K characters (minimum 10, maximum 50)
+        let charCount = content.count
+        let pointCount = max(10, min(50, (charCount / 10000) * 10 + 10))
+        let targetPoints = "\(pointCount)"
+
+        // Use more content for extraction (up to 50K chars for thorough extraction)
+        let truncated = String(content.prefix(50000))
 
         let prompt = """
-        Summarize this clinical document in 2-3 sentences.
-        Focus on: purpose, key findings, recommendations, important dates/values.
+        Extract key information from this clinical document to support generation of a bio-psycho-social report.
 
-        Document title: \(title)
-        Document type: \(type)
+        Document: \(title)
+        Type: \(type)
+
+        Include all clinically relevant details that would help understand the person's:
+        - Medical/physical status and history
+        - Psychological/cognitive functioning
+        - Social circumstances and supports
+        - Timeline of events and interventions
+        - Professional opinions and recommendations
+
+        Extract \(targetPoints) key points. Let the document's content guide what's important.
+
+        IMPORTANT - Include exact wording for:
+        - Formal diagnoses
+        - Professional opinions and recommendations
+        - Significant clinical findings
+        - Any statements that might be quoted in a report
+
+        If any information is ambiguous or unclear, flag it explicitly
+        (e.g., "UNCLEAR: document mentions injury but date not specified").
 
         Content:
         \(truncated)
         """
 
-        let systemPrompt = "You are a clinical document summarizer. Be concise and factual. Return only the summary, no other text."
+        let systemPrompt = """
+        You are a clinical document extractor. Extract key information as bullet points.
+        Be thorough - include dates, names, diagnoses, findings, and recommendations.
+        Preserve exact wording for significant clinical statements.
+        Return only the bullet points, no preamble or explanation.
+        """
 
         return try await bedrockService.invoke(
             systemPrompt: systemPrompt,
             userMessage: prompt,
             model: credentialsManager.selectedModel,
-            maxTokens: 200
+            maxTokens: 1500
         )
     }
 
-    /// Build system prompt for memory mode with embedded index
+    /// Check for inconsistencies across document summaries
+    func checkCrossDocumentInconsistencies(_ summaries: [(docId: String, title: String, summary: String)]) async throws -> String {
+        guard summaries.count > 1 else {
+            return "" // No cross-document check needed for single document
+        }
+
+        let combinedSummaries = summaries.map { doc in
+            """
+            ### \(doc.docId): \(doc.title)
+            \(doc.summary)
+            """
+        }.joined(separator: "\n\n")
+
+        let prompt = """
+        Review these document summaries for any inconsistencies or contradictions:
+
+        \(combinedSummaries)
+
+        Look for:
+        - Dates that don't align
+        - Conflicting diagnoses or findings
+        - Different accounts of the same event
+        - Discrepancies in reported details (names, places, values)
+
+        List any inconsistencies found as bullet points. If none found, respond with "No inconsistencies noted."
+        """
+
+        let systemPrompt = "You are a clinical document reviewer. Flag any contradictions or inconsistencies across documents. Be specific about which documents conflict."
+
+        let result = try await bedrockService.invoke(
+            systemPrompt: systemPrompt,
+            userMessage: prompt,
+            model: credentialsManager.selectedModel,
+            maxTokens: 500
+        )
+
+        // Only return if there are actual inconsistencies to flag
+        if result.lowercased().contains("no inconsistencies") {
+            return ""
+        }
+
+        return """
+
+        ## Cross-Document Notes
+        \(result)
+        """
+    }
+
+    /// Build system prompt for memory mode with embedded summaries
     func buildMemoryModeSystemPrompt(basePrompt: String) -> String {
-        let index = memoryStorage.readFile("index.md") ?? "No documents loaded"
+        let summaries = memoryStorage.readFile("index.md") ?? "No documents loaded"
 
         return """
         \(basePrompt)
 
-        ## Document Index
-        \(index)
+        \(summaries)
 
-        ## Memory System
-        Full document contents are stored in /memories/doc_N_content.md files.
-        Use your memory tool to:
-        - Read documents: view /memories/doc_0_content.md
-        - Read specific lines: {"command": "view", "path": "/memories/doc_0_content.md", "view_range": [100, 200]}
+        ## Document Access
 
-        ## Large File Access
-        When viewing large files, only the first 300 lines are returned by default.
-        The response shows the total line count. Use view_range to access specific sections:
-        - view_range: [1, 300] for lines 1-300
-        - view_range: [301, 600] for lines 301-600
+        The summaries above contain detailed extractions from all source documents.
+        Generate your report from these summaries.
 
-        ## Two-Phase Processing Protocol
+        If you need exact quotes, specific wording, or details not in the summaries,
+        use the memory tool to access full documents at /memories/doc_N_content.md
 
-        PHASE 1 - READING & EXTRACTING:
-        - Read each document using the memory tool
-        - IMMEDIATELY after reading each document, record key information in working_notes.md
-        - Do NOT read multiple documents before extracting—you WILL lose context when pruned
-        - Pattern: Read doc → Extract to notes → Read next doc → Extract → ...
+        To read a document:
+        - Full document: {"command": "view", "path": "/memories/doc1_content.md"}
+        - Specific lines: {"command": "view", "path": "/memories/doc1_content.md", "view_range": [100, 200]}
 
-        What to extract to working_notes.md:
-        - Patient identifiers and dates
-        - Diagnoses and clinical impressions
-        - Medications (name, dose, dates, outcomes)
-        - Key findings and abnormal values
-        - Recommendations made
-        - Any concerns or discrepancies between documents
-
-        Your working_notes.md is your PERSISTENT MEMORY. Anything not recorded there may be lost.
-
-        PHASE 2 - WRITING:
-        - After reading all documents, you will receive a [PHASE TRANSITION] message
-        - Generate the report using working_notes.md as your primary source
-        - You may re-read specific documents for exact quotes or verification
-        - Output ONLY the report content
-
-        ## CRITICAL Output Rules
-        - NEVER include meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
-        - NEVER output planning text or status updates
+        ## Output Rules
         - Output ONLY the requested clinical content (report, summary, notes, etc.)
-        - The first text you output should be the start of the actual report/document
+        - No meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
+        - Start directly with the report content
+        - Use redacted placeholders (e.g., [PERSON_A], [ORG_B]) as they appear in the source documents - these will be restored to actual names afterward
         """
     }
 
@@ -740,7 +818,7 @@ class AIAssistantService: ObservableObject {
         """
     }
 
-    /// Process with memory tool - agentic loop with two-phase tracking
+    /// Process with memory tool - simplified loop for optional document lookups
     func processWithMemory(userMessage: String, systemPrompt: String) async throws -> String {
         guard bedrockService.isConfigured else {
             throw AppError.aiNotConfigured
@@ -752,7 +830,7 @@ class AIAssistantService: ObservableObject {
 
         defer { isProcessing = false }
 
-        // Build enhanced system prompt with embedded index
+        // Build enhanced system prompt with embedded summaries
         let enhancedPrompt = buildMemoryModeSystemPrompt(basePrompt: systemPrompt)
 
         // Memory tool definition
@@ -763,29 +841,22 @@ class AIAssistantService: ObservableObject {
 
         // Start with user message
         var messages: [[String: Any]] = [
-            ["role": "user", "content": userMessage]
+            ["role": "user", "content": [["type": "text", "text": userMessage]]]
         ]
 
         var finalText = ""
         var loopCount = 0
-        let maxLoops = 30 // Safety limit (increased for two-phase)
-
-        // Two-phase tracking
-        var docsAccessed: Set<String> = []
-        let totalDocCount = memoryStorage.documentCount
-        var readingPhaseComplete = false
-        var workingNotesUpdated = false
-        var noteReminderInjected = false
+        let maxLoops = 20 // Reduced - AI should mostly work from summaries
 
         #if DEBUG
-        print("🔵 Memory mode: Starting with \(totalDocCount) documents to read")
+        print("🔵 Memory mode: Starting (summaries embedded, memory tool available for lookups)")
         #endif
 
         while loopCount < maxLoops {
             loopCount += 1
 
             #if DEBUG
-            print("🔵 Memory mode loop \(loopCount) - docs accessed: \(docsAccessed.count)/\(totalDocCount)")
+            print("🔵 Memory mode loop \(loopCount)")
             #endif
 
             let response = try await bedrockService.invokeWithTools(
@@ -805,37 +876,13 @@ class AIAssistantService: ObservableObject {
             // Check if AI wants to use a tool
             if let toolUse = response.toolUse {
                 if toolUse.name == "memory" {
-                    // Track document access and working notes updates
-                    if let path = toolUse.inputDict["path"] as? String,
-                       let command = toolUse.inputDict["command"] as? String {
-
-                        // Track doc reads
-                        if path.contains("/memories/doc_") && path.contains("_content.md") {
-                            if let filename = path.components(separatedBy: "/").last {
-                                let docId = filename.replacingOccurrences(of: "_content.md", with: "")
-                                docsAccessed.insert(docId)
-
-                                #if DEBUG
-                                print("🔵 Memory mode: Accessed \(docId) - now \(docsAccessed.count)/\(totalDocCount)")
-                                #endif
-                            }
-                        }
-
-                        // Track working_notes updates (writes, not reads)
-                        if path.contains("working_notes") &&
-                           (command == "str_replace" || command == "create" || command == "insert") {
-                            workingNotesUpdated = true
-                            #if DEBUG
-                            print("🔵 Memory mode: Working notes updated")
-                            #endif
-                        }
-                    }
-
                     // Execute memory command
                     let result = memoryStorage.handleMemoryCommand(toolUse.inputDict)
 
                     #if DEBUG
-                    print("🔵 Memory tool result: \(result.prefix(200))...")
+                    if let path = toolUse.inputDict["path"] as? String {
+                        print("🔵 Memory lookup: \(path)")
+                    }
                     #endif
 
                     // Add assistant message with tool use
@@ -867,78 +914,7 @@ class AIAssistantService: ObservableObject {
                         ]
                     ])
 
-                    // Reminder: if 3+ docs read but no notes taken yet
-                    if docsAccessed.count >= 3 && !workingNotesUpdated && !noteReminderInjected && !readingPhaseComplete {
-                        noteReminderInjected = true
-
-                        let reminderMessage = """
-                        [REMINDER]
-                        You have read \(docsAccessed.count) documents but have not recorded anything in working_notes.md.
-                        Key information will be lost when context is pruned.
-                        After reading each document, IMMEDIATELY extract and record important details to working_notes.md:
-                        - Patient identifiers and dates
-                        - Diagnoses and clinical impressions
-                        - Key findings, medications, recommendations
-                        Continue reading and extracting.
-                        """
-
-                        messages.append([
-                            "role": "user",
-                            "content": [["type": "text", "text": reminderMessage]]
-                        ])
-
-                        #if DEBUG
-                        print("🔵 Memory mode: Injected note-taking reminder (3+ docs read, no notes)")
-                        #endif
-                    }
-
-                    // Check for phase transition: all docs accessed AND notes updated
-                    if docsAccessed.count >= totalDocCount && workingNotesUpdated && !readingPhaseComplete {
-                        readingPhaseComplete = true
-
-                        let transitionMessage = """
-                        [PHASE TRANSITION]
-                        READING PHASE COMPLETE. You have accessed all \(totalDocCount) documents and recorded key information.
-
-                        Now proceed to WRITING PHASE:
-                        - Generate the clinical report using your working_notes.md as the primary source
-                        - You may re-read specific documents for exact quotes or verification
-                        - Output ONLY the report content - no meta-commentary like "I'll now..." or "Let me..."
-                        """
-
-                        messages.append([
-                            "role": "user",
-                            "content": [["type": "text", "text": transitionMessage]]
-                        ])
-
-                        #if DEBUG
-                        print("🔵 Memory mode: PHASE TRANSITION - all \(totalDocCount) docs accessed + notes updated")
-                        #endif
-                    }
-
-                    // Fallback transition: all docs accessed but no notes (still need to proceed)
-                    if docsAccessed.count >= totalDocCount && !workingNotesUpdated && !readingPhaseComplete && loopCount >= 15 {
-                        readingPhaseComplete = true
-
-                        let transitionMessage = """
-                        [PHASE TRANSITION - FALLBACK]
-                        You have accessed all \(totalDocCount) documents but working_notes.md was not updated.
-                        Generate the report using the information you've gathered from recent document reads.
-                        Output ONLY the report content.
-                        """
-
-                        messages.append([
-                            "role": "user",
-                            "content": [["type": "text", "text": transitionMessage]]
-                        ])
-
-                        #if DEBUG
-                        print("🔵 Memory mode: FALLBACK TRANSITION - all docs accessed, no notes, loop \(loopCount)")
-                        #endif
-                    }
-
-                    // Prune old tool exchanges to prevent payload explosion
-                    // Keep: first user message + last 4 message pairs (8 messages)
+                    // Prune if needed (keep first message + last 8)
                     let maxMessages = 9
                     if messages.count > maxMessages {
                         let firstMessage = messages[0]
@@ -948,70 +924,8 @@ class AIAssistantService: ObservableObject {
                         #if DEBUG
                         print("🔵 Memory mode: Pruned messages to \(messages.count)")
                         #endif
-
-                        // After pruning, inject status message if still in reading phase
-                        if !readingPhaseComplete && totalDocCount > 0 {
-                            let accessed = docsAccessed.sorted().joined(separator: ", ")
-                            let remainingDocs = (0..<totalDocCount)
-                                .map { "doc_\($0)" }
-                                .filter { !docsAccessed.contains($0) }
-                            let remaining = remainingDocs.joined(separator: ", ")
-                            let notesStatus = workingNotesUpdated ? "YES - notes recorded" : "NO - remember to extract key info!"
-
-                            let statusMessage: String
-                            if remainingDocs.isEmpty {
-                                statusMessage = """
-                                [SYSTEM STATUS]
-                                Documents accessed: \(accessed)
-                                Working notes updated: \(notesStatus)
-                                All documents accessed. \(workingNotesUpdated ? "Ready to generate report from working_notes.md." : "Extract remaining info to working_notes.md, then generate.")
-                                """
-                            } else {
-                                statusMessage = """
-                                [SYSTEM STATUS]
-                                Documents accessed: \(accessed.isEmpty ? "none yet" : accessed)
-                                Documents remaining: \(remaining)
-                                Working notes updated: \(notesStatus)
-                                Continue: Read doc → Extract to working_notes.md → Read next doc
-                                """
-                            }
-
-                            messages.append([
-                                "role": "user",
-                                "content": [["type": "text", "text": statusMessage]]
-                            ])
-
-                            #if DEBUG
-                            print("🔵 Memory mode: Injected status - \(docsAccessed.count)/\(totalDocCount) accessed, notes: \(workingNotesUpdated)")
-                            #endif
-                        }
                     }
 
-                    // Safety limit: force writing phase after 25 loops
-                    if loopCount >= 25 && !readingPhaseComplete {
-                        readingPhaseComplete = true
-
-                        let timeLimitMessage = """
-                        [TIME LIMIT]
-                        You have been processing for \(loopCount) iterations.
-                        Documents accessed: \(docsAccessed.sorted().joined(separator: ", "))
-                        Working notes updated: \(workingNotesUpdated ? "YES" : "NO")
-
-                        Generate the best possible report \(workingNotesUpdated ? "using working_notes.md as your source" : "with the information gathered").
-                        Output ONLY the report content - no meta-commentary.
-                        """
-
-                        messages.append([
-                            "role": "user",
-                            "content": [["type": "text", "text": timeLimitMessage]]
-                        ])
-
-                        #if DEBUG
-                        print("🔵 Memory mode: TIME LIMIT - forcing writing phase at loop \(loopCount)")
-                        #endif
-                    }
-
-                    // Continue loop
                     continue
                 }
             }

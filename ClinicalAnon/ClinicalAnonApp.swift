@@ -26,7 +26,7 @@ struct ClinicalAnonApp: App {
                 .environmentObject(viewModel)
                 .task {
                     // Clear any stale memory files from previous session
-                    viewModel.improveState.aiService.resetMemoryMode()
+                    viewModel.improveState.resetMemoryModeOnLaunch()
 
                     // Pre-load LLM model in background (only if already cached)
                     await LocalLLMService.shared.preloadIfCached()
