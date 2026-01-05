@@ -321,6 +321,67 @@ struct DocumentType: Identifiable, Codable, Equatable {
         customInstructions: ""
     )
 
+    static let accBSSReport = DocumentType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000006")!,
+        name: "ACC BSS Report",
+        promptTemplate: """
+            You are a clinical writing assistant specialising in psychological assessment and support planning. Synthesise a new clinical report by integrating information from ALL available documents in memory. Do not simply reformat a single source document. Weight sources as follows:
+            - Primary: User's clinical notes, rough notes, session notes
+            - Secondary: External reports, assessments by other providers
+
+            Where sources conflict, prefer the user's own notes (likely more current).
+
+            Tone: {formality_text}
+            Detail: {detail_text}
+            Structure: {structure_text}
+
+            Report Focus:
+            Psychological and behavioural functioning — not medical management. Explain HOW injury effects, psychological factors, and social stressors interact to produce concerning behaviours.
+
+            Structure:
+            1. Introduction: Person, family composition, living situation
+            2. Injury history and impact on functioning
+            3. Employment history and current situation
+            4. Recent legal issues (if applicable)
+            5. Background medical issues (brief, relevant only)
+            6. Current mental health presentation
+            7. Biopsychosocial formulation: Explain current behaviours of concern (e.g., aggression, lack of motivation, inappropriate social behaviour). Identify significant triggers and setting events.
+            8. Intervention goals: Three key goals with practical strategies for the support period. Goals should address presenting concerns such as:
+               - Behavioural regulation
+               - Daily activity / motivation
+               - Social functioning
+
+               Strategies should account for any cognitive limitations identified: external structure, prompts, simple concrete steps, immediate reinforcement as needed.
+
+            Tone & Style:
+            - Lean toward practical and accessible; minimise repetition and overlap
+            - Audience: Case managers and family members
+
+            Content Guidance:
+            - Present the person from a biopsychosocial perspective
+            - Highlight strengths and protective factors alongside difficulties
+            - Provide practical recommendations the reader can act on
+            - Use occasional direct quotes from source documents to illustrate key points
+              (e.g., "As noted by [PERSON_B] in their assessment dated [DATE_C], '[quoted text]'")
+            - If source documents conflict, prefer "User's rough notes" or "User's completed notes" over external reports (user's notes are likely more current)
+
+            Person References:
+            Use contextually appropriate name forms:
+            - Introduce by full name at first mention (e.g., [CLIENT_A_FIRST_LAST])
+            - Use first name for subsequent references (e.g., [CLIENT_A_FIRST])
+
+            Critical Rules:
+            - Preserve all placeholders exactly: [PERSON_A], [DATE_A], [ORG_B], etc.
+            - Use only information from provided documents — do not invent details
+            - If information is missing for a section, note briefly or omit
+            - Respond with only the report
+            """,
+        icon: "brain.head.profile",
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 3, detail: 4, structure: 4),
+        customInstructions: ""
+    )
+
     static let summarise = DocumentType(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000005")!,
         name: "Summary",
@@ -388,6 +449,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
         .notes,
         .report,
         .summarise,
+        .accBSSReport,
         .accBSSReview,
         .custom
     ]

@@ -386,6 +386,20 @@ class EntityMapping: ObservableObject {
         return stripped
     }
 
+    /// Get the canonical (anchor) text for a variant code from the RedactedPerson
+    /// Used to prefer anchor's components over merged aliases in allMappings
+    private func getCanonicalText(for code: String, person: RedactedPerson) -> String? {
+        // Check variant suffixes in order of specificity (longest first)
+        if code.contains("_FIRST_LAST]") { return person.firstLast }
+        if code.contains("_FIRST_MIDDLE]") { return person.firstMiddle }
+        if code.contains("_FIRST]") { return person.first }
+        if code.contains("_LAST]") { return person.last }
+        if code.contains("_MIDDLE]") { return person.middle }
+        if code.contains("_FORMAL]") { return person.formal }
+        if code.contains("_FULL]") { return person.full }
+        return person.full  // Default to full name
+    }
+
     /// Check if an original text already has a mapping
     func hasMapping(for originalText: String) -> Bool {
         let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -406,23 +420,40 @@ class EntityMapping: ObservableObject {
     }
 
     /// Get all mappings as a sorted array, deduplicated by placeholder code
-    /// When multiple originals map to the same placeholder, keeps the longest (most complete) one
+    /// When multiple originals map to the same placeholder:
+    /// - For person codes: prefer the anchor's canonical component (from RedactedPerson)
+    /// - For other codes: keep the longest (most complete) one
     /// Returns the ORIGINAL CASED text, not the normalized key
     var allMappings: [(original: String, replacement: String)] {
-        // Group by replacement code, keeping longest original for each
+        // Group by replacement code, preferring anchor's canonical text for person codes
         var byCode: [String: (original: String, replacement: String)] = [:]
 
         for (_, value) in mappings {
             let code = value.replacement
             if let existing = byCode[code] {
-                // Keep the longer original (more complete name)
-                if value.original.count > existing.original.count {
-                    #if DEBUG
-                    if code.contains("DATE") {
-                        print("📅 EntityMapping.allMappings: Replacing '\(existing.original)' with longer '\(value.original)' for \(code)")
+                // For person codes, prefer anchor's canonical component over merged aliases
+                if let baseId = extractBaseId(from: code),
+                   let person = redactedPersons[baseId],
+                   let anchorText = getCanonicalText(for: code, person: person) {
+                    // Check if current value matches anchor's canonical text
+                    if value.original.lowercased() == anchorText.lowercased() {
+                        // New value matches anchor - use it
+                        #if DEBUG
+                        print("🔗 EntityMapping.allMappings: Using anchor text '\(value.original)' for \(code) (over '\(existing.original)')")
+                        #endif
+                        byCode[code] = (original: value.original, replacement: code)
                     }
-                    #endif
-                    byCode[code] = (original: value.original, replacement: code)
+                    // If existing matches anchor OR neither matches, keep existing (don't replace with alias)
+                } else {
+                    // Non-person code or no RedactedPerson - fall back to keeping longer
+                    if value.original.count > existing.original.count {
+                        #if DEBUG
+                        if code.contains("DATE") {
+                            print("📅 EntityMapping.allMappings: Replacing '\(existing.original)' with longer '\(value.original)' for \(code)")
+                        }
+                        #endif
+                        byCode[code] = (original: value.original, replacement: code)
+                    }
                 }
             } else {
                 byCode[code] = (original: value.original, replacement: code)

@@ -614,7 +614,7 @@ class RedactPhaseState: ObservableObject {
 
         let doc = SourceDocument(
             documentNumber: nextDocumentNumber,
-            name: "Document \(nextDocumentNumber)",
+            name: "Document \(nextDocumentNumber) (\(textInputType.rawValue))",
             description: "",
             originalText: result.originalText,
             redactedText: displayedRedactedText,
@@ -633,7 +633,7 @@ class RedactPhaseState: ObservableObject {
 
         let doc = SourceDocument(
             documentNumber: nextDocumentNumber,
-            name: "Document \(nextDocumentNumber)",
+            name: "Document \(nextDocumentNumber) (\(textInputType.rawValue))",
             description: "",
             originalText: result.originalText,
             redactedText: displayedRedactedText,
