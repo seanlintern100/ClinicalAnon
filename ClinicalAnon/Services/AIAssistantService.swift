@@ -884,7 +884,7 @@ class AIAssistantService: ObservableObject {
 
                         messages.append([
                             "role": "user",
-                            "content": reminderMessage
+                            "content": [["type": "text", "text": reminderMessage]]
                         ])
 
                         #if DEBUG
@@ -908,7 +908,7 @@ class AIAssistantService: ObservableObject {
 
                         messages.append([
                             "role": "user",
-                            "content": transitionMessage
+                            "content": [["type": "text", "text": transitionMessage]]
                         ])
 
                         #if DEBUG
@@ -929,7 +929,7 @@ class AIAssistantService: ObservableObject {
 
                         messages.append([
                             "role": "user",
-                            "content": transitionMessage
+                            "content": [["type": "text", "text": transitionMessage]]
                         ])
 
                         #if DEBUG
@@ -978,7 +978,7 @@ class AIAssistantService: ObservableObject {
 
                             messages.append([
                                 "role": "user",
-                                "content": statusMessage
+                                "content": [["type": "text", "text": statusMessage]]
                             ])
 
                             #if DEBUG
@@ -1003,7 +1003,7 @@ class AIAssistantService: ObservableObject {
 
                         messages.append([
                             "role": "user",
-                            "content": timeLimitMessage
+                            "content": [["type": "text", "text": timeLimitMessage]]
                         ])
 
                         #if DEBUG
