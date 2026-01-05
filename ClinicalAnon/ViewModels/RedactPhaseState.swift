@@ -22,7 +22,7 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Text Classification
 
-    @Published var textInputType: TextInputType = .otherReports
+    @Published var textInputType: TextInputType = .roughNotes
     @Published var textInputTypeDescription: String = ""  // For "Other" type
 
     // MARK: - Processing State

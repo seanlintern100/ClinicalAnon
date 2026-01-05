@@ -487,14 +487,38 @@ class ImprovePhaseState: ObservableObject {
         let systemPrompt = """
             You are a clinical writing assistant helping refine a document.
 
-            CRITICAL RESPONSE FORMAT:
-            - If responding conversationally (answering questions, giving suggestions, discussing),
-              start your response with exactly: [CONVERSATION]
-            - If providing an updated document, return ONLY the document text with no prefix.
+            RESPONSE FORMAT - THIS IS CRITICAL:
 
-            Examples:
-            - User asks "what are the risks?" → Start with [CONVERSATION] then give your answer
-            - User asks "make it shorter" → Return the shortened document directly (no prefix)
+            There are exactly TWO response types. You MUST choose correctly:
+
+            1. CONVERSATION RESPONSE (for questions, clarifications, suggestions, discussions):
+               - Start with exactly: [CONVERSATION]
+               - Then provide your conversational reply
+               - Use this for: questions, explanations, asking for clarification, discussing options, giving advice
+               - Example triggers: "what", "why", "how", "can you explain", "what do you think", "should I"
+
+            2. DOCUMENT UPDATE (for edits, rewrites, additions to the document):
+               - Return ONLY the complete updated document text
+               - NO prefix, NO preamble, NO "Here's the updated document:"
+               - The very first character must be the start of the document content
+               - Use this for: "make it shorter", "add X", "rewrite Y", "fix Z", "expand the section on"
+
+            EXAMPLES:
+            - "What are the risks?" -> [CONVERSATION] The main risks include...
+            - "Make it shorter" -> [Direct document text starting immediately]
+            - "Can you explain why you chose that wording?" -> [CONVERSATION] I chose that...
+            - "Add more detail about the procedure" -> [Full document with expanded procedure section]
+            - "Is this appropriate for a specialist?" -> [CONVERSATION] Yes, this level of detail...
+            - "Rewrite the conclusion" -> [Full document with new conclusion]
+
+            WRONG (never do this):
+            - "Here's the updated document:" followed by content
+            - "I've made the changes:" followed by content
+            - Starting document updates with any explanation
+            - Forgetting [CONVERSATION] prefix for conversational replies
+
+            When in doubt: If the user is asking you to DO something to the document, return the document.
+            If the user is asking you to EXPLAIN or DISCUSS something, use [CONVERSATION].
             """
 
         streamingDestination = .unknown
@@ -547,14 +571,61 @@ class ImprovePhaseState: ObservableObject {
 
             The user has already received a generated document. Now they are requesting changes or asking questions.
 
-            CRITICAL RESPONSE FORMAT:
-            - If responding conversationally (answering questions, giving suggestions, discussing),
-              start your response with exactly: [CONVERSATION]
-            - If providing an updated document, return ONLY the document text with no prefix.
+            RESPONSE FORMAT - THIS IS CRITICAL:
+
+            There are exactly TWO response types. You MUST choose correctly:
+
+            1. CONVERSATION RESPONSE (for questions, clarifications, suggestions, discussions):
+               - Start with exactly: [CONVERSATION]
+               - Then provide your conversational reply
+               - Use this for: questions, explanations, asking for clarification, discussing options, giving advice
+               - Example triggers: "what", "why", "how", "can you explain", "what do you think", "should I"
+
+            2. DOCUMENT UPDATE (for edits, rewrites, additions to the document):
+               - Return ONLY the complete updated document text
+               - NO prefix, NO preamble, NO "Here's the updated document:"
+               - The very first character must be the start of the document content
+               - Use this for: "make it shorter", "add X", "rewrite Y", "fix Z", "expand the section on"
+
+            EXAMPLES:
+            - "What are the risks?" -> [CONVERSATION] The main risks include...
+            - "Make it shorter" -> [Direct document text starting immediately]
+            - "Can you explain why you chose that wording?" -> [CONVERSATION] I chose that...
+            - "Add more detail about the procedure" -> [Full document with expanded procedure section]
+            - "Is this appropriate for a specialist?" -> [CONVERSATION] Yes, this level of detail...
+            - "Rewrite the conclusion" -> [Full document with new conclusion]
+
+            WRONG (never do this):
+            - "Here's the updated document:" followed by content
+            - "I've made the changes:" followed by content
+            - Starting document updates with any explanation
+            - Forgetting [CONVERSATION] prefix for conversational replies
+
+            When in doubt: If the user is asking you to DO something to the document, return the document.
+            If the user is asking you to EXPLAIN or DISCUSS something, use [CONVERSATION].
 
             You have access to the memory system with the original source documents.
             Use it to retrieve details if needed.
             """
+
+        // Build recent conversation context (last 6 turns max)
+        var conversationContext = ""
+        let recentHistory = chatHistory.suffix(6)
+        if recentHistory.count > 0 {
+            conversationContext = "\n## Recent Conversation\n"
+            for turn in recentHistory {
+                if turn.role == "user" {
+                    conversationContext += "User: \(turn.content)\n"
+                } else if turn.content == "[[DOCUMENT_GENERATED]]" {
+                    conversationContext += "Assistant: [Generated the document]\n"
+                } else if turn.content == "[[DOCUMENT_UPDATED]]" {
+                    conversationContext += "Assistant: [Updated the document]\n"
+                } else if turn.role == "assistant" {
+                    conversationContext += "Assistant: \(turn.content)\n"
+                }
+            }
+            conversationContext += "\n"
+        }
 
         let userMessage = """
             Here is the current document:
@@ -562,17 +633,18 @@ class ImprovePhaseState: ObservableObject {
             ---
             \(currentDocument)
             ---
+            \(conversationContext)
+            Current user request: \(request)
 
-            User request: \(request)
-
+            IMPORTANT: If you need clarification, you MUST start your response with [CONVERSATION].
             If this is an editing request, return the full updated document only.
-            If this is a question or discussion, respond conversationally.
             """
 
         do {
             let result = try await aiService.processWithMemory(
                 userMessage: userMessage,
-                systemPrompt: systemPrompt
+                systemPrompt: systemPrompt,
+                isRefinement: true  // Don't add conflicting "output only" rules
             )
 
             let conversationMarker = "[CONVERSATION]"
@@ -640,6 +712,41 @@ class ImprovePhaseState: ObservableObject {
         currentAITask?.cancel()
         aiService.cancel()
         isAIProcessing = false
+    }
+
+    /// Cancel AI and cleanup state (for back navigation)
+    /// Preserves user preferences (sliders, doc type) but clears AI work
+    func cancelAndCleanup() {
+        // Cancel any running tasks
+        currentAITask?.cancel()
+        aiService.cancel()
+
+        // Clear AI output and chat
+        aiOutput = ""
+        chatHistory = []
+        aiError = nil
+        isAIProcessing = false
+        isInRefinementMode = false
+        refinementInput = ""
+
+        // Reset document state
+        currentDocument = ""
+        previousDocument = ""
+        changedLineIndices = []
+
+        // Reset memory mode
+        isMemoryMode = false
+        detectedDocuments.removeAll()
+        isDetectingDocuments = false
+        memoryModeInitialized = false
+        crossDocumentNotes = ""
+        aiService.resetMemoryMode()
+
+        // Clear source documents (they'll be re-transferred if user continues again)
+        sourceDocuments.removeAll()
+        selectedDocumentId = nil
+
+        aiService.resetContext()
     }
 
     /// Reset all state (for clearAll)

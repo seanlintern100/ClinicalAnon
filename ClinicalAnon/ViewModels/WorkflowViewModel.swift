@@ -291,6 +291,17 @@ class WorkflowViewModel: ObservableObject {
 
     func goToPreviousPhase() {
         if let previous = currentPhase.previous {
+            // If going back from Improve to Redact, cleanup AI state
+            if currentPhase == .improve && previous == .redact {
+                // Cancel AI tasks and reset improve state
+                improveState.cancelAndCleanup()
+
+                // Remove the doc that was saved when we went forward
+                // (undo the saveCurrentDocumentOnly() from continueToNextPhase)
+                if !redactState.sourceDocuments.isEmpty {
+                    redactState.sourceDocuments.removeLast()
+                }
+            }
             currentPhase = previous
         }
     }

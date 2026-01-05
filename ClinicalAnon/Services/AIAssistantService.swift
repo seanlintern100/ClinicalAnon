@@ -670,20 +670,24 @@ class AIAssistantService: ObservableObject {
         }.joined(separator: "\n\n")
 
         let prompt = """
-        Review these document summaries for any inconsistencies or contradictions:
+        Review these document summaries for clinically significant inconsistencies:
 
         \(combinedSummaries)
 
-        Look for:
-        - Dates that don't align
-        - Conflicting diagnoses or findings
-        - Different accounts of the same event
-        - Discrepancies in reported details (names, places, values)
+        Focus on issues relevant to psychology report writing:
+        - Conflicting diagnoses or diagnostic impressions
+        - Different accounts of symptom onset or duration
+        - Inconsistent cognitive/IQ assessments across reports
+        - Contradictory information about trauma history
+        - Conflicting medication histories or treatment responses
+        - Different accounts of functional impairment levels
+        - Discrepant risk assessments (self-harm, violence)
 
-        List any inconsistencies found as bullet points. If none found, respond with "No inconsistencies noted."
+        Only flag issues that would affect clinical synthesis. Ignore minor date discrepancies or typos.
+        List significant inconsistencies as bullet points. If none found, respond with "No significant inconsistencies noted."
         """
 
-        let systemPrompt = "You are a clinical document reviewer. Flag any contradictions or inconsistencies across documents. Be specific about which documents conflict."
+        let systemPrompt = "You are a clinical psychologist reviewing source documents. Flag contradictions that would affect report writing. Be specific about which documents conflict and why it matters clinically."
 
         let result = try await bedrockService.invoke(
             systemPrompt: systemPrompt,
@@ -693,7 +697,8 @@ class AIAssistantService: ObservableObject {
         )
 
         // Only return if there are actual inconsistencies to flag
-        if result.lowercased().contains("no inconsistencies") {
+        if result.lowercased().contains("no significant inconsistencies") ||
+           result.lowercased().contains("no inconsistencies") {
             return ""
         }
 
@@ -705,13 +710,28 @@ class AIAssistantService: ObservableObject {
     }
 
     /// Build system prompt for memory mode with embedded summaries
-    func buildMemoryModeSystemPrompt(basePrompt: String) -> String {
+    func buildMemoryModeSystemPrompt(basePrompt: String, isRefinement: Bool = false) -> String {
         let summaries = memoryStorage.readFile("index.md") ?? "No documents loaded"
 
-        return """
+        var prompt = """
         \(basePrompt)
 
         \(summaries)
+
+        ## Document Access
+
+        If you need exact quotes, specific wording, or details not in the summaries,
+        use the memory tool to access full documents at /memories/doc_N_content.md
+
+        To read a document:
+        - Full document: {"command": "view", "path": "/memories/doc1_content.md"}
+        - Specific lines: {"command": "view", "path": "/memories/doc1_content.md", "view_range": [100, 200]}
+        """
+
+        // Only add strict output rules for initial generation, not refinement
+        if !isRefinement {
+            prompt += """
+
 
         ## Report Writing Approach
 
@@ -727,21 +747,15 @@ class AIAssistantService: ObservableObject {
 
         The goal is a single, coherent clinical narrative that reads as original work, not a summary of summaries.
 
-        ## Document Access
-
-        If you need exact quotes, specific wording, or details not in the summaries,
-        use the memory tool to access full documents at /memories/doc_N_content.md
-
-        To read a document:
-        - Full document: {"command": "view", "path": "/memories/doc1_content.md"}
-        - Specific lines: {"command": "view", "path": "/memories/doc1_content.md", "view_range": [100, 200]}
-
         ## Output Rules
         - Output ONLY the requested clinical content (report, summary, notes, etc.)
         - No meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
         - Start directly with the report content
         - Use redacted placeholders (e.g., [PERSON_A], [ORG_B]) as they appear in the source documents - these will be restored to actual names afterward
         """
+        }
+
+        return prompt
     }
 
     /// Build contextual prompt based on text input classification
@@ -830,7 +844,7 @@ class AIAssistantService: ObservableObject {
     }
 
     /// Process with memory tool - simplified loop for optional document lookups
-    func processWithMemory(userMessage: String, systemPrompt: String) async throws -> String {
+    func processWithMemory(userMessage: String, systemPrompt: String, isRefinement: Bool = false) async throws -> String {
         guard bedrockService.isConfigured else {
             throw AppError.aiNotConfigured
         }
@@ -842,7 +856,8 @@ class AIAssistantService: ObservableObject {
         defer { isProcessing = false }
 
         // Build enhanced system prompt with embedded summaries
-        let enhancedPrompt = buildMemoryModeSystemPrompt(basePrompt: systemPrompt)
+        // For refinement, don't add strict "output only" rules that conflict with [CONVERSATION] format
+        let enhancedPrompt = buildMemoryModeSystemPrompt(basePrompt: systemPrompt, isRefinement: isRefinement)
 
         // Memory tool definition
         let memoryTool: [String: Any] = [
@@ -925,11 +940,31 @@ class AIAssistantService: ObservableObject {
                         ]
                     ])
 
-                    // Prune if needed (keep first message + last 8)
-                    let maxMessages = 9
+                    // Prune if needed - but NEVER orphan tool_results
+                    let maxMessages = 10
                     if messages.count > maxMessages {
                         let firstMessage = messages[0]
-                        let recentMessages = Array(messages.suffix(maxMessages - 1))
+                        var recentMessages = Array(messages.suffix(maxMessages - 1))
+
+                        // If first recent message is a tool_result, include its tool_use
+                        if let firstRecent = recentMessages.first,
+                           let content = firstRecent["content"] as? [[String: Any]],
+                           let toolResult = content.first(where: { $0["type"] as? String == "tool_result" }),
+                           let toolResultId = toolResult["tool_use_id"] as? String {
+
+                            // Find the assistant message containing this tool_use
+                            let prunedRange = 1..<(messages.count - recentMessages.count)
+                            for i in prunedRange.reversed() {
+                                if let assistantContent = messages[i]["content"] as? [[String: Any]],
+                                   assistantContent.contains(where: {
+                                       $0["type"] as? String == "tool_use" && $0["id"] as? String == toolResultId
+                                   }) {
+                                    recentMessages.insert(messages[i], at: 0)
+                                    break
+                                }
+                            }
+                        }
+
                         messages = [firstMessage] + recentMessages
 
                         #if DEBUG

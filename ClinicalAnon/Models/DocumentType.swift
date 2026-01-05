@@ -229,6 +229,9 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - Include relevant clinical background and progress
             - Highlight strengths and protective factors
             - Provide practical recommendations the reader can act on
+            - Use occasional direct quotes from source documents to illustrate key points
+              (e.g., "As noted by [PERSON_B] in their report dated [DATE_C], '[quoted text]'")
+            - Reference quotes with the author's name and report date using redacted placeholders
 
             Maintain professional, objective tone appropriate for external readers.
             Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.

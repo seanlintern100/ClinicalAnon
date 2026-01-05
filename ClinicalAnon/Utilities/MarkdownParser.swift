@@ -70,8 +70,10 @@ struct MarkdownParser {
         var baseAttributes: [NSAttributedString.Key: Any] = [:]
 
         if isHeader {
-            let headerSizes: [Int: CGFloat] = [1: 24, 2: 20, 3: 18, 4: 16, 5: 14, 6: 13]
-            let size = headerSizes[headerLevel] ?? baseFont.pointSize
+            // Scale headers relative to base font size for proportional appearance
+            let headerMultipliers: [Int: CGFloat] = [1: 1.4, 2: 1.25, 3: 1.1, 4: 1.0, 5: 0.95, 6: 0.9]
+            let multiplier = headerMultipliers[headerLevel] ?? 1.0
+            let size = baseFont.pointSize * multiplier
             baseAttributes[.font] = NSFont.boldSystemFont(ofSize: size)
         } else {
             baseAttributes[.font] = baseFont

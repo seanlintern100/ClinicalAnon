@@ -18,6 +18,7 @@ struct ImprovePhaseView: View {
     @ObservedObject var viewModel: WorkflowViewModel
     @ObservedObject var documentTypeManager: DocumentTypeManager = .shared
     @State private var showAddAnalysisSheet: Bool = false
+    @State private var showBackConfirmation: Bool = false
 
     // MARK: - Body
 
@@ -450,9 +451,22 @@ struct ImprovePhaseView: View {
     private var footerBar: some View {
         HStack {
             Button("← Back") {
-                viewModel.goToPreviousPhase()
+                // Show confirmation if AI work would be lost
+                if viewModel.hasGeneratedOutput || viewModel.isAIProcessing {
+                    showBackConfirmation = true
+                } else {
+                    viewModel.goToPreviousPhase()
+                }
             }
             .buttonStyle(SecondaryButtonStyle())
+            .alert("Go Back?", isPresented: $showBackConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Go Back", role: .destructive) {
+                    viewModel.goToPreviousPhase()
+                }
+            } message: {
+                Text("AI analysis and chat history will be lost.")
+            }
 
             Spacer()
 
