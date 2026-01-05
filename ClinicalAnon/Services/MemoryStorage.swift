@@ -67,6 +67,11 @@ class MemoryStorage: ObservableObject {
     /// Whether memory mode is active
     @Published var isMemoryModeActive: Bool = false
 
+    /// Number of documents in memory (computed from documents array)
+    var documentCount: Int {
+        documents.count
+    }
+
     // MARK: - Initialization
 
     init() {

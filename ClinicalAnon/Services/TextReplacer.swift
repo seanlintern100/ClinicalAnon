@@ -38,8 +38,20 @@ class TextReplacer {
         // Process entities in order of first occurrence
         // This ensures we don't mess up positions by replacing later text first
         for entity in entities {
-            // Use case-insensitive regex replacement to catch all variations (Jo, JO, jo)
-            let pattern = NSRegularExpression.escapedPattern(for: entity.originalText)
+            // Build pattern that also catches possessive forms (e.g., "Seans", "Sean's")
+            // This handles informal writing where apostrophes are omitted
+            let escapedText = NSRegularExpression.escapedPattern(for: entity.originalText)
+
+            // For person entities, also match possessive forms
+            let pattern: String
+            if entity.type.isPerson {
+                // Match: exact text, text+'s, text+s (possessive without apostrophe)
+                // Use word boundary to avoid matching "Seansation" etc.
+                pattern = "\(escapedText)(?:'s|s(?![a-zA-Z]))?"
+            } else {
+                pattern = escapedText
+            }
+
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
                 let range = NSRange(result.startIndex..., in: result)
                 result = regex.stringByReplacingMatches(

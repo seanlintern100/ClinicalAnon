@@ -616,35 +616,32 @@ class AIAssistantService: ObservableObject {
         Use your memory tool to:
         - Read documents: view /memories/doc_0_content.md
         - Read specific lines: {"command": "view", "path": "/memories/doc_0_content.md", "view_range": [100, 200]}
-        - Store observations: update /memories/working_notes.md
 
         ## Large File Access
         When viewing large files, only the first 300 lines are returned by default.
         The response shows the total line count. Use view_range to access specific sections:
         - view_range: [1, 300] for lines 1-300
         - view_range: [301, 600] for lines 301-600
-        Read the document in chunks to analyze the full content.
 
-        ## CRITICAL: Initial Response Requirements
-        For your FIRST response, you MUST read the full content of EVERY document
-        listed in the index using the memory tool BEFORE generating any output.
-        This ensures comprehensive analysis of all source material.
+        ## Two-Phase Processing Protocol
 
-        Use view_range to read large documents in chunks (e.g., [1,300], [301,600], etc.)
-        Continue reading until you've seen all content from every document.
+        PHASE 1 - READING:
+        - You MUST read ALL documents listed in the index before generating any output
+        - Read each doc_N_content.md file completely (use view_range for large files)
+        - The system will track your progress and notify you when all documents are accessed
+        - Do NOT generate the report until you receive a [PHASE TRANSITION] message
 
-        ## For Follow-up Requests
-        After the initial response, you may selectively access relevant documents
-        based on the user's specific question or request.
+        PHASE 2 - WRITING:
+        - After reading all documents, you will receive a [PHASE TRANSITION] message
+        - Generate the report immediately using all the information gathered
+        - Do NOT continue reading documents unless you need a specific detail
+        - Output ONLY the report content
 
-        ## Working Notes Protocol
-        working_notes.md has sections: Active Context, Observations, Superseded.
-        Keep notes organized. Delete outdated content.
-
-        ## Output Guidelines
-        IMPORTANT:
-        - Do NOT include thinking or planning text in your output (e.g., "Let me check...", "I'll start by...", "Now I'll...")
-        - Output ONLY the requested content (report, summary, etc.) - no meta-commentary
+        ## CRITICAL Output Rules
+        - NEVER include meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
+        - NEVER output planning text or status updates
+        - Output ONLY the requested clinical content (report, summary, notes, etc.)
+        - The first text you output should be the start of the actual report/document
         """
     }
 
@@ -733,7 +730,7 @@ class AIAssistantService: ObservableObject {
         """
     }
 
-    /// Process with memory tool - agentic loop
+    /// Process with memory tool - agentic loop with two-phase tracking
     func processWithMemory(userMessage: String, systemPrompt: String) async throws -> String {
         guard bedrockService.isConfigured else {
             throw AppError.aiNotConfigured
@@ -761,13 +758,22 @@ class AIAssistantService: ObservableObject {
 
         var finalText = ""
         var loopCount = 0
-        let maxLoops = 20 // Safety limit
+        let maxLoops = 30 // Safety limit (increased for two-phase)
+
+        // Two-phase tracking
+        var docsAccessed: Set<String> = []
+        let totalDocCount = memoryStorage.documentCount
+        var readingPhaseComplete = false
+
+        #if DEBUG
+        print("🔵 Memory mode: Starting with \(totalDocCount) documents to read")
+        #endif
 
         while loopCount < maxLoops {
             loopCount += 1
 
             #if DEBUG
-            print("🔵 Memory mode loop \(loopCount)")
+            print("🔵 Memory mode loop \(loopCount) - docs accessed: \(docsAccessed.count)/\(totalDocCount)")
             #endif
 
             let response = try await bedrockService.invokeWithTools(
@@ -787,6 +793,20 @@ class AIAssistantService: ObservableObject {
             // Check if AI wants to use a tool
             if let toolUse = response.toolUse {
                 if toolUse.name == "memory" {
+                    // Track document access
+                    if let path = toolUse.inputDict["path"] as? String,
+                       path.contains("/memories/doc_") && path.contains("_content.md") {
+                        // Extract doc ID: "doc_0" from "/memories/doc_0_content.md"
+                        if let filename = path.components(separatedBy: "/").last {
+                            let docId = filename.replacingOccurrences(of: "_content.md", with: "")
+                            docsAccessed.insert(docId)
+
+                            #if DEBUG
+                            print("🔵 Memory mode: Accessed \(docId) - now \(docsAccessed.count)/\(totalDocCount)")
+                            #endif
+                        }
+                    }
+
                     // Execute memory command
                     let result = memoryStorage.handleMemoryCommand(toolUse.inputDict)
 
@@ -823,6 +843,31 @@ class AIAssistantService: ObservableObject {
                         ]
                     ])
 
+                    // Check for phase transition: all docs accessed
+                    if docsAccessed.count >= totalDocCount && !readingPhaseComplete {
+                        readingPhaseComplete = true
+
+                        let transitionMessage = """
+                        [PHASE TRANSITION]
+                        READING PHASE COMPLETE. You have accessed all \(totalDocCount) documents.
+
+                        Now proceed to WRITING PHASE:
+                        - Generate the clinical report based on all the information you've gathered
+                        - Do NOT continue reading documents
+                        - Output ONLY the report content - no meta-commentary like "I'll now..." or "Let me..."
+                        - You may use the memory tool to look up specific details if needed
+                        """
+
+                        messages.append([
+                            "role": "user",
+                            "content": transitionMessage
+                        ])
+
+                        #if DEBUG
+                        print("🔵 Memory mode: PHASE TRANSITION - all \(totalDocCount) docs accessed")
+                        #endif
+                    }
+
                     // Prune old tool exchanges to prevent payload explosion
                     // Keep: first user message + last 4 message pairs (8 messages)
                     let maxMessages = 9
@@ -833,6 +878,63 @@ class AIAssistantService: ObservableObject {
 
                         #if DEBUG
                         print("🔵 Memory mode: Pruned messages to \(messages.count)")
+                        #endif
+
+                        // After pruning, inject status message if still in reading phase
+                        if !readingPhaseComplete && totalDocCount > 0 {
+                            let accessed = docsAccessed.sorted().joined(separator: ", ")
+                            let remainingDocs = (0..<totalDocCount)
+                                .map { "doc_\($0)" }
+                                .filter { !docsAccessed.contains($0) }
+                            let remaining = remainingDocs.joined(separator: ", ")
+
+                            let statusMessage: String
+                            if remainingDocs.isEmpty {
+                                statusMessage = """
+                                [SYSTEM STATUS]
+                                Documents accessed: \(accessed)
+                                All documents accessed. You may now generate the report.
+                                """
+                            } else {
+                                statusMessage = """
+                                [SYSTEM STATUS]
+                                Documents accessed: \(accessed.isEmpty ? "none yet" : accessed)
+                                Documents remaining: \(remaining)
+                                Continue reading the remaining documents before generating output.
+                                """
+                            }
+
+                            messages.append([
+                                "role": "user",
+                                "content": statusMessage
+                            ])
+
+                            #if DEBUG
+                            print("🔵 Memory mode: Injected status - \(docsAccessed.count)/\(totalDocCount) accessed")
+                            #endif
+                        }
+                    }
+
+                    // Safety limit: force writing phase after 25 loops
+                    if loopCount >= 25 && !readingPhaseComplete {
+                        readingPhaseComplete = true
+
+                        let timeLimitMessage = """
+                        [TIME LIMIT]
+                        You have been processing for \(loopCount) iterations.
+                        Documents accessed so far: \(docsAccessed.sorted().joined(separator: ", "))
+
+                        Generate the best possible report with the information gathered so far.
+                        Output ONLY the report content - no meta-commentary.
+                        """
+
+                        messages.append([
+                            "role": "user",
+                            "content": timeLimitMessage
+                        ])
+
+                        #if DEBUG
+                        print("🔵 Memory mode: TIME LIMIT - forcing writing phase at loop \(loopCount)")
                         #endif
                     }
 
@@ -846,6 +948,10 @@ class AIAssistantService: ObservableObject {
                 break
             }
         }
+
+        #if DEBUG
+        print("🔵 Memory mode: Complete after \(loopCount) loops, \(finalText.count) chars output")
+        #endif
 
         // Record in context
         context.addUserMessage(userMessage)
