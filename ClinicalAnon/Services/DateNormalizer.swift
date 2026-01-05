@@ -19,6 +19,7 @@ struct DateNormalizer {
     static let outputFormat = "dd/MM/yyyy"
 
     /// Patterns to recognize (in order of specificity)
+    /// IMPORTANT: Two-digit year patterns use negative lookahead to avoid matching partial 4-digit years
     private static let inputPatterns: [(pattern: String, format: String)] = [
         // Long formats with full month names
         ("\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}", "d MMMM yyyy"),
@@ -34,8 +35,9 @@ struct DateNormalizer {
         // Common slash formats (be careful with ambiguity)
         ("\\d{1,2}/\\d{1,2}/\\d{4}", "dd/MM/yyyy"),  // Prefer AU/UK format
 
-        // Two-digit year formats
-        ("\\d{1,2}/\\d{1,2}/\\d{2}", "dd/MM/yy"),
+        // Two-digit year formats - use negative lookahead (?!\d) to ensure we don't match partial 4-digit years
+        // e.g., "04/07/20" should NOT match if followed by more digits like "04/07/2024"
+        ("\\d{1,2}/\\d{1,2}/\\d{2}(?!\\d)", "dd/MM/yy"),
     ]
 
     // MARK: - Public Methods
@@ -78,6 +80,12 @@ struct DateNormalizer {
     static func normalizeAllDates(in text: String) -> String {
         var result = text
 
+        #if DEBUG
+        print("📅 DateNormalizer.normalizeAllDates: Starting normalization")
+        #endif
+
+        var totalNormalized = 0
+
         // Process patterns from longest to shortest to avoid partial replacements
         for (pattern, format) in inputPatterns.sorted(by: { $0.pattern.count > $1.pattern.count }) {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
@@ -104,15 +112,20 @@ struct DateNormalizer {
                     let normalized = outputFormatter.string(from: date)
 
                     result.replaceSubrange(range, with: normalized)
+                    totalNormalized += 1
 
                     #if DEBUG
                     if normalized != dateString {
-                        print("DateNormalizer: '\(dateString)' → '\(normalized)'")
+                        print("📅 DateNormalizer: '\(dateString)' → '\(normalized)' (format: \(format))")
                     }
                     #endif
                 }
             }
         }
+
+        #if DEBUG
+        print("📅 DateNormalizer: Normalized \(totalNormalized) date(s)")
+        #endif
 
         return result
     }

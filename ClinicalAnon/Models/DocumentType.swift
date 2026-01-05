@@ -201,6 +201,11 @@ struct DocumentType: Identifiable, Codable, Equatable {
               - Actions for the therapist
               - Actions for the client (if any)
 
+            Person references:
+            - Introduce people by first and last name once at the start (e.g., "[CLIENT_A_FIRST_LAST]")
+            - Use first name only for subsequent references throughout (e.g., "[CLIENT_A_FIRST]")
+            - This creates a more natural, less formal tone
+
             Do NOT add information not present in the original.
             Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
             Respond with only the clinical notes.
@@ -235,6 +240,11 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - If source documents conflict, prefer "User's rough notes" or "User's completed notes"
               over "Report by another person" (the user's notes are likely more current)
 
+            Person references:
+            - Introduce people by first and last name once at the start (e.g., "[CLIENT_A_FIRST_LAST]")
+            - Use first name only for subsequent references throughout (e.g., "[CLIENT_A_FIRST]")
+            - This creates a more natural, less formal tone
+
             Maintain professional, objective tone appropriate for external readers.
             Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
             Use only information provided — do not invent details.
@@ -267,6 +277,8 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - Preserve all placeholders exactly as written (e.g., [PERSON_A], [DATE_A], [LOCATION_B])
             - Use only information provided — do not invent or infer details
             - Respond with only the requested content — no preamble or commentary
+            - Person references: Introduce people by first and last name once (e.g., "[CLIENT_A_FIRST_LAST]"),
+              then use first name only for subsequent references (e.g., "[CLIENT_A_FIRST]")
 
             Your Task:
             Analyse the clinical notes against each goal from the original assessment report. For each goal, generate a summary focused primarily on actions completed and outcomes achieved.
@@ -333,6 +345,11 @@ struct DocumentType: Identifiable, Codable, Equatable {
             Format:
             - If single document: Provide one cohesive summary
             - If multiple documents: Use clear headings to separate each summary (e.g., "## Assessment Report - [DATE_A]", "## Progress Notes - [DATE_B]")
+
+            Person references:
+            - Introduce people by first and last name once at the start (e.g., "[CLIENT_A_FIRST_LAST]")
+            - Use first name only for subsequent references throughout (e.g., "[CLIENT_A_FIRST]")
+            - This creates a more natural, less formal tone
 
             Do NOT add information not present in the original.
             Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.

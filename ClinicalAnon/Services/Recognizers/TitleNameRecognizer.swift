@@ -11,7 +11,7 @@ import Foundation
 // MARK: - Title Name Recognizer
 
 /// Extracts proper names that appear after titles
-/// Example: "Mr Ronald Praneer Nath" → extracts "Ronald Praneer Nath"
+/// Example: "Mr John Michael Smith" → extracts "John Michael Smith"
 /// Critical for detecting full names that Apple NER fragments incorrectly
 class TitleNameRecognizer: EntityRecognizer {
 
@@ -32,7 +32,7 @@ class TitleNameRecognizer: EntityRecognizer {
 
         // Build pattern: Title (with optional period) + 1-3 capitalized words
         let titlePattern = titles.joined(separator: "|")
-        // Pattern matches: "Mr Ronald", "Dr. John Smith", "Mrs Jane Anne Doe"
+        // Pattern matches: "Mr John", "Dr. John Smith", "Mrs Jane Anne Doe"
         let pattern = "\\b(\(titlePattern))\\.?\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+){0,2})"
 
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {

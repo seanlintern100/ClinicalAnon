@@ -43,6 +43,7 @@ struct SettingsContainerView: View {
 
 struct DetectionSettingsView: View {
     @AppStorage("redactAllNumbers") private var redactAllNumbers: Bool = true
+    @AppStorage(SettingsKeys.dateRedactionLevel) private var dateRedactionLevel: String = "keepYear"
 
     var body: some View {
         Form {
@@ -61,6 +62,20 @@ struct DetectionSettingsView: View {
                 Text("Number Detection")
             } footer: {
                 Text("When enabled, all numbers (amounts, reference numbers, years, etc.) will be flagged for review and redaction.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Section {
+                Picker("Date Redaction Level", selection: $dateRedactionLevel) {
+                    Text("Keep Year (e.g., [DATE_A] 2024)").tag("keepYear")
+                    Text("Full Redaction (e.g., [DATE_A])").tag("full")
+                }
+                .pickerStyle(.radioGroup)
+            } header: {
+                Text("Date Handling")
+            } footer: {
+                Text("Keep Year preserves temporal context for AI processing while hiding specific day/month.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

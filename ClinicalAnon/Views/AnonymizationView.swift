@@ -723,6 +723,10 @@ class AnonymizationViewModel: ObservableObject {
             return
         }
 
+        // Check date redaction setting
+        let dateRedactionSetting = UserDefaults.standard.string(forKey: SettingsKeys.dateRedactionLevel) ?? "keepYear"
+        let keepYear = dateRedactionSetting == "keepYear"
+
         // Start with original text
         var text = result.originalText
 
@@ -731,6 +735,14 @@ class AnonymizationViewModel: ObservableObject {
         var allReplacements: [(start: Int, end: Int, code: String)] = []
 
         for entity in activeEntities {
+            // Determine code to use (with year for dates if setting enabled)
+            var code = entity.replacementCode
+            if entity.type == .date && keepYear {
+                if let year = extractYearFromDate(entity.originalText) {
+                    code = "\(entity.replacementCode) \(year)"
+                }
+            }
+
             for position in entity.positions {
                 guard position.count >= 2 else { continue }
                 let start = position[0]
@@ -741,7 +753,7 @@ class AnonymizationViewModel: ObservableObject {
                     continue
                 }
 
-                allReplacements.append((start: start, end: end, code: entity.replacementCode))
+                allReplacements.append((start: start, end: end, code: code))
             }
         }
 
@@ -768,6 +780,18 @@ class AnonymizationViewModel: ObservableObject {
 
         cachedRedactedText = text
         redactedTextNeedsUpdate = false
+    }
+
+    /// Extract year from a date string (e.g., "March 15, 2024" → "2024")
+    private func extractYearFromDate(_ dateString: String) -> String? {
+        let yearPattern = "\\b(19|20)\\d{2}\\b"
+        guard let regex = try? NSRegularExpression(pattern: yearPattern) else { return nil }
+        let range = NSRange(dateString.startIndex..., in: dateString)
+        if let match = regex.firstMatch(in: dateString, range: range),
+           let matchRange = Range(match.range, in: dateString) {
+            return String(dateString[matchRange])
+        }
+        return nil
     }
 
     // MARK: - Cached AttributedString Management

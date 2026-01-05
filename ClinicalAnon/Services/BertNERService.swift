@@ -653,7 +653,7 @@ class BertNERService: ObservableObject {
     }
 
     /// Bridge gaps between PER entities when the gap contains capitalized words (middle names)
-    /// Example: "Ronald" + "Praneer" (capitalized gap) + "Nath" → merged into "Ronald Praneer Nath"
+    /// Example: "John" + "Michael" (capitalized gap) + "Smith" → merged into "John Michael Smith"
     private func bridgeNameGaps(_ entities: [BERTEntity], in text: String) -> [BERTEntity] {
         // Filter to only PER entities and sort by start position
         let personEntities = entities.filter { $0.type.isPerson }.sorted { $0.start < $1.start }

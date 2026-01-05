@@ -130,6 +130,11 @@ class RedactPhaseState: ObservableObject {
     @Published private(set) var cachedRedactedText: String = ""
     private var redactedTextNeedsUpdate: Bool = true
 
+    /// Mark that redacted text needs to be regenerated
+    func markRedactedTextNeedsUpdate() {
+        redactedTextNeedsUpdate = true
+    }
+
     /// Positions of replacement codes in redacted text (for efficient highlighting)
     private(set) var replacementPositions: [(range: NSRange, entityType: EntityType)] = []
 
@@ -141,6 +146,15 @@ class RedactPhaseState: ObservableObject {
     // Duplicate Finder
     @Published var showDuplicateFinderModal: Bool = false
     @Published var duplicateGroups: [DuplicateGroup] = []
+
+    // Edit Name Structure Modal
+    @Published var isEditingNameStructure: Bool = false
+    @Published var nameStructureEditEntity: Entity? = nil
+
+    // Variant Selection Modal (shown when merge variant detection fails)
+    @Published var isSelectingVariant: Bool = false
+    @Published var variantSelectionAlias: Entity? = nil
+    @Published var variantSelectionPrimary: Entity? = nil
 
     // MARK: - Duplicate Detection
 
@@ -715,6 +729,10 @@ class RedactPhaseState: ObservableObject {
         // Find and update the primary entity with combined positions from alias
         addPositionsToPrimary(primaryId: primary.id, newPositions: alias.positions)
 
+        // Update the primary entity's code if it changed (e.g., to variant code)
+        // This ensures the entity in the list has the correct code for restore
+        updateEntityReplacementCode(entityId: primary.id, newCode: primaryCode)
+
         // Update sibling entities to use the primary's replacement code
         // This preserves the connected components relationship
         for sibling in siblings {
@@ -732,11 +750,66 @@ class RedactPhaseState: ObservableObject {
         redactedTextNeedsUpdate = true
 
         #if DEBUG
-        print("RedactPhaseState.mergeEntities: Merged '\(alias.originalText)' into '\(primary.originalText)'")
+        print("RedactPhaseState.mergeEntities: Merged '\(alias.originalText)' into '\(primary.originalText)' → \(primaryCode)")
         if !siblings.isEmpty {
             print("RedactPhaseState.mergeEntities: Updated \(siblings.count) sibling(s) from \(aliasCode) to \(primaryCode)")
         }
         #endif
+    }
+
+    // MARK: - Edit Name Structure
+
+    /// Start editing name structure for an entity
+    func startEditingNameStructure(_ entity: Entity) {
+        nameStructureEditEntity = entity
+        isEditingNameStructure = true
+    }
+
+    /// Cancel name structure editing
+    func cancelNameStructureEdit() {
+        isEditingNameStructure = false
+        nameStructureEditEntity = nil
+    }
+
+    /// Save the edited name structure
+    func saveNameStructure(firstName: String, middleName: String?, lastName: String, title: String?) {
+        guard let entity = nameStructureEditEntity else { return }
+
+        // Update the RedactedPerson in EntityMapping
+        engine.entityMapping.updatePersonStructure(
+            replacementCode: entity.replacementCode,
+            firstName: firstName,
+            middleName: middleName,
+            lastName: lastName,
+            title: title
+        )
+
+        // Mark cache for refresh since mappings changed
+        redactedTextNeedsUpdate = true
+
+        // Close the modal
+        isEditingNameStructure = false
+        nameStructureEditEntity = nil
+
+        #if DEBUG
+        print("RedactPhaseState.saveNameStructure: Updated structure for '\(entity.replacementCode)'")
+        #endif
+    }
+
+    // MARK: - Variant Selection Modal
+
+    /// Start variant selection for a merge where automatic detection failed
+    func startVariantSelection(alias: Entity, primary: Entity) {
+        variantSelectionAlias = alias
+        variantSelectionPrimary = primary
+        isSelectingVariant = true
+    }
+
+    /// Cancel variant selection
+    func cancelVariantSelection() {
+        isSelectingVariant = false
+        variantSelectionAlias = nil
+        variantSelectionPrimary = nil
     }
 
     /// Add positions to primary entity across all entity lists
@@ -762,7 +835,7 @@ class RedactPhaseState: ObservableObject {
     }
 
     /// Update an entity's replacement code and recalculate variant across all entity lists
-    private func updateEntityReplacementCode(entityId: UUID, newCode: String) {
+    func updateEntityReplacementCode(entityId: UUID, newCode: String) {
         // Helper to update code and recalculate variant based on new anchor
         func updateEntity(_ entity: inout Entity) {
             entity.replacementCode = newCode
@@ -1361,11 +1434,23 @@ class RedactPhaseState: ObservableObject {
             return
         }
 
+        // Check date redaction setting
+        let dateRedactionSetting = UserDefaults.standard.string(forKey: SettingsKeys.dateRedactionLevel) ?? "keepYear"
+        let keepYear = dateRedactionSetting == "keepYear"
+
         // Use NSString for all operations since positions are in UTF-16 (NSRange) coordinates
         let nsText = result.originalText as NSString
         var allReplacements: [(start: Int, end: Int, code: String, entityType: EntityType)] = []
 
         for entity in activeEntities {
+            // Determine code to use (with year for dates if setting enabled)
+            var code = entity.replacementCode
+            if entity.type == .date && keepYear {
+                if let year = extractYearFromDate(entity.originalText) {
+                    code = "\(entity.replacementCode) \(year)"
+                }
+            }
+
             for position in entity.positions {
                 guard position.count >= 2 else { continue }
                 let start = position[0]
@@ -1373,7 +1458,7 @@ class RedactPhaseState: ObservableObject {
 
                 // Validate against NSString length (UTF-16), not String.count (grapheme clusters)
                 guard start >= 0 && end <= nsText.length && start < end else { continue }
-                allReplacements.append((start: start, end: end, code: entity.replacementCode, entityType: entity.type))
+                allReplacements.append((start: start, end: end, code: code, entityType: entity.type))
             }
         }
 
@@ -1440,6 +1525,18 @@ class RedactPhaseState: ObservableObject {
         cachedRedactedText = resultParts.joined()
         replacementPositions = newReplacementPositions
         redactedTextNeedsUpdate = false
+    }
+
+    /// Extract year from a date string (e.g., "March 15, 2024" → "2024")
+    private func extractYearFromDate(_ dateString: String) -> String? {
+        let yearPattern = "\\b(19|20)\\d{2}\\b"
+        guard let regex = try? NSRegularExpression(pattern: yearPattern) else { return nil }
+        let range = NSRange(dateString.startIndex..., in: dateString)
+        if let match = regex.firstMatch(in: dateString, range: range),
+           let matchRange = Range(match.range, in: dateString) {
+            return String(dateString[matchRange])
+        }
+        return nil
     }
 
     private func findAllOccurrences(of searchText: String, in text: String, includePossessive: Bool = true) -> [[Int]] {

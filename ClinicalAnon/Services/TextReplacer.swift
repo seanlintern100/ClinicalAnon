@@ -31,6 +31,22 @@ class TextReplacer {
             return originalText
         }
 
+        // Check date redaction setting (default: keepYear)
+        let dateRedactionSetting = UserDefaults.standard.string(forKey: SettingsKeys.dateRedactionLevel) ?? "keepYear"
+        let keepYear = dateRedactionSetting == "keepYear"
+
+        #if DEBUG
+        let dateEntities = entities.filter { $0.type == .date }
+        if !dateEntities.isEmpty {
+            print("📅 TextReplacer.replaceEntities: Date redaction")
+            print("  Setting: '\(dateRedactionSetting)', keepYear: \(keepYear)")
+            print("  Date entities to process: \(dateEntities.count)")
+            for (i, entity) in dateEntities.enumerated() {
+                print("    [\(i)] '\(entity.originalText)' → \(entity.replacementCode)")
+            }
+        }
+        #endif
+
         // IMPROVED: Don't trust LLM positions - find text ourselves
         // This is more reliable since LLMs think in tokens, not characters
         var result = originalText
@@ -52,20 +68,62 @@ class TextReplacer {
                 pattern = escapedText
             }
 
+            // Determine replacement text
+            var replacement = entity.replacementCode
+
+            // For dates with keepYear, append the year
+            if entity.type == .date && keepYear {
+                if let year = extractYear(from: entity.originalText) {
+                    replacement = "\(entity.replacementCode) \(year)"
+                    #if DEBUG
+                    print("📅 TextReplacer: Date '\(entity.originalText)' → '\(replacement)' (year extracted: \(year))")
+                    #endif
+                } else {
+                    #if DEBUG
+                    print("📅 TextReplacer: Date '\(entity.originalText)' → '\(replacement)' (no year found)")
+                    #endif
+                }
+            }
+
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
                 let range = NSRange(result.startIndex..., in: result)
+                let beforeReplace = result
                 result = regex.stringByReplacingMatches(
                     in: result,
                     options: [],
                     range: range,
-                    withTemplate: entity.replacementCode
+                    withTemplate: replacement
                 )
+                #if DEBUG
+                if entity.type == .date && beforeReplace != result {
+                    let count = beforeReplace.occurrences(of: entity.originalText)
+                    print("📅 TextReplacer: Replaced \(count) occurrence(s) of '\(entity.originalText)'")
+                }
+                #endif
             }
         }
 
-        print("✅ Replaced \(entities.count) entity types")
-
         return result
+    }
+
+    // MARK: - Year Extraction
+
+    /// Extract year from a date string (supports various formats)
+    /// - Parameter dateString: The date string (e.g., "March 15, 2024", "15/03/2024")
+    /// - Returns: The 4-digit year if found, nil otherwise
+    private static func extractYear(from dateString: String) -> String? {
+        // Match 4-digit year (1900-2099)
+        let yearPattern = "\\b(19|20)\\d{2}\\b"
+        guard let regex = try? NSRegularExpression(pattern: yearPattern) else {
+            return nil
+        }
+
+        let range = NSRange(dateString.startIndex..., in: dateString)
+        if let match = regex.firstMatch(in: dateString, range: range),
+           let matchRange = Range(match.range, in: dateString) {
+            return String(dateString[matchRange])
+        }
+        return nil
     }
 
     /// Reverse replacement - restore original text from anonymized text

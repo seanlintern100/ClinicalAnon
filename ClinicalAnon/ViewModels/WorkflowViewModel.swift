@@ -68,7 +68,7 @@ class WorkflowViewModel: ObservableObject {
         }
 
         restoreState.getAIOutput = { [weak self] in
-            self?.improveState.aiOutput ?? ""
+            self?.improveState.currentDocument ?? ""
         }
 
         improveState.getTextInputType = { [weak self] in
@@ -385,6 +385,7 @@ class WorkflowViewModel: ObservableObject {
 
     /// Merge one entity into another (alias adopts primary's replacement code)
     /// The alias entity is removed from the list, its positions added to primary
+    /// If variant detection fails, shows prompt for user to select variant
     func mergeEntities(alias: Entity, into primary: Entity) {
         guard alias.type == primary.type else {
             #if DEBUG
@@ -393,11 +394,76 @@ class WorkflowViewModel: ObservableObject {
             return
         }
 
-        // Update the entity mapping so alias uses primary's code
-        _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
+        // Try merge with variant detection
+        let result = engine.entityMapping.tryMergeMapping(alias: alias.originalText, into: primary.originalText)
 
-        // Merge in RedactPhaseState (consolidates positions, removes alias from list)
-        redactState.mergeEntities(alias: alias, into: primary)
+        #if DEBUG
+        print("WorkflowViewModel.mergeEntities: '\(alias.originalText)' into '\(primary.originalText)'")
+        print("  tryMergeMapping result: \(result)")
+        #endif
+
+        switch result {
+        case .success(let code, let variant):
+            // Variant detected, proceed with merge
+            #if DEBUG
+            print("  ✓ Auto-detected variant: \(variant) → \(code)")
+            #endif
+            completeMerge(alias: alias, into: primary)
+
+        case .variantNotDetected(let baseId, let primaryCode):
+            // Show variant selection modal for user to specify
+            #if DEBUG
+            print("  ⚠️ Variant not detected, showing prompt (baseId: \(baseId), primaryCode: \(primaryCode))")
+            #endif
+            redactState.startVariantSelection(alias: alias, primary: primary)
+
+        case .primaryNotFound:
+            // Fallback to old behavior using mergeMapping()
+            #if DEBUG
+            print("  ⚠️ Primary not found, using fallback")
+            #endif
+            _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
+            completeMerge(alias: alias, into: primary)
+
+        case .noBaseId:
+            // Fallback to old behavior using mergeMapping()
+            #if DEBUG
+            print("  ⚠️ No baseId, using fallback")
+            #endif
+            _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
+            completeMerge(alias: alias, into: primary)
+        }
+    }
+
+    /// Complete merge after variant is determined (either auto-detected or user-selected)
+    /// Instead of removing the alias, we update its code to the variant code and keep both entities
+    func completeMerge(alias: Entity, into primary: Entity) {
+        // Get the alias's updated code from the mapping (this is the variant code)
+        if let newAliasCode = engine.entityMapping.existingMapping(for: alias.originalText) {
+            // Update the alias entity's code to the variant code (e.g., [PERSON_A_FIRST])
+            // This keeps both entities in the list with correct codes
+            redactState.updateEntityReplacementCode(entityId: alias.id, newCode: newAliasCode)
+
+            #if DEBUG
+            print("WorkflowViewModel.completeMerge: Updated '\(alias.originalText)' code: \(alias.replacementCode) → \(newAliasCode)")
+            #endif
+        } else {
+            #if DEBUG
+            print("WorkflowViewModel.completeMerge: No mapping found for '\(alias.originalText)' - keeping existing code \(alias.replacementCode)")
+            #endif
+        }
+
+        // Also update primary's code if it changed
+        if let newPrimaryCode = engine.entityMapping.existingMapping(for: primary.originalText),
+           newPrimaryCode != primary.replacementCode {
+            redactState.updateEntityReplacementCode(entityId: primary.id, newCode: newPrimaryCode)
+        }
+
+        // Close variant selection modal if open
+        redactState.cancelVariantSelection()
+
+        // Mark text as needing update
+        redactState.markRedactedTextNeedsUpdate()
 
         // Rebuild caches with updated entities
         if let result = redactState.result {
@@ -411,6 +477,25 @@ class WorkflowViewModel: ObservableObject {
                 restoredText: nil
             )
         }
+    }
+
+    /// Complete merge with user-selected variant
+    func completeMergeWithVariant(_ variant: NameVariant) {
+        guard let alias = redactState.variantSelectionAlias,
+              let primary = redactState.variantSelectionPrimary else {
+            redactState.cancelVariantSelection()
+            return
+        }
+
+        // Complete the mapping with user-selected variant
+        _ = engine.entityMapping.completeMergeWithVariant(
+            alias: alias.originalText,
+            into: primary.originalText,
+            variant: variant
+        )
+
+        // Complete the entity merge
+        completeMerge(alias: alias, into: primary)
     }
 
     /// Open the duplicate finder modal
@@ -596,6 +681,8 @@ class WorkflowViewModel: ObservableObject {
 
     func restoreNamesFromAIOutput() {
         // Ensure all source document entities are in the mapping for multi-doc flow
+        // Always add to ensure the entity's exact replacement code is in allMappings
+        // (handles cases where entity has different code than existing mapping)
         for doc in improveState.sourceDocuments {
             for entity in doc.entities {
                 engine.entityMapping.addMapping(

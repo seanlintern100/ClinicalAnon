@@ -117,7 +117,26 @@ struct MarkdownParser {
             }
 
             // Look for italic (*text* or _text_) - be careful not to match ** or __
+            // Also skip if content looks like a code identifier (contains more underscores)
             if let match = findPattern(in: text, from: currentIndex, pattern: "(?<![\\*_])([\\*_])(?![\\*_])(.+?)(?<![\\*_])\\1(?![\\*_])") {
+                // Skip italic formatting if content contains underscores (likely a code/placeholder like PERSON_A)
+                let isCodeIdentifier = match.content.contains("_")
+
+                // Also skip if we're inside square brackets (placeholder like [PERSON_A_FIRST])
+                let textBefore = String(text[text.startIndex..<match.range.lowerBound])
+                let lastOpenBracket = textBefore.lastIndex(of: "[")
+                let lastCloseBracket = textBefore.lastIndex(of: "]")
+                let insideBrackets = lastOpenBracket != nil && (lastCloseBracket == nil || lastOpenBracket! > lastCloseBracket!)
+
+                if isCodeIdentifier || insideBrackets {
+                    // Don't apply italic formatting - treat as literal text
+                    // Move forward by one character to continue parsing
+                    let char = String(text[currentIndex])
+                    result.append(NSAttributedString(string: char, attributes: baseAttributes))
+                    currentIndex = text.index(after: currentIndex)
+                    continue
+                }
+
                 // Add text before match
                 if currentIndex < match.range.lowerBound {
                     let beforeText = String(text[currentIndex..<match.range.lowerBound])

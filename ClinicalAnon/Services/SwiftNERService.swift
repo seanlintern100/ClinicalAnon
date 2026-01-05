@@ -38,7 +38,7 @@ class SwiftNERService {
             NZAddressRecognizer(),         // NZ addresses and suburbs
             MaoriNameRecognizer(),         // NZ-specific Māori names
             RelationshipNameExtractor(),   // Extract names from "sister Margaret"
-            TitleNameRecognizer(),         // Extract names from "Mr Ronald", "Dr Smith"
+            TitleNameRecognizer(),         // Extract names from "Mr John", "Dr Smith"
             AppleNERRecognizer()           // Apple's baseline NER (names) last
         ]
 
@@ -102,7 +102,7 @@ class SwiftNERService {
         let deduplicated = deduplicateEntities(noOverlaps)
 
         // Extend first names with known surnames (searches FULL text, not per-chunk)
-        // This catches cases like "Madhu" when "Nath" is known from "Ronald Nath"
+        // This catches cases like "Jane" when "Smith" is known from "John Smith"
         let withSurnames = extendWithKnownSurnames(deduplicated, in: text)
 
         // Validate positions are within text bounds

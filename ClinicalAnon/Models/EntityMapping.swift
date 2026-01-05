@@ -55,12 +55,12 @@ struct RedactedPerson: Codable {
     }
 
     /// Detect which variant a given text represents for this person
-    /// Strips titles before matching
+    /// Strips titles before matching, supports prefix matching for nicknames
     func detectVariant(for text: String) -> NameVariant? {
         let stripped = RedactedPerson.stripTitle(text).lowercased()
         let hasTitle = RedactedPerson.hasTitle(text)
 
-        // Match longest first to avoid partial matches
+        // Exact matches first (longest to shortest)
         if stripped == full.lowercased() { return .full }
         if let fm = firstMiddle?.lowercased(), stripped == fm { return .firstMiddle }
         if stripped == firstLast.lowercased() { return .firstLast }
@@ -71,6 +71,15 @@ struct RedactedPerson: Codable {
         if stripped == first.lowercased() { return .first }
         if let mid = middle?.lowercased(), stripped == mid { return .middle }
         if stripped == last.lowercased() { return .last }
+
+        // Prefix matching for nicknames (e.g., "Ron" ↔ "Ronald")
+        let firstLower = first.lowercased()
+        if stripped.count >= 3 {  // Minimum 3 chars to avoid false positives
+            // Check if alias is prefix of first name: "Ron" is prefix of "Ronald"
+            if firstLower.hasPrefix(stripped) { return .first }
+            // Check if first name is prefix of alias: "Ronald" is prefix of "Ronaldo"
+            if stripped.hasPrefix(firstLower) { return .first }
+        }
 
         return nil
     }
@@ -170,7 +179,7 @@ class EntityMapping: ObservableObject {
         }
 
         // Check if this is a component of an existing mapped name
-        // e.g., "Ronald" is first name of "Ronald Nath" - should share the same code
+        // e.g., "John" is first name of "John Smith" - should share the same code
         if type.isPerson {
             if let parentCode = findParentNameCode(for: key, type: type) {
                 // Store mapping with parent's code
@@ -312,10 +321,10 @@ class EntityMapping: ObservableObject {
     }
 
     /// Find if this text is related to an existing mapped name (component or extension)
-    /// Returns the related name's replacement code if found
+    /// Returns the variant-aware replacement code if found
     /// Handles both directions:
-    /// - "Ronald" is a component of existing "Ronald Nath" → use same code
-    /// - "Ronald Nath" starts with existing "Ronald" → use same code
+    /// - "John" is a component of existing "John Smith" → use [PERSON_A_FIRST]
+    /// - "John Smith" starts with existing "John" → use same code
     private func findParentNameCode(for text: String, type: EntityType) -> String? {
         let searchText = text.lowercased()
 
@@ -328,16 +337,27 @@ class EntityMapping: ObservableObject {
             }
 
             // Case 1: Existing key is longer - our text is a component
-            // e.g., existing "ronald nath" starts with our "ronald "
+            // e.g., existing "john smith" starts with our "john "
             if existingKey.hasPrefix(searchText + " ") {
+                // Find the RedactedPerson and generate correct variant code
+                if let baseId = extractBaseId(from: mapping.replacement),
+                   let person = redactedPersons[baseId],
+                   let variant = person.detectVariant(for: text) {
+                    let variantCode = person.placeholder(for: variant)
+                    #if DEBUG
+                    print("EntityMapping: '\(text)' is component of '\(existingKey)' → using \(variantCode) (variant: \(variant))")
+                    #endif
+                    return variantCode
+                }
+                // Fallback to parent's code if no variant detected
                 #if DEBUG
-                print("EntityMapping: '\(text)' is component of '\(existingKey)' → using \(mapping.replacement)")
+                print("EntityMapping: '\(text)' is component of '\(existingKey)' → using \(mapping.replacement) (no variant)")
                 #endif
                 return mapping.replacement
             }
 
             // Case 2: Our text is longer - existing key is a component
-            // e.g., our "ronald nath" starts with existing "ronald "
+            // e.g., our "john smith" starts with existing "john "
             if searchText.hasPrefix(existingKey + " ") {
                 #if DEBUG
                 print("EntityMapping: '\(text)' extends '\(existingKey)' → using \(mapping.replacement)")
@@ -347,6 +367,23 @@ class EntityMapping: ObservableObject {
         }
 
         return nil
+    }
+
+    /// Extract base ID from a replacement code (e.g., "[PERSON_A_FIRST_LAST]" → "PERSON_A")
+    private func extractBaseId(from code: String) -> String? {
+        // Remove brackets: "[PERSON_A_FIRST_LAST]" → "PERSON_A_FIRST_LAST"
+        let stripped = code.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+
+        // Check for variant suffixes and remove them
+        for variant in NameVariant.allCases {
+            if stripped.hasSuffix(variant.codeSuffix) {
+                let baseId = String(stripped.dropLast(variant.codeSuffix.count))
+                return baseId
+            }
+        }
+
+        // No variant suffix - the code itself is the base ID
+        return stripped
     }
 
     /// Check if an original text already has a mapping
@@ -368,11 +405,43 @@ class EntityMapping: ObservableObject {
         redactedPersons.removeAll()
     }
 
-    /// Get all mappings as a sorted array
+    /// Get all mappings as a sorted array, deduplicated by placeholder code
+    /// When multiple originals map to the same placeholder, keeps the longest (most complete) one
     /// Returns the ORIGINAL CASED text, not the normalized key
     var allMappings: [(original: String, replacement: String)] {
-        return mappings.map { (original: $0.value.original, replacement: $0.value.replacement) }
-            .sorted { $0.original < $1.original }
+        // Group by replacement code, keeping longest original for each
+        var byCode: [String: (original: String, replacement: String)] = [:]
+
+        for (_, value) in mappings {
+            let code = value.replacement
+            if let existing = byCode[code] {
+                // Keep the longer original (more complete name)
+                if value.original.count > existing.original.count {
+                    #if DEBUG
+                    if code.contains("DATE") {
+                        print("📅 EntityMapping.allMappings: Replacing '\(existing.original)' with longer '\(value.original)' for \(code)")
+                    }
+                    #endif
+                    byCode[code] = (original: value.original, replacement: code)
+                }
+            } else {
+                byCode[code] = (original: value.original, replacement: code)
+            }
+        }
+
+        let result = Array(byCode.values).sorted { $0.original < $1.original }
+
+        #if DEBUG
+        let dateMappings = result.filter { $0.replacement.contains("DATE") }
+        if !dateMappings.isEmpty {
+            print("📅 EntityMapping.allMappings: Date mappings available:")
+            for dm in dateMappings {
+                print("    \(dm.replacement) → '\(dm.original)'")
+            }
+        }
+        #endif
+
+        return result
     }
 
     /// Total number of unique entities mapped
@@ -415,11 +484,11 @@ class EntityMapping: ObservableObject {
     }
 
     /// Merge one entity's mapping into another (alias → primary)
-    /// The alias will adopt the primary's replacement code
+    /// Creates a RedactedPerson anchor and assigns variant-specific codes
     /// - Parameters:
-    ///   - alias: The text to merge (will use primary's code)
-    ///   - primary: The text to merge into (keeps its code)
-    /// - Returns: The primary's replacement code, or nil if primary not found
+    ///   - alias: The text to merge (will get variant-specific code)
+    ///   - primary: The text to merge into (the full name anchor)
+    /// - Returns: The alias's new replacement code, or nil if primary not found
     func mergeMapping(alias: String, into primary: String) -> String? {
         let aliasKey = alias.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let primaryKey = primary.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -431,14 +500,211 @@ class EntityMapping: ObservableObject {
             return nil
         }
 
-        // Point alias to primary's code
-        mappings[aliasKey] = (original: alias, replacement: primaryMapping.replacement)
+        // Extract base ID from primary's code
+        guard let baseId = extractBaseId(from: primaryMapping.replacement) else {
+            // Fallback to old behavior if no base ID extractable
+            mappings[aliasKey] = (original: alias, replacement: primaryMapping.replacement)
+            #if DEBUG
+            print("EntityMapping.mergeMapping: No baseId, fallback → '\(alias)' → \(primaryMapping.replacement)")
+            #endif
+            return primaryMapping.replacement
+        }
+
+        // Create RedactedPerson if doesn't exist
+        if redactedPersons[baseId] == nil {
+            let person = RedactedPerson.parse(fullName: primary, baseId: baseId)
+            redactedPersons[baseId] = person
+
+            // Update primary mapping to use proper variant code
+            let primaryVariant: NameVariant = person.middle != nil ? .full : .firstLast
+            let primaryCode = person.placeholder(for: primaryVariant)
+            mappings[primaryKey] = (original: primary, replacement: primaryCode)
+
+            #if DEBUG
+            print("EntityMapping.mergeMapping: Created RedactedPerson '\(person.full)' baseId=\(baseId)")
+            print("  Primary updated: '\(primary)' → \(primaryCode)")
+            #endif
+        }
+
+        // Detect alias variant and assign correct code
+        if let person = redactedPersons[baseId],
+           let variant = person.detectVariant(for: alias) {
+            let variantCode = person.placeholder(for: variant)
+            mappings[aliasKey] = (original: alias, replacement: variantCode)
+
+            #if DEBUG
+            print("EntityMapping.mergeMapping: '\(alias)' → \(variantCode) (variant: \(variant))")
+            #endif
+
+            return variantCode
+        } else {
+            // Fallback: use primary's code (shouldn't happen for valid merges)
+            mappings[aliasKey] = (original: alias, replacement: primaryMapping.replacement)
+
+            #if DEBUG
+            print("EntityMapping.mergeMapping: No variant detected, fallback → '\(alias)' → \(primaryMapping.replacement)")
+            #endif
+
+            return primaryMapping.replacement
+        }
+    }
+
+    /// Result of attempting to merge with variant detection
+    enum MergeResult {
+        case success(code: String, variant: NameVariant)
+        case variantNotDetected(baseId: String, primaryCode: String)
+        case primaryNotFound
+        case noBaseId
+    }
+
+    /// Try to merge mapping with variant detection, returning result for UI handling
+    /// Unlike mergeMapping(), this does NOT fallback - lets caller decide what to do
+    func tryMergeMapping(alias: String, into primary: String) -> MergeResult {
+        let aliasKey = alias.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let primaryKey = primary.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let primaryMapping = mappings[primaryKey] else {
+            return .primaryNotFound
+        }
+
+        guard let baseId = extractBaseId(from: primaryMapping.replacement) else {
+            return .noBaseId
+        }
+
+        // Create RedactedPerson if doesn't exist
+        if redactedPersons[baseId] == nil {
+            let person = RedactedPerson.parse(fullName: primary, baseId: baseId)
+            redactedPersons[baseId] = person
+
+            let primaryVariant: NameVariant = person.middle != nil ? .full : .firstLast
+            let primaryCode = person.placeholder(for: primaryVariant)
+            mappings[primaryKey] = (original: primary, replacement: primaryCode)
+        }
+
+        // Try to detect variant
+        if let person = redactedPersons[baseId],
+           let variant = person.detectVariant(for: alias) {
+            let variantCode = person.placeholder(for: variant)
+            mappings[aliasKey] = (original: alias, replacement: variantCode)
+            return .success(code: variantCode, variant: variant)
+        } else {
+            // Variant not detected - return info for UI prompt
+            let currentPrimaryCode = mappings[primaryKey]?.replacement ?? primaryMapping.replacement
+            return .variantNotDetected(baseId: baseId, primaryCode: currentPrimaryCode)
+        }
+    }
+
+    /// Complete a merge with a user-specified variant
+    /// Called after user selects variant from prompt
+    func completeMergeWithVariant(alias: String, into primary: String, variant: NameVariant) -> String? {
+        let aliasKey = alias.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let primaryKey = primary.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let primaryMapping = mappings[primaryKey],
+              let baseId = extractBaseId(from: primaryMapping.replacement),
+              let person = redactedPersons[baseId] else {
+            return nil
+        }
+
+        let variantCode = person.placeholder(for: variant)
+        mappings[aliasKey] = (original: alias, replacement: variantCode)
 
         #if DEBUG
-        print("EntityMapping.mergeMapping: '\(alias)' merged into '\(primary)' → \(primaryMapping.replacement)")
+        print("EntityMapping.completeMergeWithVariant: '\(alias)' → \(variantCode) (user selected: \(variant))")
         #endif
 
-        return primaryMapping.replacement
+        return variantCode
+    }
+
+    /// Update or create a RedactedPerson structure for an entity
+    /// Used when user manually edits name components via the Edit Name Structure modal
+    /// - Parameters:
+    ///   - replacementCode: The entity's replacement code (e.g., "[PERSON_A_FIRST_LAST]")
+    ///   - firstName: The first name component
+    ///   - middleName: The middle name component (optional)
+    ///   - lastName: The last name component
+    ///   - title: The title (Mr, Mrs, Dr, etc.) - optional
+    func updatePersonStructure(
+        replacementCode: String,
+        firstName: String,
+        middleName: String?,
+        lastName: String,
+        title: String?
+    ) {
+        // Extract baseId from replacement code
+        guard let baseId = extractBaseId(from: replacementCode) else {
+            #if DEBUG
+            print("EntityMapping.updatePersonStructure: Could not extract baseId from '\(replacementCode)'")
+            #endif
+            return
+        }
+
+        // Build full name from components
+        var fullNameParts = [firstName]
+        if let middle = middleName, !middle.isEmpty {
+            fullNameParts.append(middle)
+        }
+        fullNameParts.append(lastName)
+        let fullName = fullNameParts.joined(separator: " ")
+
+        // Create RedactedPerson
+        let person = RedactedPerson(
+            baseId: baseId,
+            full: fullName,
+            first: firstName,
+            last: lastName,
+            middle: middleName?.isEmpty == true ? nil : middleName,
+            detectedTitle: title?.isEmpty == true ? nil : title
+        )
+
+        // Store in redactedPersons dictionary
+        redactedPersons[baseId] = person
+
+        // Update mappings for all name variants
+        updateMappingsForPerson(person)
+
+        #if DEBUG
+        print("EntityMapping.updatePersonStructure: Updated '\(baseId)' with first='\(firstName)', middle='\(middleName ?? "nil")', last='\(lastName)'")
+        #endif
+    }
+
+    /// Update all mappings for a RedactedPerson's name variants
+    private func updateMappingsForPerson(_ person: RedactedPerson) {
+        // Build list of variant -> text pairs
+        var variants: [(NameVariant, String)] = [
+            (.first, person.first),
+            (.last, person.last),
+            (.firstLast, person.firstLast),
+            (.full, person.full)
+        ]
+
+        // Add middle name variants if present
+        if let middle = person.middle, !middle.isEmpty {
+            variants.append((.middle, middle))
+            if let firstMiddle = person.firstMiddle {
+                variants.append((.firstMiddle, firstMiddle))
+            }
+        }
+
+        // Add formal variant if title is present
+        if person.detectedTitle != nil {
+            variants.append((.formal, person.formal))
+        }
+
+        // Update mappings for each variant
+        for (variant, text) in variants where !text.isEmpty {
+            let key = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            let code = person.placeholder(for: variant)
+            mappings[key] = (original: text, replacement: code)
+        }
+    }
+
+    /// Get the RedactedPerson for an entity's replacement code (if exists)
+    func getPersonForCode(_ replacementCode: String) -> RedactedPerson? {
+        guard let baseId = extractBaseId(from: replacementCode) else {
+            return nil
+        }
+        return redactedPersons[baseId]
     }
 
     /// Export mappings as JSON string
