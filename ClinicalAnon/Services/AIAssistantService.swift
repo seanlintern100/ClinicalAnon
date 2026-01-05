@@ -713,10 +713,21 @@ class AIAssistantService: ObservableObject {
 
         \(summaries)
 
-        ## Document Access
+        ## Report Writing Approach
 
-        The summaries above contain detailed extractions from all source documents.
-        Generate your report from these summaries.
+        You are writing a psychology report. The summaries above contain detailed extractions from all source documents.
+
+        CRITICAL - Synthesise, don't summarise:
+        - DO NOT structure your report by source document (e.g., "Report A says... Report B says...")
+        - DO organise thematically (e.g., medical history, psychological functioning, social context, recommendations)
+        - Weave information from multiple sources together into cohesive sections
+        - When sources agree, state the finding once with confidence
+        - When sources differ, note this and use clinical judgement about what to include
+        - Draw on ALL relevant information from the summaries - don't leave out important details
+
+        The goal is a single, coherent clinical narrative that reads as original work, not a summary of summaries.
+
+        ## Document Access
 
         If you need exact quotes, specific wording, or details not in the summaries,
         use the memory tool to access full documents at /memories/doc_N_content.md

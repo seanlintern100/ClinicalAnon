@@ -304,16 +304,14 @@ class ImprovePhaseState: ObservableObject {
                             docIndex += 1
                         }
 
-                        // Generate summaries for sub-docs without them
+                        // Generate detailed summaries for all sub-docs
                         for i in 0..<subDocs.count {
-                            if subDocs[i].summary.isEmpty {
-                                let summary = try await aiService.generateDocumentSummary(
-                                    subDocs[i].fullContent,
-                                    title: subDocs[i].title,
-                                    type: subDocs[i].type
-                                )
-                                subDocs[i].summary = summary
-                            }
+                            let summary = try await aiService.generateDocumentSummary(
+                                subDocs[i].fullContent,
+                                title: subDocs[i].title,
+                                type: subDocs[i].type
+                            )
+                            subDocs[i].summary = summary
                         }
 
                         allDetectedDocs.append(contentsOf: subDocs)
@@ -374,20 +372,19 @@ class ImprovePhaseState: ObservableObject {
                     }
                 }
 
-                // Generate summaries for documents without them
+                // Generate detailed summaries for all documents
+                // (detection returns brief summaries, we need full bullet-point extraction)
                 for i in 0..<detectedDocuments.count {
-                    if detectedDocuments[i].summary.isEmpty {
-                        let summary = try await aiService.generateDocumentSummary(
-                            detectedDocuments[i].fullContent,
-                            title: detectedDocuments[i].title,
-                            type: detectedDocuments[i].type
-                        )
-                        detectedDocuments[i].summary = summary
+                    let summary = try await aiService.generateDocumentSummary(
+                        detectedDocuments[i].fullContent,
+                        title: detectedDocuments[i].title,
+                        type: detectedDocuments[i].type
+                    )
+                    detectedDocuments[i].summary = summary
 
-                        #if DEBUG
-                        print("🤖 Memory Mode: Generated summary for \(detectedDocuments[i].title)")
-                        #endif
-                    }
+                    #if DEBUG
+                    print("🤖 Memory Mode: Generated summary for \(detectedDocuments[i].title)")
+                    #endif
                 }
             }
 

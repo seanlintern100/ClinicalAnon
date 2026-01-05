@@ -537,7 +537,8 @@ class WorkflowViewModel: ObservableObject {
     }
 
     func editPrompt(for docType: DocumentType) {
-        improveState.editPrompt(for: docType)
+        improveState.documentTypeToEdit = docType
+        showPromptEditor = true  // Set on ViewModel so sheet binding works
     }
 
     func openAddCustomCategory() {
