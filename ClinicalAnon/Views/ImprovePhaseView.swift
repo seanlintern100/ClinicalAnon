@@ -818,15 +818,6 @@ private struct DetectedDocumentRow: View {
         document.id.replacingOccurrences(of: "doc", with: "").replacingOccurrences(of: "_", with: "")
     }
 
-    // Parse markdown to AttributedString
-    private func markdownAttributedString(_ text: String) -> AttributedString {
-        do {
-            return try AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
-        } catch {
-            return AttributedString(text)
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
@@ -877,7 +868,7 @@ private struct DetectedDocumentRow: View {
 
             // Summary section with markdown support
             if !document.summary.isEmpty {
-                Text(markdownAttributedString(document.summary))
+                Text(MarkdownParser.parseToAttributedString(document.summary))
                     .font(.system(size: 9))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .lineLimit(isExpanded ? nil : 2)
