@@ -138,7 +138,9 @@ struct RedactPhaseView: View {
             if let result = viewModel.result {
                 if let cachedOriginal = viewModel.cachedOriginalAttributed {
                     TextContentCard(isSourcePanel: true, isProcessed: true) {
-                        FastTextView(attributedText: cachedOriginal)
+                        FastTextView(attributedText: cachedOriginal) { selectedText in
+                            viewModel.openAddCustomEntity(withText: selectedText)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
@@ -254,7 +256,9 @@ struct RedactPhaseView: View {
             if let result = viewModel.result {
                 if let cachedRedacted = viewModel.cachedRedactedAttributed {
                     TextContentCard(isSourcePanel: false, isProcessed: false) {
-                        FastTextView(attributedText: cachedRedacted)
+                        FastTextView(attributedText: cachedRedacted) { selectedText in
+                            viewModel.openAddCustomEntity(withText: selectedText)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
@@ -1406,6 +1410,44 @@ private struct DuplicateGroupRow: View {
     }
 }
 
+// MARK: - Custom NSTextView with Context Menu
+
+/// NSTextView subclass that adds "Add as entity" to right-click menu
+class FastTextViewWithMenu: NSTextView {
+    var onRightClickWithSelection: ((String) -> Void)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+
+        // Get selected text
+        let selectedRange = self.selectedRange()
+        if selectedRange.length > 0,
+           let storage = self.textStorage {
+            let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !selectedText.isEmpty {
+                // Add custom item at top
+                let addItem = NSMenuItem(title: "Add '\(selectedText)' as entity...", action: #selector(addAsEntity), keyEquivalent: "")
+                addItem.target = self
+                menu.insertItem(addItem, at: 0)
+                menu.insertItem(NSMenuItem.separator(), at: 1)
+            }
+        }
+
+        return menu
+    }
+
+    @objc private func addAsEntity() {
+        let selectedRange = self.selectedRange()
+        if selectedRange.length > 0,
+           let storage = self.textStorage {
+            let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !selectedText.isEmpty {
+                onRightClickWithSelection?(selectedText)
+            }
+        }
+    }
+}
+
 // MARK: - Fast Text View (NSTextView wrapper for performance)
 
 /// NSTextView wrapper for fast rendering of large AttributedStrings
@@ -1413,6 +1455,7 @@ private struct DuplicateGroupRow: View {
 /// NSTextView renders the same content in <1s
 struct FastTextView: NSViewRepresentable {
     let attributedText: AttributedString
+    var onRightClick: ((String) -> Void)? = nil
 
     func makeNSView(context: Context) -> NSScrollView {
         // Create text storage, layout manager, and text container manually for proper setup
@@ -1425,7 +1468,7 @@ struct FastTextView: NSViewRepresentable {
         textContainer.heightTracksTextView = false
         layoutManager.addTextContainer(textContainer)
 
-        let textView = NSTextView(frame: .zero, textContainer: textContainer)
+        let textView = FastTextViewWithMenu(frame: .zero, textContainer: textContainer)
         textView.isEditable = false
         textView.isSelectable = true
         textView.allowsUndo = false
@@ -1435,6 +1478,7 @@ struct FastTextView: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
+        textView.onRightClickWithSelection = onRightClick
 
         // Set initial text
         textStorage.setAttributedString(NSAttributedString(attributedText))
@@ -1452,10 +1496,13 @@ struct FastTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        guard let textView = scrollView.documentView as? FastTextViewWithMenu else { return }
 
         // Update the attributed text
         textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
+
+        // Update callback in case it changed
+        textView.onRightClickWithSelection = onRightClick
 
         // Ensure text container tracks width properly
         let contentWidth = max(scrollView.contentSize.width - 32, 100)  // Account for insets
