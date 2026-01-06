@@ -172,8 +172,8 @@ class RedactPhaseState: ObservableObject {
     /// Never shown: Different first names + same last name (family filter)
     /// Never shown: Ambiguous partial names (shared across multiple anchors)
     func findPotentialDuplicates() -> [DuplicateGroup] {
-        // Filter to person entities only
-        let personEntities = allEntities.filter { $0.type.isPerson && !isEntityExcluded($0) }
+        // Filter to anchor person entities only (exclude sub-entities like first/last name components)
+        let personEntities = allEntities.filter { $0.type.isPerson && !isEntityExcluded($0) && $0.isAnchor }
         guard personEntities.count >= 2 else { return [] }
 
         // Extract name components for each entity
