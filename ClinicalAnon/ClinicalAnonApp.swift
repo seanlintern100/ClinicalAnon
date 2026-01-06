@@ -28,8 +28,9 @@ struct ClinicalAnonApp: App {
                     // Clear any stale memory files from previous session
                     viewModel.improveState.resetMemoryModeOnLaunch()
 
-                    // Pre-load LLM model in background (only if already cached)
+                    // Pre-load models in background (only if already cached)
                     await LocalLLMService.shared.preloadIfCached()
+                    await XLMRobertaNERService.shared.preloadIfCached()
                 }
         }
         .windowStyle(.hiddenTitleBar)

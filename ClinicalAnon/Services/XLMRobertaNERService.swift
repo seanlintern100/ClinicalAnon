@@ -112,6 +112,40 @@ class XLMRobertaNERService: ObservableObject {
         return cacheDir.appendingPathComponent("XLMRobertaNER").appendingPathComponent("\(modelName).mlmodelc")
     }
 
+    /// Pre-load model if already cached (for app startup)
+    func preloadIfCached() async {
+        print("XLMRobertaNERService: Checking pre-load conditions...")
+        print("  - isAvailable: \(isAvailable)")
+        print("  - isModelCached: \(isModelCached)")
+        print("  - isModelLoaded: \(isModelLoaded)")
+
+        guard isAvailable else {
+            print("XLMRobertaNERService: Pre-load skipped - CoreML not available")
+            return
+        }
+
+        guard isModelCached else {
+            print("XLMRobertaNERService: Pre-load skipped - model not cached")
+            return
+        }
+
+        guard !isModelLoaded else {
+            print("XLMRobertaNERService: Pre-load skipped - already loaded")
+            return
+        }
+
+        print("XLMRobertaNERService: Pre-loading XLM-R model on startup...")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        do {
+            try await loadModel()
+            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+            print("⏱️ XLMRobertaNERService: Pre-load completed in \(String(format: "%.2f", elapsed))s")
+        } catch {
+            print("XLMRobertaNERService: Pre-load failed: \(error)")
+        }
+    }
+
     /// Load the model
     func loadModel() async throws {
         guard isAvailable else {
