@@ -985,10 +985,20 @@ class RedactPhaseState: ObservableObject {
         // print("RedactPhaseState.reclassifyEntity: Reclassifying \(entitiesToReclassify.count) entity(ies) from \(entity.type.displayName) to \(newType.displayName)")
         #endif
 
-        // Reclassify each entity
+        // Get the new type prefix (e.g., "CLIENT" for personClient)
+        let newPrefix = newType.replacementPrefix
+
+        // Reclassify each entity by replacing the type prefix, keeping letter + suffix
         for e in entitiesToReclassify {
-            // Use reclassifyMapping to force new code generation (not getReplacementCode which returns existing)
-            let newCode = engine.entityMapping.reclassifyMapping(originalText: e.originalText, to: newType)
+            // Extract the part after the type prefix: e.g., "[PERSON_A_FIRST]" → "A_FIRST]"
+            let oldCode = e.replacementCode
+            var newCode = oldCode
+
+            // Find the letter+suffix part (everything after first underscore)
+            if let firstUnderscore = oldCode.firstIndex(of: "_") {
+                let letterAndSuffix = oldCode[firstUnderscore...] // "_A_FIRST]" or "_A]"
+                newCode = "[\(newPrefix)\(letterAndSuffix)"
+            }
 
             // Create updated entity (nameVariant is computed from replacementCode)
             var updated = e
@@ -999,7 +1009,7 @@ class RedactPhaseState: ObservableObject {
             updateEntityInLists(updated)
 
             #if false  // DEBUG disabled for perf testing
-            // print("  '\(e.originalText)': \(e.replacementCode) → \(newCode)")
+            // print("  '\(e.originalText)': \(oldCode) → \(newCode)")
             #endif
         }
 
