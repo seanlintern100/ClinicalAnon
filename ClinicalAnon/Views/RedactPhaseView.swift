@@ -533,6 +533,55 @@ private struct EntityTypeSection: View {
         case allIncluded, allExcluded, mixed
     }
 
+    /// Group entities: anchors with their children, sorted alphabetically by anchor
+    private func groupedEntities() -> [(anchor: Entity, children: [Entity])] {
+        // Separate anchors and children
+        let anchors = entities.filter { $0.isAnchor }
+        let children = entities.filter { !$0.isAnchor }
+
+        // Group children by baseId
+        var childrenByBaseId: [String: [Entity]] = [:]
+        for child in children {
+            if let baseId = child.baseId {
+                childrenByBaseId[baseId, default: []].append(child)
+            }
+        }
+
+        // Build groups: each anchor with its children
+        var groups: [(anchor: Entity, children: [Entity])] = []
+        for anchor in anchors.sorted(by: { $0.originalText.lowercased() < $1.originalText.lowercased() }) {
+            let anchorChildren = anchor.baseId.flatMap { childrenByBaseId[$0] } ?? []
+            // Sort children alphabetically within group
+            let sortedChildren = anchorChildren.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() }
+            groups.append((anchor: anchor, children: sortedChildren))
+        }
+
+        return groups
+    }
+
+    /// Create entity row with optional indentation
+    @ViewBuilder
+    private func entityRow(for entity: Entity, indented: Bool) -> some View {
+        HStack(spacing: 0) {
+            if indented {
+                // Indentation spacer for child entities
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 16)
+            }
+
+            RedactEntityRow(
+                entity: entity,
+                isExcluded: viewModel.isEntityExcluded(entity),
+                isFromAIReview: isAISection,
+                onToggle: { viewModel.toggleEntity(entity) },
+                mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
+                onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) },
+                onEditNameStructure: { viewModel.redactState.startEditingNameStructure(entity) }
+            )
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Section header
@@ -578,19 +627,17 @@ private struct EntityTypeSection: View {
             .background(color.opacity(0.08))
             .cornerRadius(4)
 
-            // Entity rows (sorted alphabetically)
+            // Entity rows (grouped by anchor with children indented)
             if isExpanded {
                 VStack(spacing: 2) {
-                    ForEach(entities.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() }) { entity in
-                        RedactEntityRow(
-                            entity: entity,
-                            isExcluded: viewModel.isEntityExcluded(entity),
-                            isFromAIReview: isAISection,
-                            onToggle: { viewModel.toggleEntity(entity) },
-                            mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
-                            onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) },
-                            onEditNameStructure: { viewModel.redactState.startEditingNameStructure(entity) }
-                        )
+                    ForEach(groupedEntities(), id: \.anchor.id) { group in
+                        // Anchor row (no indent)
+                        entityRow(for: group.anchor, indented: false)
+
+                        // Child rows (indented)
+                        ForEach(group.children) { child in
+                            entityRow(for: child, indented: true)
+                        }
                     }
                 }
                 .padding(.top, 4)

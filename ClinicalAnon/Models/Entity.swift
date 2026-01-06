@@ -133,6 +133,35 @@ struct Entity: Identifiable, Codable, Hashable {
         return replacementCode
     }
 
+    // MARK: - Grouping Properties
+
+    /// Base ID for grouping (e.g., "PERSON_A" from "[PERSON_A_FIRST]")
+    var baseId: String? {
+        let stripped = replacementCode.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+
+        // Check for variant suffixes and remove them
+        for variant in NameVariant.allCases {
+            if stripped.hasSuffix(variant.codeSuffix) {
+                return String(stripped.dropLast(variant.codeSuffix.count))
+            }
+        }
+        return stripped
+    }
+
+    /// Whether this entity is an anchor (full name) vs a connected child (partial name)
+    /// Anchors: .full, .firstLast, or nil (standalone/primary)
+    /// Children: .first, .last, .middle, .formal, .firstMiddle
+    var isAnchor: Bool {
+        guard type.isPerson else { return true }  // Non-person entities are always "anchors"
+
+        switch nameVariant {
+        case .full, .firstLast, nil:
+            return true   // Full names or unmerged entities
+        case .first, .last, .middle, .formal, .firstMiddle:
+            return false  // Partial name components
+        }
+    }
+
     // MARK: - Helper Methods
 
     /// Check if this entity contains a specific position
