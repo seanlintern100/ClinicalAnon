@@ -460,6 +460,26 @@ class EntityMapping: ObservableObject {
             }
         }
 
+        // For single-name person entities, add variant aliases
+        // Handles AI using [PERSON_G_FIRST] when only [PERSON_G] exists
+        for (code, value) in byCode {
+            guard code.contains("PERSON") || code.contains("CLIENT") || code.contains("PROVIDER") else { continue }
+
+            // Check if this is a base code (no variant suffix)
+            let hasVariant = NameVariant.allCases.contains { code.contains($0.codeSuffix + "]") }
+            if !hasVariant {
+                // Add all variant aliases pointing to same original text
+                let baseId = String(code.dropFirst().dropLast()) // "PERSON_G"
+                for variant in NameVariant.allCases {
+                    let variantCode = "[\(baseId)\(variant.codeSuffix)]"
+                    if byCode[variantCode] == nil {
+                        // Use variant code as replacement so TextReidentifier can find it
+                        byCode[variantCode] = (original: value.original, replacement: variantCode)
+                    }
+                }
+            }
+        }
+
         let result = Array(byCode.values).sorted { $0.original < $1.original }
 
         #if DEBUG
