@@ -277,37 +277,17 @@ struct RedactPhaseView: View {
                 VStack(spacing: DesignSystem.Spacing.small) {
                     // Status messages
                     if let error = viewModel.errorMessage {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.red)
-                            Text(error)
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(.red)
-                            Spacer()
-                            Button(action: { viewModel.errorMessage = nil }) {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.red)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(DesignSystem.Spacing.small)
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(6)
+                        ErrorBanner(
+                            message: error,
+                            onDismiss: { viewModel.errorMessage = nil }
+                        )
                     }
 
                     if let success = viewModel.successMessage {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text(success)
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(.green)
-                            Spacer()
-                        }
-                        .padding(DesignSystem.Spacing.small)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(6)
+                        SuccessBanner(
+                            message: success,
+                            onDismiss: nil
+                        )
                     }
 
                     // Buttons
@@ -452,6 +432,7 @@ private struct RedactEntitySidebar: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .accessibilityLabel("Add custom entity")
 
                     Button(action: { viewModel.openDuplicateFinder() }) {
                         Image(systemName: "person.2.fill")
@@ -460,6 +441,7 @@ private struct RedactEntitySidebar: View {
                     .buttonStyle(.plain)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .help("Find potential duplicate names")
+                    .accessibilityLabel("Find duplicate names")
                     .disabled(personEntityCount < 2)
                     .opacity(personEntityCount < 2 ? 0.4 : 1.0)
                 }
@@ -470,6 +452,7 @@ private struct RedactEntitySidebar: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(DesignSystem.Colors.textSecondary)
+                .accessibilityLabel(isCollapsed ? "Expand sidebar" : "Collapse sidebar")
             }
             .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)
@@ -628,6 +611,7 @@ private struct EntityTypeSection: View {
                         .foregroundColor(checkState == .allExcluded ? DesignSystem.Colors.textSecondary : color)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(checkState == .allIncluded ? "Deselect all \(title)" : "Select all \(title)")
 
                 // Expand/collapse button for rest of header
                 Button(action: { withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() } }) {
@@ -653,6 +637,7 @@ private struct EntityTypeSection: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "Collapse \(title) section" : "Expand \(title) section")
             }
             .padding(.vertical, 6)
             .padding(.horizontal, DesignSystem.Spacing.xs)
@@ -699,6 +684,7 @@ private struct RedactEntityRow: View {
                     .foregroundColor(isExcluded ? DesignSystem.Colors.textSecondary : entity.type.highlightColor)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isExcluded ? "Include \(entity.originalText) in redaction" : "Exclude \(entity.originalText) from redaction")
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -1218,6 +1204,7 @@ struct DuplicateFinderModal: View {
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close dialog")
             }
             .padding(DesignSystem.Spacing.medium)
 
@@ -1366,6 +1353,7 @@ private struct DuplicateGroupRow: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 2)
+            .accessibilityLabel(group.isSelected ? "Deselect merge group for \(group.primary.originalText)" : "Select merge group for \(group.primary.originalText)")
 
             // Group content
             VStack(alignment: .leading, spacing: 4) {

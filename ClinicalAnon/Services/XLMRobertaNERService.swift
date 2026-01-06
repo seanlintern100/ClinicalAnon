@@ -255,6 +255,12 @@ class XLMRobertaNERService: ObservableObject {
                 return nil
             }
 
+            // Filter out clinical terms and common abbreviations that are false positives
+            if NERUtilities.isClinicalTerm(entity.text) {
+                print("XLMRobertaNERService: '\(entity.text)' filtered as clinical term")
+                return nil
+            }
+
             return PIIFinding(
                 text: entity.text,
                 suggestedType: entity.type,
@@ -773,7 +779,7 @@ class XLMRobertaNERService: ObservableObject {
 
             guard !existingTexts.contains(firstName.lowercased()) else { continue }
             guard !newEntities.contains(where: { $0.text.lowercased() == firstName.lowercased() }) else { continue }
-            guard firstName.count >= 3, !isCommonWord(firstName) else { continue }
+            guard firstName.count >= 3, !NERUtilities.isCommonWord(firstName) else { continue }
 
             var foundPositions: [(start: Int, end: Int)] = []
 
@@ -815,22 +821,6 @@ class XLMRobertaNERService: ObservableObject {
         return newEntities
     }
 
-    /// Check if a word is common
-    private func isCommonWord(_ word: String) -> Bool {
-        let commonWords: Set<String> = [
-            "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
-            "her", "was", "one", "our", "out", "has", "his", "him", "how", "its",
-            "may", "new", "now", "old", "see", "way", "who", "did", "get",
-            "let", "put", "say", "she", "too", "use", "very", "well", "with",
-            "this", "that", "they", "from", "have", "been", "were", "what", "when",
-            "will", "more", "some", "them", "than", "then", "only", "come", "could",
-            "january", "february", "march", "april", "june", "july", "august",
-            "september", "october", "november", "december", "monday", "tuesday",
-            "wednesday", "thursday", "friday", "saturday", "sunday"
-        ]
-        return commonWords.contains(word.lowercased())
-    }
-
     // MARK: - Identifier Detection
 
     /// Detect alphanumeric identifiers
@@ -855,7 +845,7 @@ class XLMRobertaNERService: ObservableObject {
             let hasDigit = matchText.contains(where: { $0.isNumber })
             guard hasLetter && hasDigit else { continue }
 
-            if isCommonAbbreviation(matchText) { continue }
+            if NERUtilities.isCommonAbbreviation(matchText) { continue }
 
             // Use NSRange directly for UTF-16 positions
             let start = match.range.location
@@ -874,17 +864,6 @@ class XLMRobertaNERService: ObservableObject {
         }
 
         return identifiers
-    }
-
-    /// Check for common abbreviations
-    private func isCommonAbbreviation(_ text: String) -> Bool {
-        let commonPatterns: Set<String> = [
-            "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
-            "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
-            "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th", "31st",
-            "covid19", "covid-19", "h1n1", "mp3", "mp4", "a4", "b12", "c19"
-        ]
-        return commonPatterns.contains(text.lowercased())
     }
 }
 

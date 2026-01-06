@@ -17,7 +17,7 @@ ClinicalAnon is a macOS-native application designed for psychology and wellbeing
 - **100% local processing** - No cloud uploads, no internet required after setup
 - **AI-assisted with human oversight** - LLM detects entities, practitioner reviews before applying
 - **Clinical context preserved** - Replaces identifying information while maintaining therapeutic meaning
-- **Privacy-first** - All processing in-memory only, nothing ever written to disk
+- **Privacy-first** - Minimal temporary storage, data cleared on app quit or next launch
 - **New Zealand cultural competence** - Handles te reo Māori names and NZ-specific contexts appropriately
 
 ---
@@ -29,7 +29,7 @@ ClinicalAnon is a macOS-native application designed for psychology and wellbeing
 - ✅ **Consistent mapping** - Same entity always gets same code within session
 - ✅ **Editable output** - Practitioner can refine AI suggestions
 - ✅ **Local AI** - Uses Ollama with Llama 3.1 8B model (runs on your Mac)
-- ✅ **Zero persistence** - No files created, no data saved, complete privacy
+- ✅ **Session-scoped storage** - All data cleared on app quit or next launch
 
 ### Entity Types Detected
 
@@ -184,15 +184,15 @@ This project is currently in active development. Contribution guidelines will be
 
 ### Data Handling
 - **No cloud processing** - Everything runs locally
-- **No file writes** - All processing in RAM
-- **No logs** - No debugging logs with sensitive data
+- **Minimal temporary storage** - Large documents (>100K chars) use temporary files in ~/Library/Caches during processing, automatically cleared on next app launch
+- **No persistent logs** - No debugging logs with sensitive data
 - **No analytics** - No telemetry or usage tracking
 - **No network** - After initial setup, no internet required
 
 ### Security Model
 - **User data stays local** - Never leaves the device
 - **LLM runs locally** - Ollama processes text on-device
-- **Session-only memory** - Cleared on app quit
+- **Session-scoped memory** - Cleared on app quit or next launch
 - **Direct download** - No App Store approval delays for security patches
 
 ---

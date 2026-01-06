@@ -283,7 +283,7 @@ class SwiftNERService {
             if foundMisspellings.contains(wordLower) { continue }
 
             // Skip common words and clinical terms
-            if isCommonWord(word) || isClinicalTerm(word) { continue }
+            if NERUtilities.shouldExclude(word) { continue }
 
             // Check against each known name
             for knownName in knownNames {
@@ -346,7 +346,7 @@ class SwiftNERService {
             if foundWords.contains(wordLower) { continue }
 
             // Skip common words and clinical terms
-            if isCommonWord(word) || isClinicalTerm(word) { continue }
+            if NERUtilities.shouldExclude(word) { continue }
 
             // Check if word is in dictionary using spell checker
             let misspelledRange = spellChecker.checkSpelling(of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
@@ -459,13 +459,13 @@ class SwiftNERService {
             if words.count >= 2 {
                 // First name
                 let firstName = String(words[0])
-                if firstName.count >= 3 && !isCommonWord(firstName) && !isClinicalTerm(firstName) {
+                if firstName.count >= 3 && !NERUtilities.shouldExclude(firstName) {
                     nameSet.insert(firstName)
                 }
                 // Last name (also important for possessives like "Versteeghs")
                 if let lastName = words.last {
                     let lastNameStr = String(lastName)
-                    if lastNameStr.count >= 3 && !isCommonWord(lastNameStr) && !isClinicalTerm(lastNameStr) {
+                    if lastNameStr.count >= 3 && !NERUtilities.shouldExclude(lastNameStr) {
                         nameSet.insert(lastNameStr)
                     }
                 }
@@ -683,47 +683,6 @@ class SwiftNERService {
 
             return entity
         }
-    }
-
-    /// Check if a word is a common English word (not a name)
-    private func isCommonWord(_ word: String) -> Bool {
-        let commonWords: Set<String> = [
-            "the", "a", "an", "and", "but", "or", "nor", "for", "yet", "so",
-            "in", "on", "at", "to", "from", "with", "by", "of", "about",
-            "he", "she", "it", "they", "we", "you", "i",
-            "him", "her", "them", "us", "me",
-            "his", "its", "their", "our", "your", "my",
-            "is", "was", "are", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did",
-            "this", "that", "these", "those",
-            "when", "where", "what", "which", "who", "why", "how",
-            "patient", "treatment", "therapy", "care", "health",
-            "medical", "clinical", "hospital", "clinic", "doctor",
-            "mother", "father", "sister", "brother", "son", "daughter",
-            "wife", "husband", "partner", "friend", "family", "whanau"
-        ]
-        return commonWords.contains(word.lowercased())
-    }
-
-    /// Check if a word is a clinical term to exclude
-    private func isClinicalTerm(_ word: String) -> Bool {
-        // All terms stored in lowercase for case-insensitive matching
-        let clinicalTerms: Set<String> = [
-            "gp", "mdt", "aod", "acc", "dhb", "ed", "icu", "ot", "pt",
-            "cbt", "dbt", "act", "emdr", "mi", "mh", "mha", "moh",
-            "adhd", "add", "asd", "ocd", "ptsd", "gad", "mdd", "bpd",
-            "dsm", "icd", "dx", "rx", "tx", "hx", "sx", "prn",
-            "tbi", "cva", "ms", "cp", "ld", "id", "abi",
-            "ngo", "moe", "msd", "winz", "cyf",
-            "nz", "usa", "uk", "au",
-            "client", "supplier", "provider", "participant", "claimant",
-            "referrer", "coordinator", "author", "reviewer", "approver",
-            "name", "address", "phone", "email", "contact", "details",
-            "number", "date", "claim", "reference", "report", "reports", "file",
-            "current", "background", "history", "plan", "goals", "progress",
-            "summary", "recommendations", "actions", "notes", "comments"
-        ]
-        return clinicalTerms.contains(word.lowercased())
     }
 
     // MARK: - Overlap Removal

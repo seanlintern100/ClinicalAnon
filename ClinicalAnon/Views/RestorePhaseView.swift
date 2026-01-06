@@ -284,6 +284,7 @@ struct EditReplacementModal: View {
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close dialog")
             }
 
             // Entity info

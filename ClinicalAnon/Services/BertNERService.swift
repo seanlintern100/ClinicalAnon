@@ -240,6 +240,12 @@ class BertNERService: ObservableObject {
                 return nil
             }
 
+            // Filter out clinical terms and common abbreviations that are false positives
+            if NERUtilities.isClinicalTerm(entity.text) {
+                print("BertNERService: '\(entity.text)' filtered as clinical term")
+                return nil
+            }
+
             return PIIFinding(
                 text: entity.text,
                 suggestedType: entity.type,
@@ -305,70 +311,64 @@ class BertNERService: ObservableObject {
 
     /// Split text into chunks that fit within BERT's token limit
     /// Uses sentence boundaries when possible, falls back to word boundaries
+    /// Uses NSString for UTF-16 consistent position handling
     private func splitIntoChunks(text: String) -> [TextChunk] {
         // Target ~400 tokens per chunk to leave room for special tokens and overlaps
         // Average English word is ~1.3 tokens, so ~300 words per chunk
         let targetCharsPerChunk = 1500  // ~300 words * 5 chars average
 
-        guard text.count > targetCharsPerChunk else {
+        // Use NSString for UTF-16 length (consistent with other recognizers)
+        let nsText = text as NSString
+        let textLength = nsText.length
+
+        guard textLength > targetCharsPerChunk else {
             return [TextChunk(text: text, charOffset: 0)]
         }
 
         var chunks: [TextChunk] = []
-        var currentStart = text.startIndex
-        var charOffset = 0
+        let stepSize = targetCharsPerChunk - 200  // Small overlap
 
-        while currentStart < text.endIndex {
-            // Calculate end position for this chunk
-            let remainingDistance = text.distance(from: currentStart, to: text.endIndex)
-            let chunkSize = min(targetCharsPerChunk, remainingDistance)
-            var chunkEnd = text.index(currentStart, offsetBy: chunkSize)
+        var currentStart = 0
+        while currentStart < textLength {
+            // Calculate chunk end
+            var chunkEnd = min(currentStart + targetCharsPerChunk, textLength)
 
             // If not at end, try to find a good break point (sentence or word boundary)
-            if chunkEnd < text.endIndex {
-                // Look for sentence boundary (. ! ? followed by space or newline)
-                var bestBreak = chunkEnd
-                let searchStart = text.index(currentStart, offsetBy: max(0, chunkSize - 200))
+            if chunkEnd < textLength {
+                let searchStart = max(chunkEnd - 200, currentStart + stepSize)
+                let searchRange = NSRange(location: searchStart, length: chunkEnd - searchStart)
 
-                // Search backwards from chunkEnd for sentence boundary
-                var searchIdx = chunkEnd
-                while searchIdx > searchStart {
-                    let prevIdx = text.index(before: searchIdx)
-                    let char = text[prevIdx]
-                    if (char == "." || char == "!" || char == "?") && searchIdx < text.endIndex {
-                        let nextChar = text[searchIdx]
-                        if nextChar.isWhitespace || nextChar.isNewline {
-                            bestBreak = searchIdx
-                            break
-                        }
-                    }
-                    searchIdx = prevIdx
+                // Try sentence boundaries in order of preference
+                var foundBoundary = nsText.range(of: ". ", options: .backwards, range: searchRange)
+                if foundBoundary.location == NSNotFound {
+                    foundBoundary = nsText.range(of: "! ", options: .backwards, range: searchRange)
                 }
-
-                // If no sentence boundary found, look for word boundary (space)
-                if bestBreak == chunkEnd {
-                    searchIdx = chunkEnd
-                    while searchIdx > searchStart {
-                        if text[searchIdx].isWhitespace {
-                            bestBreak = text.index(after: searchIdx)
-                            break
-                        }
-                        searchIdx = text.index(before: searchIdx)
-                    }
+                if foundBoundary.location == NSNotFound {
+                    foundBoundary = nsText.range(of: "? ", options: .backwards, range: searchRange)
                 }
-
-                chunkEnd = bestBreak
+                if foundBoundary.location == NSNotFound {
+                    foundBoundary = nsText.range(of: "\n", options: .backwards, range: searchRange)
+                }
+                if foundBoundary.location != NSNotFound {
+                    chunkEnd = foundBoundary.location + foundBoundary.length
+                }
             }
 
-            // Extract chunk
-            let chunkText = String(text[currentStart..<chunkEnd])
+            // Extract chunk using NSString (UTF-16)
+            let chunkRange = NSRange(location: currentStart, length: chunkEnd - currentStart)
+            let chunkText = nsText.substring(with: chunkRange)
+
             if !chunkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                chunks.append(TextChunk(text: chunkText, charOffset: charOffset))
+                chunks.append(TextChunk(text: chunkText, charOffset: currentStart))
             }
 
-            // Move to next chunk
-            charOffset += text.distance(from: currentStart, to: chunkEnd)
-            currentStart = chunkEnd
+            // Advance by step size (ensures progress)
+            currentStart += stepSize
+
+            // Break if we've covered the text
+            if currentStart >= textLength - 100 {
+                break
+            }
         }
 
         return chunks
@@ -472,33 +472,47 @@ class BertNERService: ObservableObject {
         return (inputIds, attentionMask, tokenToChar)
     }
 
-    /// Split text into words with character positions
+    /// Split text into words with character positions (UTF-16)
+    /// Uses NSString for consistent UTF-16 position handling
     private func tokenizeWords(text: String) -> [(String, Int, Int)] {
         var words: [(String, Int, Int)] = []
         var currentWord = ""
         var wordStart = 0
 
-        for (index, char) in text.enumerated() {
-            if char.isWhitespace || char.isPunctuation {
+        let nsText = text as NSString
+        var i = 0
+
+        while i < nsText.length {
+            let char = nsText.character(at: i)
+            let scalar = UnicodeScalar(char)
+
+            let isWhitespace = CharacterSet.whitespaces.contains(scalar ?? UnicodeScalar(0))
+            let isNewline = CharacterSet.newlines.contains(scalar ?? UnicodeScalar(0))
+            let isPunctuation = CharacterSet.punctuationCharacters.contains(scalar ?? UnicodeScalar(0))
+
+            if isWhitespace || isNewline || isPunctuation {
                 if !currentWord.isEmpty {
-                    words.append((currentWord, wordStart, index))
+                    words.append((currentWord, wordStart, i))
                     currentWord = ""
                 }
                 // Add punctuation as separate token
-                if char.isPunctuation {
-                    words.append((String(char), index, index + 1))
+                if isPunctuation, let s = scalar {
+                    words.append((String(Character(s)), i, i + 1))
                 }
             } else {
                 if currentWord.isEmpty {
-                    wordStart = index
+                    wordStart = i
                 }
-                currentWord.append(char)
+                if let s = scalar {
+                    currentWord.append(Character(s))
+                }
             }
+            i += 1
         }
 
         // Don't forget the last word
         if !currentWord.isEmpty {
-            words.append((currentWord, wordStart, text.count))
+            words.append((currentWord, wordStart, nsText.length))
         }
 
         return words
@@ -654,7 +668,9 @@ class BertNERService: ObservableObject {
 
     /// Bridge gaps between PER entities when the gap contains capitalized words (middle names)
     /// Example: "John" + "Michael" (capitalized gap) + "Smith" → merged into "John Michael Smith"
+    /// Uses NSString for UTF-16 consistent position handling
     private func bridgeNameGaps(_ entities: [BERTEntity], in text: String) -> [BERTEntity] {
+        let nsText = text as NSString
         // Filter to only PER entities and sort by start position
         let personEntities = entities.filter { $0.type.isPerson }.sorted { $0.start < $1.start }
         let otherEntities = entities.filter { !$0.type.isPerson }
@@ -680,10 +696,9 @@ class BertNERService: ObservableObject {
                 // Gap should be reasonable (< 30 chars to catch middle names with spaces)
                 guard gapEnd > gapStart && gapEnd - gapStart < 30 else { break }
 
-                // Extract gap text
-                let gapStartIdx = text.index(text.startIndex, offsetBy: gapStart)
-                let gapEndIdx = text.index(text.startIndex, offsetBy: gapEnd)
-                let gapText = String(text[gapStartIdx..<gapEndIdx]).trimmingCharacters(in: .whitespaces)
+                // Extract gap text using NSString (UTF-16)
+                let gapRange = NSRange(location: gapStart, length: gapEnd - gapStart)
+                let gapText = nsText.substring(with: gapRange).trimmingCharacters(in: .whitespaces)
 
                 // Check if gap contains only capitalized words (potential middle names)
                 let gapWords = gapText.split(separator: " ")
@@ -696,9 +711,9 @@ class BertNERService: ObservableObject {
                     // Merge entities: extend current to include next
                     let mergedStart = current.start
                     let mergedEnd = next.end
-                    let startIdx = text.index(text.startIndex, offsetBy: mergedStart)
-                    let endIdx = text.index(text.startIndex, offsetBy: min(mergedEnd, text.count))
-                    let mergedText = String(text[startIdx..<endIdx])
+                    // Use NSString for UTF-16 consistent substring
+                    let mergedRange = NSRange(location: mergedStart, length: min(mergedEnd, nsText.length) - mergedStart)
+                    let mergedText = nsText.substring(with: mergedRange)
 
                     print("BertNERService: Bridged '\(current.text)' + '\(gapText)' + '\(next.text)' → '\(mergedText)'")
 
@@ -725,17 +740,19 @@ class BertNERService: ObservableObject {
     }
 
     /// Create BERT entity from aggregated span
+    /// Uses NSString for UTF-16 consistent position handling
     private func createBERTEntity(
         from entity: (text: String, type: String, start: Int, end: Int, confidence: Double),
         originalText: String
     ) -> BERTEntity {
+        // Use NSString for UTF-16 consistent positions
+        let nsText = originalText as NSString
         let start = entity.start
-        let end = min(entity.end, originalText.count)
+        let end = min(entity.end, nsText.length)
 
-        // Extract actual text from original
-        let startIdx = originalText.index(originalText.startIndex, offsetBy: start)
-        let endIdx = originalText.index(originalText.startIndex, offsetBy: end)
-        let extractedText = String(originalText[startIdx..<endIdx])
+        // Extract actual text from original using NSString (UTF-16)
+        let range = NSRange(location: start, length: end - start)
+        let extractedText = nsText.substring(with: range)
 
         return BERTEntity(
             text: extractedText,
@@ -802,27 +819,33 @@ class BertNERService: ObservableObject {
     }
 
     /// Find a surname following a name at the given position
+    /// Uses NSString for UTF-16 consistent position handling
     private func findFollowingSurname(after endIndex: Int, in text: String) -> String? {
-        guard endIndex < text.count else { return nil }
-
-        let startIdx = text.index(text.startIndex, offsetBy: endIndex)
+        let nsText = text as NSString
+        guard endIndex < nsText.length else { return nil }
 
         // Check if followed by a space
-        guard startIdx < text.endIndex, text[startIdx] == " " else { return nil }
+        let charAtEnd = nsText.character(at: endIndex)
+        guard charAtEnd == 32 else { return nil }  // 32 is space in UTF-16
 
         // Get the next word
-        let afterSpace = text.index(after: startIdx)
-        guard afterSpace < text.endIndex else { return nil }
+        let afterSpace = endIndex + 1
+        guard afterSpace < nsText.length else { return nil }
 
         // Find the end of the next word
         var wordEnd = afterSpace
-        while wordEnd < text.endIndex && text[wordEnd].isLetter {
-            wordEnd = text.index(after: wordEnd)
+        while wordEnd < nsText.length {
+            let char = nsText.character(at: wordEnd)
+            guard let scalar = UnicodeScalar(char), CharacterSet.letters.contains(scalar) else {
+                break
+            }
+            wordEnd += 1
         }
 
         guard wordEnd > afterSpace else { return nil }
 
-        let nextWord = String(text[afterSpace..<wordEnd])
+        let wordRange = NSRange(location: afterSpace, length: wordEnd - afterSpace)
+        let nextWord = nsText.substring(with: wordRange)
 
         // Check if it looks like a surname:
         // - Starts with uppercase
@@ -830,7 +853,7 @@ class BertNERService: ObservableObject {
         // - Not a common word
         guard nextWord.count >= 2,
               nextWord.first?.isUppercase == true,
-              !isCommonWord(nextWord) else {
+              !NERUtilities.isCommonWord(nextWord) else {
             return nil
         }
 
@@ -839,9 +862,11 @@ class BertNERService: ObservableObject {
 
     /// Extract first name components from multi-word person names
     /// When "Hannes Venter" is detected, also find standalone "Hannes"
+    /// Uses NSString for UTF-16 consistent position handling
     private func extractNameComponents(_ entities: [BERTEntity], in text: String) -> [BERTEntity] {
         var newEntities: [BERTEntity] = []
         let existingTexts = Set(entities.map { $0.text.lowercased() })
+        let nsText = text as NSString
 
         for entity in entities {
             // Only process multi-word person names
@@ -862,15 +887,25 @@ class BertNERService: ObservableObject {
             guard !newEntities.contains(where: { $0.text.lowercased() == firstName.lowercased() }) else { continue }
 
             // Skip if too short or common word
-            guard firstName.count >= 3, !isCommonWord(firstName) else { continue }
+            guard firstName.count >= 3, !NERUtilities.isCommonWord(firstName) else { continue }
 
-            // Find standalone occurrences of first name
-            var searchStart = text.startIndex
             var foundPositions: [(start: Int, end: Int)] = []
 
-            while let range = text.range(of: firstName, options: .caseInsensitive, range: searchStart..<text.endIndex) {
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
+            // Use word boundary regex to avoid matching inside other words
+            // Also match possessive forms without apostrophe (e.g., "Sean" also matches "Seans")
+            let escapedName = NSRegularExpression.escapedPattern(for: firstName)
+            let pattern = "\\b\(escapedName)s?\\b"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+                continue
+            }
+
+            let searchRange = NSRange(location: 0, length: nsText.length)
+            let matches = regex.matches(in: text, options: [], range: searchRange)
+
+            for match in matches {
+                // Use NSRange directly for UTF-16 positions
+                let start = match.range.location
+                let end = match.range.location + match.range.length
 
                 // Check this isn't part of the full name (already covered)
                 let isPartOfFullName = (start >= entity.start && end <= entity.end)
@@ -878,7 +913,6 @@ class BertNERService: ObservableObject {
                 if !isPartOfFullName {
                     foundPositions.append((start: start, end: end))
                 }
-                searchStart = range.upperBound
             }
 
             // Create entity for each standalone occurrence
@@ -901,28 +935,14 @@ class BertNERService: ObservableObject {
         return newEntities
     }
 
-    /// Check if a word is a common English word (not a name)
-    private func isCommonWord(_ word: String) -> Bool {
-        let commonWords: Set<String> = [
-            "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
-            "her", "was", "one", "our", "out", "has", "his", "him", "how", "its",
-            "may", "new", "now", "old", "see", "way", "who", "did", "get", "has",
-            "let", "put", "say", "she", "too", "use", "very", "well", "with",
-            "this", "that", "they", "from", "have", "been", "were", "what", "when",
-            "will", "more", "some", "them", "than", "then", "only", "come", "could",
-            "january", "february", "march", "april", "june", "july", "august",
-            "september", "october", "november", "december", "monday", "tuesday",
-            "wednesday", "thursday", "friday", "saturday", "sunday"
-        ]
-        return commonWords.contains(word.lowercased())
-    }
-
     // MARK: - Identifier Detection
 
     /// Detect alphanumeric identifiers (codes, reference numbers, etc.)
     /// Matches strings with both letters AND numbers like "S7798120001" or "VEND-G0M136"
+    /// Uses NSString for UTF-16 consistent position handling
     private func detectIdentifiers(in text: String) -> [BERTEntity] {
         var identifiers: [BERTEntity] = []
+        let nsText = text as NSString
 
         // Pattern: word boundaries, alphanumeric with optional hyphens, min 4 chars
         // Must contain at least one letter AND one digit
@@ -932,12 +952,12 @@ class BertNERService: ObservableObject {
             return identifiers
         }
 
-        let range = NSRange(text.startIndex..., in: text)
+        let range = NSRange(location: 0, length: nsText.length)
         let matches = regex.matches(in: text, options: [], range: range)
 
         for match in matches {
-            guard let swiftRange = Range(match.range, in: text) else { continue }
-            let matchText = String(text[swiftRange])
+            // Use NSString for UTF-16 consistent substring
+            let matchText = nsText.substring(with: match.range)
 
             // Must contain both letters and digits
             let hasLetter = matchText.contains(where: { $0.isLetter })
@@ -945,10 +965,11 @@ class BertNERService: ObservableObject {
             guard hasLetter && hasDigit else { continue }
 
             // Skip common patterns that aren't identifiers
-            if isCommonAbbreviation(matchText) { continue }
+            if NERUtilities.isCommonAbbreviation(matchText) { continue }
 
-            let start = text.distance(from: text.startIndex, to: swiftRange.lowerBound)
-            let end = text.distance(from: text.startIndex, to: swiftRange.upperBound)
+            // Use NSRange directly for UTF-16 positions
+            let start = match.range.location
+            let end = match.range.location + match.range.length
 
             identifiers.append(BERTEntity(
                 text: matchText,
@@ -963,19 +984,6 @@ class BertNERService: ObservableObject {
         }
 
         return identifiers
-    }
-
-    /// Check if a string is a common abbreviation (not an identifier)
-    private func isCommonAbbreviation(_ text: String) -> Bool {
-        let commonPatterns: Set<String> = [
-            // Ordinals
-            "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
-            "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
-            "21st", "22nd", "23rd", "24th", "25th", "26th", "27th", "28th", "29th", "30th", "31st",
-            // Common abbreviations
-            "covid19", "covid-19", "h1n1", "mp3", "mp4", "a4", "b12", "c19"
-        ]
-        return commonPatterns.contains(text.lowercased())
     }
 
     // MARK: - Deduplication

@@ -109,6 +109,7 @@ struct ImprovePhaseView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Add new analysis type")
+                .accessibilityLabel("Add analysis type")
             }
 
             Spacer()
@@ -144,6 +145,7 @@ struct ImprovePhaseView: View {
                     .buttonStyle(.plain)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .help("Copy document")
+                    .accessibilityLabel("Copy document to clipboard")
                 }
             }
             .frame(height: 44)
@@ -701,6 +703,7 @@ private struct SourceDocumentRow: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(isSelected ? .white.opacity(0.7) : DesignSystem.Colors.textSecondary)
+                    .accessibilityLabel("Edit document description")
                 }
 
                 if !document.description.isEmpty {
@@ -800,6 +803,7 @@ private struct DocumentHierarchyRow: View {
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Collapse document hierarchy" : "Expand document hierarchy")
 
             // Child detected documents
             if isExpanded && !detectedChildren.isEmpty {
@@ -907,6 +911,7 @@ private struct DetectedDocumentRow: View {
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "Collapse summary" : "Expand summary")
                 }
             }
 
@@ -1018,6 +1023,7 @@ private struct DocumentTypeChip: View {
                             .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Edit \(documentType.name) settings")
 
                     // Delete button for user-created types
                     if let deleteAction = onDelete {
@@ -1027,6 +1033,7 @@ private struct DocumentTypeChip: View {
                                 .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.textSecondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Delete \(documentType.name)")
                     }
                 }
             }

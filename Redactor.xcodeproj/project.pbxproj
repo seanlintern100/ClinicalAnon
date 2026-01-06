@@ -17,6 +17,7 @@
 		0A1B2C3D4E5F6A7B8C9D0E1F /* TitleNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */; };
 		0E085DEAC7C367FC64D14900 /* EntityMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */; };
 		1018969E6E6D810477650A46 /* SwiftNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9741FCB21B765FA21672D641 /* SwiftNERService.swift */; };
+		NERUTIL001000000000000001 /* NERUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = NERUTIL001000000000000002 /* NERUtilities.swift */; };
 		CHUNK0001000000000000001 /* ChunkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHUNK0002000000000000001 /* ChunkManager.swift */; };
 		15D511386E0C9D4F4CFEC7FC /* AppleNERRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */; };
 		16183A6417260B823C8E2805 /* EntityType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01915D69A51DDDEA81FD955A /* EntityType.swift */; };
@@ -127,6 +128,7 @@
 		87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalAnonApp.swift; sourceTree = "<group>"; };
 		8E8D95843A42C138E6B0D5CA /* AIAssistantService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantService.swift; sourceTree = "<group>"; };
 		9741FCB21B765FA21672D641 /* SwiftNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftNERService.swift; sourceTree = "<group>"; };
+		NERUTIL001000000000000002 /* NERUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NERUtilities.swift; sourceTree = "<group>"; };
 		CHUNK0002000000000000001 /* ChunkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkManager.swift; sourceTree = "<group>"; };
 		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllNumbersRecognizer.swift; sourceTree = "<group>"; };
@@ -347,6 +349,7 @@
 				MEMSTOR001000000000000002 /* MemoryStorage.swift */,
 				B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */,
 				9741FCB21B765FA21672D641 /* SwiftNERService.swift */,
+				NERUTIL001000000000000002 /* NERUtilities.swift */,
 				CHUNK0002000000000000001 /* ChunkManager.swift */,
 				A1E99991AD176BB9F3A8DE67 /* TextReidentifier.swift */,
 				F110215B1181B8B98076418E /* TextReplacer.swift */,
@@ -550,6 +553,7 @@
 				8A4431B706F76840302FA1D9 /* RestorePhaseView.swift in Sources */,
 				7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */,
 				1018969E6E6D810477650A46 /* SwiftNERService.swift in Sources */,
+				NERUTIL001000000000000001 /* NERUtilities.swift in Sources */,
 				CHUNK0001000000000000001 /* ChunkManager.swift in Sources */,
 				913A43814EBACCC657047706 /* TextEditorView.swift in Sources */,
 				4A45EFB5809D2D54CED0088B /* TextReidentifier.swift in Sources */,
