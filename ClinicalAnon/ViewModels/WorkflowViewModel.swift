@@ -384,8 +384,8 @@ class WorkflowViewModel: ObservableObject {
     /// If variant detection fails, shows prompt for user to select variant
     func mergeEntities(alias: Entity, into primary: Entity) {
         guard alias.type == primary.type else {
-            #if DEBUG
-            print("WorkflowViewModel.mergeEntities: Cannot merge different entity types")
+            #if false  // DEBUG disabled for perf testing
+            // print("WorkflowViewModel.mergeEntities: Cannot merge different entity types")
             #endif
             return
         }
@@ -400,15 +400,15 @@ class WorkflowViewModel: ObservableObject {
         // Person entities: try merge with variant detection
         let result = engine.entityMapping.tryMergeMapping(alias: alias.originalText, into: primary.originalText)
 
-        #if DEBUG
-        print("WorkflowViewModel.mergeEntities: '\(alias.originalText)' into '\(primary.originalText)'")
+        #if false  // DEBUG disabled for perf testing
+        // print("WorkflowViewModel.mergeEntities: '\(alias.originalText)' into '\(primary.originalText)'")
         print("  tryMergeMapping result: \(result)")
         #endif
 
         switch result {
         case .success(let code, let variant):
             // Variant detected, proceed with merge
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("  ✓ Auto-detected variant: \(variant) → \(code)")
             #endif
             completeMerge(alias: alias, into: primary)
@@ -416,7 +416,7 @@ class WorkflowViewModel: ObservableObject {
         case .variantNotDetected(let baseId, _):
             // Auto-assign .first and complete merge (modal no longer needed)
             // Restoration uses RedactedPerson which has all variants
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("  ⚠️ Variant not detected, auto-assigning .first (baseId: \(baseId))")
             #endif
             _ = engine.entityMapping.completeMergeWithVariant(
@@ -428,7 +428,7 @@ class WorkflowViewModel: ObservableObject {
 
         case .primaryNotFound:
             // Fallback to old behavior using mergeMapping()
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("  ⚠️ Primary not found, using fallback")
             #endif
             _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
@@ -436,7 +436,7 @@ class WorkflowViewModel: ObservableObject {
 
         case .noBaseId:
             // Fallback to old behavior using mergeMapping()
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("  ⚠️ No baseId, using fallback")
             #endif
             _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
@@ -447,7 +447,7 @@ class WorkflowViewModel: ObservableObject {
     /// Complete merge after variant is determined (either auto-detected or user-selected)
     /// Instead of removing the alias, we update its code to the variant code and keep both entities
     func completeMerge(alias: Entity, into primary: Entity) {
-        #if DEBUG
+        #if false  // DEBUG disabled for perf testing
         print("🔀 completeMerge START: '\(alias.originalText)' into '\(primary.originalText)'")
         print("   Alias in deepScan: \(redactState.deepScanFindings.contains { $0.id == alias.id })")
         print("   Alias in result: \(redactState.result?.entities.contains { $0.id == alias.id } ?? false)")
@@ -459,11 +459,11 @@ class WorkflowViewModel: ObservableObject {
             // This keeps both entities in the list with correct codes
             redactState.updateEntityReplacementCode(entityId: alias.id, newCode: newAliasCode)
 
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   Updated code: \(alias.replacementCode) → \(newAliasCode)")
             #endif
         } else {
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   No mapping found - keeping code \(alias.replacementCode)")
             #endif
         }
@@ -475,7 +475,7 @@ class WorkflowViewModel: ObservableObject {
         // so it appears in the main section (not the deep scan section)
         if redactState.deepScanFindings.contains(where: { $0.id == alias.id }) {
             redactState.moveDeepScanFindingToResult(alias.id)
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   Moved alias from deepScan to result")
             #endif
         }
@@ -484,7 +484,7 @@ class WorkflowViewModel: ObservableObject {
         // so anchor and child are in the same section for grouping
         if redactState.deepScanFindings.contains(where: { $0.id == primary.id }) {
             redactState.moveDeepScanFindingToResult(primary.id)
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   Moved primary from deepScan to result")
             #endif
         }
@@ -493,12 +493,12 @@ class WorkflowViewModel: ObservableObject {
         if let newPrimaryCode = engine.entityMapping.existingMapping(for: primary.originalText),
            newPrimaryCode != primary.replacementCode {
             redactState.updateEntityReplacementCode(entityId: primary.id, newCode: newPrimaryCode)
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   Updated primary code: \(primary.replacementCode) → \(newPrimaryCode)")
             #endif
         }
 
-        #if DEBUG
+        #if false  // DEBUG disabled for perf testing
         // Check final state
         if let updatedAlias = redactState.allEntities.first(where: { $0.id == alias.id }) {
             print("   FINAL: '\(updatedAlias.originalText)' code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isMergedChild=\(updatedAlias.isMergedChild) isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")

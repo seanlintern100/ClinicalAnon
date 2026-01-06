@@ -803,10 +803,10 @@ class RedactPhaseState: ObservableObject {
         // Mark for cache refresh
         redactedTextNeedsUpdate = true
 
-        #if DEBUG
-        print("RedactPhaseState.mergeEntities: Merged '\(alias.originalText)' into '\(primary.originalText)' → \(primaryCode)")
+        #if false  // DEBUG disabled for perf testing
+        // print("RedactPhaseState.mergeEntities: Merged '\(alias.originalText)' into '\(primary.originalText)' → \(primaryCode)")
         if !siblings.isEmpty {
-            print("RedactPhaseState.mergeEntities: Updated \(siblings.count) sibling(s) from \(aliasCode) to \(primaryCode)")
+            // print("RedactPhaseState.mergeEntities: Updated \(siblings.count) sibling(s) from \(aliasCode) to \(primaryCode)")
         }
         #endif
     }
@@ -850,8 +850,8 @@ class RedactPhaseState: ObservableObject {
         isEditingNameStructure = false
         nameStructureEditEntity = nil
 
-        #if DEBUG
-        print("RedactPhaseState.saveNameStructure: Updated structure for '\(entity.replacementCode)'")
+        #if false  // DEBUG disabled for perf testing
+        // print("RedactPhaseState.saveNameStructure: Updated structure for '\(entity.replacementCode)'")
         #endif
     }
 
@@ -1002,8 +1002,8 @@ class RedactPhaseState: ObservableObject {
             entitiesToReclassify.append(contentsOf: children)
         }
 
-        #if DEBUG
-        print("RedactPhaseState.reclassifyEntity: Reclassifying \(entitiesToReclassify.count) entity(ies) from \(entity.type.displayName) to \(newType.displayName)")
+        #if false  // DEBUG disabled for perf testing
+        // print("RedactPhaseState.reclassifyEntity: Reclassifying \(entitiesToReclassify.count) entity(ies) from \(entity.type.displayName) to \(newType.displayName)")
         #endif
 
         // Reclassify each entity
@@ -1020,8 +1020,8 @@ class RedactPhaseState: ObservableObject {
             // Update in appropriate list
             updateEntityInLists(updated)
 
-            #if DEBUG
-            print("  '\(e.originalText)': \(e.replacementCode) → \(newCode)")
+            #if false  // DEBUG disabled for perf testing
+            // print("  '\(e.originalText)': \(e.replacementCode) → \(newCode)")
             #endif
         }
 
@@ -1144,9 +1144,9 @@ class RedactPhaseState: ObservableObject {
     private func processPIIFindings(_ findings: [PIIFinding], originalText: String) {
         var newEntities: [Entity] = []
 
-        print("DEBUG processPIIFindings: Received \(findings.count) findings")
+        // print("DEBUG processPIIFindings: Received \(findings.count) findings")
         for finding in findings {
-            print("DEBUG processPIIFindings: Processing '\(finding.text)' type=\(finding.suggestedType)")
+            // print("DEBUG processPIIFindings: Processing '\(finding.text)' type=\(finding.suggestedType)")
 
             if let (matchedEntity, leakedPart) = findPartialMatch(finding.text) {
                 let fullOriginal = matchedEntity.originalText + leakedPart
@@ -1167,16 +1167,16 @@ class RedactPhaseState: ObservableObject {
             } else {
                 let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
                 if alreadyExists {
-                    print("DEBUG processPIIFindings: '\(finding.text)' already exists, skipping")
+                    // print("DEBUG processPIIFindings: '\(finding.text)' already exists, skipping")
                     continue
                 }
 
                 let positions = findAllOccurrences(of: finding.text, in: originalText)
                 if positions.isEmpty {
-                    print("DEBUG processPIIFindings: '\(finding.text)' not found in original text, skipping")
+                    // print("DEBUG processPIIFindings: '\(finding.text)' not found in original text, skipping")
                     continue
                 }
-                print("DEBUG processPIIFindings: '\(finding.text)' found at \(positions.count) positions, adding")
+                // print("DEBUG processPIIFindings: '\(finding.text)' found at \(positions.count) positions, adding")
 
                 // Get replacement code from engine (this also registers it for restore)
                 let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)

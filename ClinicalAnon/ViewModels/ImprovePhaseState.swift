@@ -125,12 +125,12 @@ class ImprovePhaseState: ObservableObject {
 
     /// Process text with AI using selected document type
     func processWithAI() {
-        #if DEBUG
+        #if false  // DEBUG disabled for perf testing
         print("🤖 processWithAI called")
         #endif
 
         guard let getText = getRedactedText else {
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("🔴 processWithAI: getRedactedText callback is nil")
             #endif
             aiError = "No text provider configured"
@@ -139,7 +139,7 @@ class ImprovePhaseState: ObservableObject {
 
         let inputForAI = getText()
         guard !inputForAI.isEmpty else {
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("🔴 processWithAI: inputForAI is empty")
             #endif
             aiError = "No redacted text to process"
@@ -147,14 +147,14 @@ class ImprovePhaseState: ObservableObject {
         }
 
         guard let docType = selectedDocumentType else {
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("🔴 processWithAI: selectedDocumentType is nil")
             #endif
             aiError = "No document type selected"
             return
         }
 
-        #if DEBUG
+        #if false  // DEBUG disabled for perf testing
         print("🤖 AI Processing: Starting...")
         print("   Document type: \(docType.name) (id: \(docType.id))")
         print("   Input length: \(inputForAI.count) chars")
@@ -182,19 +182,19 @@ class ImprovePhaseState: ObservableObject {
         if sourceDocuments.count > 1 {
             // Multiple docs - use per-document classifications
             fullPrompt = aiService.buildContextualPromptForMultiDoc(basePrompt: basePrompt, sourceDocuments: sourceDocuments)
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   Multi-doc mode: \(sourceDocuments.count) documents with individual classifications")
             #endif
         } else {
             // Single doc - use global classification
             let textType = getTextInputType?() ?? .otherReports
             fullPrompt = aiService.buildContextualPrompt(basePrompt: basePrompt, textType: textType)
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("   Text input type: \(textType.rawValue)")
             #endif
         }
 
-        #if DEBUG
+        #if false  // DEBUG disabled for perf testing
         print("   Prompt length: \(fullPrompt.count) chars")
         print("   Prompt preview: \(String(fullPrompt.prefix(200)))...")
         #endif
@@ -206,7 +206,7 @@ class ImprovePhaseState: ObservableObject {
         let isLargeDocument = aiService.shouldUseMemoryMode(for: inputForAI)
 
         if hasMultipleDocs || isLargeDocument {
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             if hasMultipleDocs {
                 print("🤖 Multiple source documents (\(sourceDocuments.count)) - using memory mode")
             } else {
@@ -224,7 +224,7 @@ class ImprovePhaseState: ObservableObject {
         isMemoryMode = false
         currentAITask = Task {
             do {
-                #if DEBUG
+                #if false  // DEBUG disabled for perf testing
                 print("🤖 AI Processing: Starting stream...")
                 #endif
 
@@ -233,7 +233,7 @@ class ImprovePhaseState: ObservableObject {
                 var chunkCount = 0
                 for try await chunk in stream {
                     if Task.isCancelled {
-                        #if DEBUG
+                        #if false  // DEBUG disabled for perf testing
                         print("🤖 AI Processing: Cancelled after \(chunkCount) chunks")
                         #endif
                         break
@@ -242,7 +242,7 @@ class ImprovePhaseState: ObservableObject {
                     chunkCount += 1
                 }
 
-                #if DEBUG
+                #if false  // DEBUG disabled for perf testing
                 print("🤖 AI Processing: Stream complete - \(chunkCount) chunks, \(aiOutput.count) chars")
                 #endif
 
@@ -263,7 +263,7 @@ class ImprovePhaseState: ObservableObject {
                 }
                 isAIProcessing = false
             } catch {
-                #if DEBUG
+                #if false  // DEBUG disabled for perf testing
                 print("🤖 AI Processing: ERROR - \(error.localizedDescription)")
                 #endif
                 if !Task.isCancelled {
@@ -284,7 +284,7 @@ class ImprovePhaseState: ObservableObject {
 
             if sourceDocuments.count > 1 {
                 // Multiple source documents: Check each for sub-document detection
-                #if DEBUG
+                #if false  // DEBUG disabled for perf testing
                 print("🤖 Memory Mode: Processing \(sourceDocuments.count) source documents")
                 #endif
 
@@ -294,7 +294,7 @@ class ImprovePhaseState: ObservableObject {
                 for source in sourceDocuments {
                     if source.redactedText.count >= largeDocThreshold {
                         // Large doc - detect sub-documents within it
-                        #if DEBUG
+                        #if false  // DEBUG disabled for perf testing
                         print("🤖 Memory Mode: Source '\(source.displayName)' is large (\(source.redactedText.count / 1000)K) - detecting sub-docs")
                         #endif
 
@@ -328,7 +328,7 @@ class ImprovePhaseState: ObservableObject {
 
                         allDetectedDocs.append(contentsOf: subDocs)
 
-                        #if DEBUG
+                        #if false  // DEBUG disabled for perf testing
                         print("🤖 Memory Mode: Found \(subDocs.count) sub-docs in '\(source.displayName)'")
                         #endif
 
@@ -357,7 +357,7 @@ class ImprovePhaseState: ObservableObject {
 
                         allDetectedDocs.append(docWithSummary)
 
-                        #if DEBUG
+                        #if false  // DEBUG disabled for perf testing
                         print("🤖 Memory Mode: Using '\(source.displayName)' directly (small doc)")
                         #endif
                     }
@@ -367,13 +367,13 @@ class ImprovePhaseState: ObservableObject {
 
             } else {
                 // Single large document: Run AI detection to find sub-documents
-                #if DEBUG
+                #if false  // DEBUG disabled for perf testing
                 print("🤖 Memory Mode: Detecting documents within single source...")
                 #endif
 
                 detectedDocuments = try await aiService.detectDocumentBoundaries(text)
 
-                #if DEBUG
+                #if false  // DEBUG disabled for perf testing
                 print("🤖 Memory Mode: Detected \(detectedDocuments.count) document(s)")
                 #endif
 
@@ -394,7 +394,7 @@ class ImprovePhaseState: ObservableObject {
                     )
                     detectedDocuments[i].summary = summary
 
-                    #if DEBUG
+                    #if false  // DEBUG disabled for perf testing
                     print("🤖 Memory Mode: Generated summary for \(detectedDocuments[i].title)")
                     #endif
                 }
@@ -406,7 +406,7 @@ class ImprovePhaseState: ObservableObject {
             await aiService.initializeMemoryMode(documents: detectedDocuments)
             memoryModeInitialized = true
 
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("🤖 Memory Mode: Memory storage initialized with \(detectedDocuments.count) documents")
             #endif
 
@@ -421,7 +421,7 @@ class ImprovePhaseState: ObservableObject {
                     // Add to chat as a system note
                     chatHistory.append((role: "system", content: "⚠️ **Cross-Document Notes**\n\(inconsistencies.replacingOccurrences(of: "## Cross-Document Notes", with: "").trimmingCharacters(in: .whitespacesAndNewlines))"))
 
-                    #if DEBUG
+                    #if false  // DEBUG disabled for perf testing
                     print("🤖 Memory Mode: Found cross-document inconsistencies - flagged in chat")
                     #endif
                 }
@@ -453,12 +453,12 @@ class ImprovePhaseState: ObservableObject {
             }
             isAIProcessing = false
 
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("🤖 Memory Mode: Processing complete - \(result.count) chars")
             #endif
 
         } catch {
-            #if DEBUG
+            #if false  // DEBUG disabled for perf testing
             print("🤖 Memory Mode: ERROR - \(error.localizedDescription)")
             #endif
             if !Task.isCancelled {
