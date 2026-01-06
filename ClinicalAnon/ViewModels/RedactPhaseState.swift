@@ -988,16 +988,63 @@ class RedactPhaseState: ObservableObject {
         // Get the new type prefix (e.g., "CLIENT" for personClient)
         let newPrefix = newType.replacementPrefix
 
-        // Reclassify each entity by replacing the type prefix, keeping letter + suffix
+        // Extract the letter from the anchor's old code (e.g., "A" from "[PERSON_A]")
+        let anchorCode = entity.replacementCode
+        var targetLetter: String = ""
+        if let firstUnderscore = anchorCode.firstIndex(of: "_") {
+            let afterUnderscore = anchorCode[anchorCode.index(after: firstUnderscore)...]
+            // Extract just the letter part before any variant suffix or closing bracket
+            if let endOfLetter = afterUnderscore.firstIndex(where: { $0 == "_" || $0 == "]" }) {
+                targetLetter = String(afterUnderscore[..<endOfLetter])
+            }
+        }
+
+        // Check if this letter is already used by another entity of the target type
+        let proposedBaseCode = "[\(newPrefix)_\(targetLetter)]"
+        let letterAlreadyUsed = allEntities.contains { e in
+            e.type == newType &&
+            !entitiesToReclassify.contains(where: { $0.id == e.id }) &&
+            e.baseReplacementCode == proposedBaseCode
+        }
+
+        // If letter is taken, get the next available one from EntityMapping
+        let finalLetter: String
+        if letterAlreadyUsed {
+            // Get next available letter for this type
+            let nextCode = engine.entityMapping.getReplacementCode(for: "__TEMP_RECLASSIFY__", type: newType)
+            // Extract letter from new code (e.g., "[CLIENT_B]" → "B")
+            if let firstUnderscore = nextCode.firstIndex(of: "_"),
+               let closeBracket = nextCode.lastIndex(of: "]") {
+                let afterUnderscore = nextCode.index(after: firstUnderscore)
+                finalLetter = String(nextCode[afterUnderscore..<closeBracket])
+            } else {
+                finalLetter = targetLetter
+            }
+            // Remove the temp mapping
+            engine.entityMapping.removeMapping(for: "__TEMP_RECLASSIFY__")
+        } else {
+            finalLetter = targetLetter
+        }
+
+        // Reclassify each entity by replacing the type prefix and letter
         for e in entitiesToReclassify {
-            // Extract the part after the type prefix: e.g., "[PERSON_A_FIRST]" → "A_FIRST]"
             let oldCode = e.replacementCode
             var newCode = oldCode
 
-            // Find the letter+suffix part (everything after first underscore)
-            if let firstUnderscore = oldCode.firstIndex(of: "_") {
-                let letterAndSuffix = oldCode[firstUnderscore...] // "_A_FIRST]" or "_A]"
-                newCode = "[\(newPrefix)\(letterAndSuffix)"
+            // Find the variant suffix (if any) from the old code
+            var variantSuffix = ""
+            for variant in NameVariant.allCases {
+                if oldCode.uppercased().hasSuffix(variant.codeSuffix + "]") {
+                    variantSuffix = variant.codeSuffix
+                    break
+                }
+            }
+
+            // Build new code with new prefix, new letter, and preserved suffix
+            if variantSuffix.isEmpty {
+                newCode = "[\(newPrefix)_\(finalLetter)]"
+            } else {
+                newCode = "[\(newPrefix)_\(finalLetter)\(variantSuffix)]"
             }
 
             // Create updated entity (nameVariant is computed from replacementCode)
