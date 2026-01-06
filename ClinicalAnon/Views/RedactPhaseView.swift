@@ -498,10 +498,13 @@ private struct RedactEntitySidebar: View {
         [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
     }
 
-    /// Get entities for a specific type (excluding AI findings shown in separate section)
+    /// Get entities for a specific type (excluding AI/deep scan findings shown in separate sections)
     private func entitiesForType(_ type: EntityType) -> [Entity] {
         let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
-        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) }
+        let deepIds = Set(viewModel.deepScanFindings.map { $0.id })
+        return viewModel.allEntities.filter {
+            $0.type == type && !aiIds.contains($0.id) && !deepIds.contains($0.id)
+        }
     }
 }
 
@@ -574,6 +577,7 @@ private struct EntityTypeSection: View {
                 entity: entity,
                 isExcluded: viewModel.isEntityExcluded(entity),
                 isFromAIReview: isAISection,
+                isChild: indented,
                 onToggle: { viewModel.toggleEntity(entity) },
                 mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
                 onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) },
@@ -653,10 +657,17 @@ private struct RedactEntityRow: View {
     let entity: Entity
     let isExcluded: Bool
     let isFromAIReview: Bool
+    let isChild: Bool  // Whether this is an indented child entity
     let onToggle: () -> Void
     let mergeTargets: [Entity]
     let onMerge: (Entity) -> Void
     let onEditNameStructure: () -> Void
+
+    /// Text color: gray for excluded or child entities, primary for anchors
+    private var textColor: Color {
+        if isExcluded { return DesignSystem.Colors.textSecondary }
+        return isChild ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary
+    }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
@@ -671,7 +682,7 @@ private struct RedactEntityRow: View {
                 HStack(spacing: 4) {
                     Text(entity.originalText)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundColor(isExcluded ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
+                        .foregroundColor(textColor)
                         .lineLimit(1)
                         .strikethrough(isExcluded)
 
@@ -686,19 +697,22 @@ private struct RedactEntityRow: View {
                     }
                 }
 
-                HStack(spacing: 4) {
-                    Text("→ \(entity.replacementCode)")
-                        .font(.system(size: 10))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                // Only show replacement code and variant badge for anchors, not children
+                if !isChild {
+                    HStack(spacing: 4) {
+                        Text("→ \(entity.replacementCode)")
+                            .font(.system(size: 10))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                    if let variant = entity.nameVariant {
-                        Text(variant.displayName)
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(entity.type.highlightColor.opacity(0.8))
-                            .cornerRadius(3)
+                        if let variant = entity.nameVariant {
+                            Text(variant.displayName)
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(entity.type.highlightColor.opacity(0.8))
+                                .cornerRadius(3)
+                        }
                     }
                 }
             }

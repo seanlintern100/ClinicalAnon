@@ -445,6 +445,12 @@ class WorkflowViewModel: ObservableObject {
             #endif
         }
 
+        // If alias is a deep scan finding, move it to result.entities
+        // so it appears in the main section (not the deep scan section)
+        if redactState.deepScanFindings.contains(where: { $0.id == alias.id }) {
+            redactState.moveDeepScanFindingToResult(alias.id)
+        }
+
         // Also update primary's code if it changed
         if let newPrimaryCode = engine.entityMapping.existingMapping(for: primary.originalText),
            newPrimaryCode != primary.replacementCode {

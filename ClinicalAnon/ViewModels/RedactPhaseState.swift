@@ -879,18 +879,31 @@ class RedactPhaseState: ObservableObject {
         }
     }
 
+    /// Extract variant from replacement code suffix (e.g., "_FIRST" from "[PERSON_A_FIRST]")
+    /// This is more reliable than lookup-based variant detection after merges
+    private func extractVariantFromCode(_ code: String) -> NameVariant? {
+        let uppercased = code.uppercased()
+
+        // Check each variant suffix (in order of specificity - longer suffixes first)
+        if uppercased.hasSuffix("_FIRST_LAST]") { return .firstLast }
+        if uppercased.hasSuffix("_FIRST_MID]") { return .firstMiddle }
+        if uppercased.hasSuffix("_FIRST]") { return .first }
+        if uppercased.hasSuffix("_LAST]") { return .last }
+        if uppercased.hasSuffix("_MIDDLE]") { return .middle }
+        if uppercased.hasSuffix("_FORMAL]") { return .formal }
+        if uppercased.hasSuffix("_FULL]") { return .full }
+
+        return nil  // No variant suffix = anchor
+    }
+
     /// Update an entity's replacement code and recalculate variant across all entity lists
     func updateEntityReplacementCode(entityId: UUID, newCode: String) {
-        // Helper to update code and recalculate variant based on new anchor
+        // Helper to update code and extract variant from code suffix
         func updateEntity(_ entity: inout Entity) {
             entity.replacementCode = newCode
-            // Recalculate variant based on matching anchor
+            // Extract variant directly from replacement code suffix (more reliable than lookup)
             if entity.type.isPerson {
-                if let (_, variant) = engine.entityMapping.findVariant(for: entity.originalText) {
-                    entity.nameVariant = variant
-                } else {
-                    entity.nameVariant = nil
-                }
+                entity.nameVariant = extractVariantFromCode(newCode)
             }
         }
 
@@ -917,6 +930,18 @@ class RedactPhaseState: ObservableObject {
         customEntities.removeAll { $0.id == entityId }
         piiReviewFindings.removeAll { $0.id == entityId }
         deepScanFindings.removeAll { $0.id == entityId }
+    }
+
+    /// Move a deep scan finding to result.entities (after merge)
+    /// This ensures the merged entity appears in the main section, not the deep scan section
+    func moveDeepScanFindingToResult(_ entityId: UUID) {
+        guard let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) else { return }
+        let entity = deepScanFindings.remove(at: idx)
+        result?.entities.append(entity)
+
+        // Also remove from excluded set since user chose to merge it
+        _excludedIds.remove(entityId)
+        excludedEntityIds.remove(entityId)
     }
 
     func openAddCustomEntity(withText text: String? = nil) {

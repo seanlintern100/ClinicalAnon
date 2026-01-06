@@ -558,8 +558,17 @@ class EntityMapping: ObservableObject {
         }
 
         // Detect alias variant and assign correct code
-        if let person = redactedPersons[baseId],
-           let variant = person.detectVariant(for: alias) {
+        guard let person = redactedPersons[baseId] else {
+            // No person registered - use primary's code as fallback
+            mappings[aliasKey] = (original: alias, replacement: primaryMapping.replacement)
+            #if DEBUG
+            print("EntityMapping.mergeMapping: No person for baseId '\(baseId)', fallback → '\(alias)' → \(primaryMapping.replacement)")
+            #endif
+            return primaryMapping.replacement
+        }
+
+        // Try to detect variant using existing logic
+        if let variant = person.detectVariant(for: alias) {
             let variantCode = person.placeholder(for: variant)
             mappings[aliasKey] = (original: alias, replacement: variantCode)
 
@@ -569,15 +578,43 @@ class EntityMapping: ObservableObject {
 
             return variantCode
         } else {
-            // Fallback: use primary's code (shouldn't happen for valid merges)
-            mappings[aliasKey] = (original: alias, replacement: primaryMapping.replacement)
+            // Variant not detected - infer from name component matching
+            let inferredVariant = inferVariantFromNameMatch(alias: alias, person: person)
+            let variantCode = person.placeholder(for: inferredVariant)
+            mappings[aliasKey] = (original: alias, replacement: variantCode)
 
             #if DEBUG
-            print("EntityMapping.mergeMapping: No variant detected, fallback → '\(alias)' → \(primaryMapping.replacement)")
+            print("EntityMapping.mergeMapping: '\(alias)' → \(variantCode) (inferred: \(inferredVariant))")
             #endif
 
-            return primaryMapping.replacement
+            return variantCode
         }
+    }
+
+    /// Infer variant by checking if alias matches first, last, or other name component
+    /// Used as fallback when detectVariant() fails
+    private func inferVariantFromNameMatch(alias: String, person: RedactedPerson) -> NameVariant {
+        let aliasLower = alias.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Check exact matches with name components
+        if aliasLower == person.first.lowercased() {
+            return .first
+        }
+        if aliasLower == person.last.lowercased() {
+            return .last
+        }
+        if let middle = person.middle?.lowercased(), aliasLower == middle {
+            return .middle
+        }
+
+        // Check if it contains first + last (no middle)
+        let firstLast = "\(person.first) \(person.last)".lowercased()
+        if aliasLower == firstLast {
+            return .firstLast
+        }
+
+        // Default to first name if single word, otherwise firstLast
+        return alias.contains(" ") ? .firstLast : .first
     }
 
     /// Result of attempting to merge with variant detection
