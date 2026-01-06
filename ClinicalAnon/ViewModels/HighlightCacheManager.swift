@@ -36,31 +36,40 @@ class HighlightCacheManager: ObservableObject {
         replacementPositions: [(range: NSRange, entityType: EntityType)],
         restoredText: String?
     ) {
+        let totalStart = CFAbsoluteTimeGetCurrent()
         storedAllEntities = allEntities
 
         // Build original attributed string
         if let original = originalText {
+            let start = CFAbsoluteTimeGetCurrent()
             cachedOriginalAttributed = buildOriginalAttributed(
                 original,
                 allEntities: allEntities,
                 excludedIds: excludedIds
             )
+            print("⏱️ buildOriginalAttributed: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - start))s")
         } else {
             cachedOriginalAttributed = nil
         }
 
         // Build redacted attributed string using pre-calculated positions (O(m) vs O(n*m))
+        let redactedStart = CFAbsoluteTimeGetCurrent()
         cachedRedactedAttributed = buildRedactedAttributed(
             redactedText,
             replacementPositions: replacementPositions
         )
+        print("⏱️ buildRedactedAttributed: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - redactedStart))s")
 
         // Build restored attributed string
         if let restored = restoredText, !restored.isEmpty {
+            let restoredStart = CFAbsoluteTimeGetCurrent()
             cachedRestoredAttributed = buildRestoredAttributed(restored, allEntities: allEntities)
+            print("⏱️ buildRestoredAttributed: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - restoredStart))s")
         } else {
             cachedRestoredAttributed = nil
         }
+
+        print("⏱️ rebuildAllCaches TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - totalStart))s")
     }
 
     /// Rebuild only the restored text cache

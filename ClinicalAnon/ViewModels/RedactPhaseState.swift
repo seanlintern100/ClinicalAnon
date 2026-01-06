@@ -498,6 +498,7 @@ class RedactPhaseState: ObservableObject {
 
     func analyze() async {
         guard !inputText.isEmpty else { return }
+        let analyzeStart = CFAbsoluteTimeGetCurrent()
 
         errorMessage = nil
         successMessage = nil
@@ -515,7 +516,9 @@ class RedactPhaseState: ObservableObject {
                 }
             }
 
+            let engineStart = CFAbsoluteTimeGetCurrent()
             var analysisResult = try await engine.anonymize(inputText)
+            print("⏱️ engine.anonymize: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - engineStart))s")
 
             // Run XLM-R multilingual NER if available and merge findings
             if XLMRobertaNERService.shared.isAvailable {
@@ -526,11 +529,15 @@ class RedactPhaseState: ObservableObject {
                 }
 
                 do {
+                    let xlmrStart = CFAbsoluteTimeGetCurrent()
                     let xlmrFindings = try await XLMRobertaNERService.shared.runNERScan(
                         text: analysisResult.originalText,
                         existingEntities: analysisResult.entities
                     )
+                    print("⏱️ XLM-R scan: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - xlmrStart))s")
+                    let mergeStart = CFAbsoluteTimeGetCurrent()
                     analysisResult = mergeXLMRFindingsIntoResult(xlmrFindings, result: analysisResult)
+                    print("⏱️ mergeXLMRFindings: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - mergeStart))s")
                 } catch {
                     // XLM-R failure is non-fatal - continue with Apple NER results
                     print("XLM-R scan failed (non-fatal): \(error.localizedDescription)")
@@ -551,6 +558,7 @@ class RedactPhaseState: ObservableObject {
             refreshRedactedTextCache()
 
             isProcessing = false
+            print("⏱️ analyze() TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - analyzeStart))s")
             successMessage = "Analysis complete! Found \(result?.entityCount ?? 0) entities."
             autoHideSuccess()
         } catch {
@@ -1342,6 +1350,12 @@ class RedactPhaseState: ObservableObject {
     }
 
     private func updateRedactedTextCache() {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        defer {
+            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+            print("⏱️ updateRedactedTextCache: \(String(format: "%.3f", elapsed))s")
+        }
+
         guard let result = result else {
             cachedRedactedText = ""
             replacementPositions = []

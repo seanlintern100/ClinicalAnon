@@ -334,10 +334,12 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Redact Phase Actions
 
     func analyze() async {
+        let totalStart = CFAbsoluteTimeGetCurrent()
         await redactState.analyze()
 
         // Rebuild cache using strong reference to cacheManager
         if let result = redactState.result {
+            let cacheStart = CFAbsoluteTimeGetCurrent()
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
                 allEntities: redactState.allEntities,
@@ -347,7 +349,9 @@ class WorkflowViewModel: ObservableObject {
                 replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
+            print("⏱️ WorkflowVM cacheManager.rebuildAllCaches: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - cacheStart))s")
         }
+        print("⏱️ WorkflowVM.analyze() TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - totalStart))s")
     }
 
     func clearAll() {
@@ -576,8 +580,10 @@ class WorkflowViewModel: ObservableObject {
     }
 
     func applyChanges() {
+        let totalStart = CFAbsoluteTimeGetCurrent()
         redactState.applyChanges()
         if let result = redactState.result {
+            let cacheStart = CFAbsoluteTimeGetCurrent()
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
                 allEntities: redactState.allEntities,
@@ -587,7 +593,9 @@ class WorkflowViewModel: ObservableObject {
                 replacementPositions: redactState.replacementPositions,
                 restoredText: nil
             )
+            print("⏱️ applyChanges cacheManager.rebuildAllCaches: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - cacheStart))s")
         }
+        print("⏱️ applyChanges() TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - totalStart))s")
     }
 
     func openAddCustomEntity(withText text: String? = nil) {
