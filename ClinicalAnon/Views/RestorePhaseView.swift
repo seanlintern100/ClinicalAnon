@@ -224,9 +224,9 @@ private struct RestoredEntityRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(entity.replacementCode)
+                    Text(displayText)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(hasOverride ? .orange : DesignSystem.Colors.textPrimary)
 
                     if let variant = entity.nameVariant {
                         Text(variant.displayName)
@@ -240,10 +240,10 @@ private struct RestoredEntityRow: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text("→")
+                    Text("←")
                         .foregroundColor(DesignSystem.Colors.textSecondary)
-                    Text(displayText)
-                        .foregroundColor(hasOverride ? .orange : DesignSystem.Colors.textPrimary)
+                    Text(entity.replacementCode)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
                 .font(.system(size: 11))
             }

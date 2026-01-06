@@ -466,7 +466,16 @@ class WorkflowViewModel: ObservableObject {
         if redactState.deepScanFindings.contains(where: { $0.id == alias.id }) {
             redactState.moveDeepScanFindingToResult(alias.id)
             #if DEBUG
-            print("   Moved from deepScan to result")
+            print("   Moved alias from deepScan to result")
+            #endif
+        }
+
+        // If primary (anchor) is in deep scan, move it to result.entities
+        // so anchor and child are in the same section for grouping
+        if redactState.deepScanFindings.contains(where: { $0.id == primary.id }) {
+            redactState.moveDeepScanFindingToResult(primary.id)
+            #if DEBUG
+            print("   Moved primary from deepScan to result")
             #endif
         }
 

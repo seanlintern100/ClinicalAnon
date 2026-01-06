@@ -1701,19 +1701,65 @@ struct DetectionModePicker: View {
 }
 #endif
 
+// MARK: - Context Menu Text View
+
+/// Custom NSTextView that adds "Add custom redaction" to right-click menu
+class ContextMenuTextView: NSTextView {
+    var onRightClickWithSelection: ((String) -> Void)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+
+        // Get selected text
+        let selectedRange = self.selectedRange()
+        if selectedRange.length > 0,
+           let selectedText = self.textStorage?.attributedSubstring(from: selectedRange).string {
+            let trimmedText = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedText.isEmpty {
+                // Add separator if menu has items
+                if menu.items.count > 0 {
+                    menu.insertItem(NSMenuItem.separator(), at: 0)
+                }
+
+                // Add custom redaction menu item at top
+                let menuItem = NSMenuItem(
+                    title: "Add Custom Redaction",
+                    action: #selector(addCustomRedaction(_:)),
+                    keyEquivalent: ""
+                )
+                menuItem.target = self
+                menuItem.representedObject = trimmedText
+                menu.insertItem(menuItem, at: 0)
+            }
+        }
+
+        return menu
+    }
+
+    @objc private func addCustomRedaction(_ sender: NSMenuItem) {
+        if let text = sender.representedObject as? String {
+            onRightClickWithSelection?(text)
+        }
+    }
+}
+
 // MARK: - Interactive Text View
 
-/// NSTextView wrapper that supports double-click word selection
+/// NSTextView wrapper that supports double-click word selection and right-click context menu
 struct InteractiveTextView: NSViewRepresentable {
     let attributedText: AttributedString
     let onDoubleClick: (String) -> Void
+    var onRightClick: ((String) -> Void)? = nil
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.backgroundColor = .clear
         scrollView.drawsBackground = false
 
-        let textView = NSTextView()
+        let textView = ContextMenuTextView()
+        textView.onRightClickWithSelection = { text in
+            context.coordinator.onRightClick?(text)
+        }
 
         textView.isEditable = false
         textView.isSelectable = true
@@ -1758,19 +1804,29 @@ struct InteractiveTextView: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
 
-        // Update the coordinator's callback
+        // Update the coordinator's callbacks
         context.coordinator.onDoubleClick = onDoubleClick
+        context.coordinator.onRightClick = onRightClick
+
+        // Update the text view's right-click callback
+        if let contextMenuTextView = textView as? ContextMenuTextView {
+            contextMenuTextView.onRightClickWithSelection = { text in
+                context.coordinator.onRightClick?(text)
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onDoubleClick: onDoubleClick)
+        Coordinator(onDoubleClick: onDoubleClick, onRightClick: onRightClick)
     }
 
     class Coordinator: NSObject, NSTextViewDelegate {
         var onDoubleClick: (String) -> Void
+        var onRightClick: ((String) -> Void)?
 
-        init(onDoubleClick: @escaping (String) -> Void) {
+        init(onDoubleClick: @escaping (String) -> Void, onRightClick: ((String) -> Void)?) {
             self.onDoubleClick = onDoubleClick
+            self.onRightClick = onRightClick
         }
 
         // Detect when user double-clicks to select a word
