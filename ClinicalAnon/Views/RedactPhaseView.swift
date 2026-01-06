@@ -636,7 +636,7 @@ private struct EntityTypeSection: View {
                 isFromAIReview: isAISection,
                 isChild: indented,
                 onToggle: { viewModel.toggleEntity(entity) },
-                mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
+                mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id && $0.isAnchor }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
                 onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) },
                 onEditNameStructure: { viewModel.redactState.startEditingNameStructure(entity) },
                 onChangeType: { newType in viewModel.reclassifyEntity(entity.id, to: newType) }
