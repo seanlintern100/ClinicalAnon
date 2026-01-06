@@ -314,26 +314,6 @@ struct RedactPhaseView: View {
                             .help("Scan for missed PII using local AI")
                         }
 
-                        // XLM-R NER Scan button (multilingual)
-                        if XLMRobertaNERService.shared.isAvailable {
-                            Button(action: { Task { await viewModel.runXLMRNERScan() } }) {
-                                HStack(spacing: DesignSystem.Spacing.xs) {
-                                    if viewModel.isRunningXLMRNER {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                            .frame(width: 14, height: 14)
-                                    } else {
-                                        Image(systemName: "globe.americas.fill")
-                                    }
-                                    Text("XLM-R Scan")
-                                }
-                                .font(DesignSystem.Typography.body)
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .disabled(viewModel.isRunningXLMRNER)
-                            .help("Scan using XLM-RoBERTa multilingual NER for foreign names (100+ languages)")
-                        }
-
                         // Deep Scan button (Apple NER at lower confidence)
                         Button(action: { Task { await viewModel.runDeepScan() } }) {
                             HStack(spacing: DesignSystem.Spacing.xs) {
@@ -455,18 +435,6 @@ private struct RedactEntitySidebar: View {
                             )
                         }
 
-                        // Show XLM-R NER section if there are XLM-R findings
-                        if !viewModel.xlmrNERFindings.isEmpty {
-                            EntityTypeSection(
-                                title: "XLM-R NER Findings",
-                                icon: "globe.americas.fill",
-                                color: .teal,
-                                entities: viewModel.xlmrNERFindings,
-                                viewModel: viewModel,
-                                isAISection: true  // Reuse AI section styling
-                            )
-                        }
-
                         // Show Deep Scan section if there are deep scan findings
                         if !viewModel.deepScanFindings.isEmpty {
                             EntityTypeSection(
@@ -530,11 +498,10 @@ private struct RedactEntitySidebar: View {
         [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
     }
 
-    /// Get entities for a specific type (excluding AI and XLM-R findings to avoid duplicates)
+    /// Get entities for a specific type (excluding AI findings shown in separate section)
     private func entitiesForType(_ type: EntityType) -> [Entity] {
         let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
-        let xlmrIds = Set(viewModel.xlmrNERFindings.map { $0.id })
-        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) && !xlmrIds.contains($0.id) }
+        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) }
     }
 }
 

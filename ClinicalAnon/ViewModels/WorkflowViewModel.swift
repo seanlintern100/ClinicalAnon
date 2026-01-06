@@ -165,10 +165,6 @@ class WorkflowViewModel: ObservableObject {
     var isReviewingPII: Bool { redactState.isReviewingPII }
     var piiReviewError: String? { redactState.piiReviewError }
 
-    var xlmrNERFindings: [Entity] { redactState.xlmrNERFindings }
-    var isRunningXLMRNER: Bool { redactState.isRunningXLMRNER }
-    var xlmrNERError: String? { redactState.xlmrNERError }
-
     var deepScanFindings: [Entity] { redactState.deepScanFindings }
     var isRunningDeepScan: Bool { redactState.isRunningDeepScan }
     var deepScanError: String? { redactState.deepScanError }
@@ -558,21 +554,6 @@ class WorkflowViewModel: ObservableObject {
 
     func runLocalPIIReview() async {
         await redactState.runLocalPIIReview()
-        if let result = redactState.result {
-            cacheManager.rebuildAllCaches(
-                originalText: result.originalText,
-                allEntities: redactState.allEntities,
-                activeEntities: redactState.activeEntities,
-                excludedIds: redactState.excludedEntityIds,
-                redactedText: redactState.displayedRedactedText,
-                replacementPositions: redactState.replacementPositions,
-                restoredText: nil
-            )
-        }
-    }
-
-    func runXLMRNERScan() async {
-        await redactState.runXLMRNERScan()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
