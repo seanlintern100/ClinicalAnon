@@ -437,6 +437,12 @@ class WorkflowViewModel: ObservableObject {
     /// Complete merge after variant is determined (either auto-detected or user-selected)
     /// Instead of removing the alias, we update its code to the variant code and keep both entities
     func completeMerge(alias: Entity, into primary: Entity) {
+        #if DEBUG
+        print("🔀 completeMerge START: '\(alias.originalText)' into '\(primary.originalText)'")
+        print("   Alias in deepScan: \(redactState.deepScanFindings.contains { $0.id == alias.id })")
+        print("   Alias in result: \(redactState.result?.entities.contains { $0.id == alias.id } ?? false)")
+        #endif
+
         // Get the alias's updated code from the mapping (this is the variant code)
         if let newAliasCode = engine.entityMapping.existingMapping(for: alias.originalText) {
             // Update the alias entity's code to the variant code (e.g., [PERSON_A_FIRST])
@@ -444,11 +450,11 @@ class WorkflowViewModel: ObservableObject {
             redactState.updateEntityReplacementCode(entityId: alias.id, newCode: newAliasCode)
 
             #if DEBUG
-            print("WorkflowViewModel.completeMerge: Updated '\(alias.originalText)' code: \(alias.replacementCode) → \(newAliasCode)")
+            print("   Updated code: \(alias.replacementCode) → \(newAliasCode)")
             #endif
         } else {
             #if DEBUG
-            print("WorkflowViewModel.completeMerge: No mapping found for '\(alias.originalText)' - keeping existing code \(alias.replacementCode)")
+            print("   No mapping found - keeping code \(alias.replacementCode)")
             #endif
         }
 
@@ -456,13 +462,28 @@ class WorkflowViewModel: ObservableObject {
         // so it appears in the main section (not the deep scan section)
         if redactState.deepScanFindings.contains(where: { $0.id == alias.id }) {
             redactState.moveDeepScanFindingToResult(alias.id)
+            #if DEBUG
+            print("   Moved from deepScan to result")
+            #endif
         }
 
         // Also update primary's code if it changed
         if let newPrimaryCode = engine.entityMapping.existingMapping(for: primary.originalText),
            newPrimaryCode != primary.replacementCode {
             redactState.updateEntityReplacementCode(entityId: primary.id, newCode: newPrimaryCode)
+            #if DEBUG
+            print("   Updated primary code: \(primary.replacementCode) → \(newPrimaryCode)")
+            #endif
         }
+
+        #if DEBUG
+        // Check final state
+        if let updatedAlias = redactState.allEntities.first(where: { $0.id == alias.id }) {
+            print("   FINAL: '\(updatedAlias.originalText)' code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")
+        } else {
+            print("   ⚠️ FINAL: Alias NOT found in allEntities!")
+        }
+        #endif
 
         // Close variant selection modal if open
         redactState.cancelVariantSelection()
