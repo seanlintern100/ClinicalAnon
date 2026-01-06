@@ -160,6 +160,25 @@ struct RedactPhaseView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } else if viewModel.isProcessing {
+                // Processing state - show loading indicator
+                VStack(spacing: DesignSystem.Spacing.medium) {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Analyzing text...")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text("This may take a few minutes for large documents.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.white)
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+                .padding(24)
             } else {
                 // Initial input state - card fills pane
                 ZStack(alignment: .topLeading) {
