@@ -712,11 +712,26 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Entity Management
 
+    /// Toggle an entity's exclusion state
+    /// If this is an anchor, also toggle its children (entities with same baseId)
     func toggleEntity(_ entity: Entity) {
-        if _excludedIds.contains(entity.id) {
-            _excludedIds.remove(entity.id)
-        } else {
-            _excludedIds.insert(entity.id)
+        var entitiesToToggle: [Entity] = [entity]
+
+        // If this is an anchor, also toggle children with same baseId
+        if entity.isAnchor, let baseId = entity.baseId {
+            let children = allEntities.filter {
+                $0.id != entity.id && $0.baseId == baseId && !$0.isAnchor
+            }
+            entitiesToToggle.append(contentsOf: children)
+        }
+
+        let shouldExclude = !_excludedIds.contains(entity.id)
+        for e in entitiesToToggle {
+            if shouldExclude {
+                _excludedIds.insert(e.id)
+            } else {
+                _excludedIds.remove(e.id)
+            }
         }
         hasPendingChanges = true
     }
@@ -928,25 +943,28 @@ class RedactPhaseState: ObservableObject {
     }
 
     /// Remove all entities matching the given text (case-insensitive)
+    /// Also removes children of anchor entities (entities sharing the same baseId)
     func removeEntitiesByText(_ text: String) {
         let normalizedText = text.lowercased()
-
-        // Find all matching entity IDs across all lists
         var idsToRemove: Set<UUID> = []
+        var baseIdsToRemove: Set<String> = []
 
-        if let entities = result?.entities {
-            for entity in entities where entity.originalText.lowercased() == normalizedText {
-                idsToRemove.insert(entity.id)
+        // First pass: find matching entities and collect baseIds from anchors
+        for entity in allEntities where entity.originalText.lowercased() == normalizedText {
+            idsToRemove.insert(entity.id)
+            // If this is an anchor, collect its baseId to remove children too
+            if entity.isAnchor, let baseId = entity.baseId {
+                baseIdsToRemove.insert(baseId)
             }
         }
-        for entity in customEntities where entity.originalText.lowercased() == normalizedText {
-            idsToRemove.insert(entity.id)
-        }
-        for entity in piiReviewFindings where entity.originalText.lowercased() == normalizedText {
-            idsToRemove.insert(entity.id)
-        }
-        for entity in deepScanFindings where entity.originalText.lowercased() == normalizedText {
-            idsToRemove.insert(entity.id)
+
+        // Second pass: find all entities (including children) with matching baseIds
+        if !baseIdsToRemove.isEmpty {
+            for entity in allEntities {
+                if let baseId = entity.baseId, baseIdsToRemove.contains(baseId) {
+                    idsToRemove.insert(entity.id)
+                }
+            }
         }
 
         // Remove all matching entities
