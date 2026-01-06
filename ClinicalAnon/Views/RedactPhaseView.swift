@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 // MARK: - Redact Phase View
 
@@ -136,11 +137,8 @@ struct RedactPhaseView: View {
             // Text content
             if let result = viewModel.result {
                 if let cachedOriginal = viewModel.cachedOriginalAttributed {
-                    ScrollView {
-                        TextContentCard(isSourcePanel: true, isProcessed: true) {
-                            Text(cachedOriginal)
-                                .textSelection(.enabled)
-                        }
+                    TextContentCard(isSourcePanel: true, isProcessed: true) {
+                        FastTextView(attributedText: cachedOriginal)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
@@ -255,11 +253,8 @@ struct RedactPhaseView: View {
             // Redacted text content
             if let result = viewModel.result {
                 if let cachedRedacted = viewModel.cachedRedactedAttributed {
-                    ScrollView {
-                        TextContentCard(isSourcePanel: false, isProcessed: false) {
-                            Text(cachedRedacted)
-                                .textSelection(.enabled)
-                        }
+                    TextContentCard(isSourcePanel: false, isProcessed: false) {
+                        FastTextView(attributedText: cachedRedacted)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
@@ -1408,6 +1403,67 @@ private struct DuplicateGroupRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(group.isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.3) : DesignSystem.Colors.border.opacity(0.3), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Fast Text View (NSTextView wrapper for performance)
+
+/// NSTextView wrapper for fast rendering of large AttributedStrings
+/// SwiftUI's Text is extremely slow for large documents (20-30s for 152K chars)
+/// NSTextView renders the same content in <1s
+struct FastTextView: NSViewRepresentable {
+    let attributedText: AttributedString
+
+    func makeNSView(context: Context) -> NSScrollView {
+        // Create text storage, layout manager, and text container manually for proper setup
+        let textStorage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+
+        let textContainer = NSTextContainer()
+        textContainer.widthTracksTextView = true
+        textContainer.heightTracksTextView = false
+        layoutManager.addTextContainer(textContainer)
+
+        let textView = NSTextView(frame: .zero, textContainer: textContainer)
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.allowsUndo = false
+        textView.backgroundColor = .textBackgroundColor  // System color for dark mode support
+        textView.drawsBackground = true
+        textView.textContainerInset = NSSize(width: 16, height: 16)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+
+        // Set initial text
+        textStorage.setAttributedString(NSAttributedString(attributedText))
+
+        let scrollView = NSScrollView()
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.backgroundColor = .textBackgroundColor
+        scrollView.drawsBackground = true
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+
+        // Update the attributed text
+        textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
+
+        // Ensure text container tracks width properly
+        let contentWidth = max(scrollView.contentSize.width - 32, 100)  // Account for insets
+        textView.textContainer?.containerSize = NSSize(width: contentWidth, height: .greatestFiniteMagnitude)
+
+        // Update frame to match scroll view
+        textView.minSize = NSSize(width: contentWidth, height: 0)
+        textView.maxSize = NSSize(width: contentWidth, height: .greatestFiniteMagnitude)
     }
 }
 
