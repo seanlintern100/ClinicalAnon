@@ -463,6 +463,9 @@ class WorkflowViewModel: ObservableObject {
         print("   Alias in result: \(redactState.result?.entities.contains { $0.id == alias.id } ?? false)")
         #endif
 
+        // IMPORTANT: Capture alias's old baseId BEFORE it gets a new code
+        let oldAliasBaseId = alias.baseId
+
         // Get the alias's updated code from the mapping (this is the variant code)
         if let newAliasCode = engine.entityMapping.existingMapping(for: alias.originalText) {
             // Update the alias entity's code to the variant code (e.g., [PERSON_A_FIRST])
@@ -480,6 +483,35 @@ class WorkflowViewModel: ObservableObject {
 
         // Mark the alias as a merged child so it displays as a sub-entity
         redactState.markEntityAsMergedChild(entityId: alias.id)
+
+        // Transfer any orphaned sub-entities that belonged to the alias
+        if let oldBaseId = oldAliasBaseId, let newBaseId = primary.baseId, oldBaseId != newBaseId {
+            // Find all entities that still have the old baseId (they're now orphans)
+            let orphanedEntities = redactState.allEntities.filter {
+                $0.id != alias.id && $0.baseId == oldBaseId
+            }
+
+            for orphan in orphanedEntities {
+                // Extract variant suffix from old code
+                let oldCode = orphan.replacementCode
+                var variantSuffix = ""
+                for variant in NameVariant.allCases {
+                    if oldCode.uppercased().hasSuffix(variant.codeSuffix + "]") {
+                        variantSuffix = variant.codeSuffix
+                        break
+                    }
+                }
+
+                // Build new code with primary's baseId
+                let newCode = "[\(newBaseId)\(variantSuffix)]"
+                redactState.updateEntityReplacementCode(entityId: orphan.id, newCode: newCode)
+                redactState.markEntityAsMergedChild(entityId: orphan.id)
+
+                #if DEBUG
+                print("   Transferred orphan: '\(orphan.originalText)' \(oldCode) → \(newCode)")
+                #endif
+            }
+        }
 
         // If alias is a deep scan finding, move it to result.entities
         // so it appears in the main section (not the deep scan section)
