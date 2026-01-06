@@ -165,10 +165,6 @@ class WorkflowViewModel: ObservableObject {
     var isReviewingPII: Bool { redactState.isReviewingPII }
     var piiReviewError: String? { redactState.piiReviewError }
 
-    var bertNERFindings: [Entity] { redactState.bertNERFindings }
-    var isRunningBertNER: Bool { redactState.isRunningBertNER }
-    var bertNERError: String? { redactState.bertNERError }
-
     var xlmrNERFindings: [Entity] { redactState.xlmrNERFindings }
     var isRunningXLMRNER: Bool { redactState.isRunningXLMRNER }
     var xlmrNERError: String? { redactState.xlmrNERError }
@@ -562,21 +558,6 @@ class WorkflowViewModel: ObservableObject {
 
     func runLocalPIIReview() async {
         await redactState.runLocalPIIReview()
-        if let result = redactState.result {
-            cacheManager.rebuildAllCaches(
-                originalText: result.originalText,
-                allEntities: redactState.allEntities,
-                activeEntities: redactState.activeEntities,
-                excludedIds: redactState.excludedEntityIds,
-                redactedText: redactState.displayedRedactedText,
-                replacementPositions: redactState.replacementPositions,
-                restoredText: nil
-            )
-        }
-    }
-
-    func runBertNERScan() async {
-        await redactState.runBertNERScan()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,

@@ -314,26 +314,6 @@ struct RedactPhaseView: View {
                             .help("Scan for missed PII using local AI")
                         }
 
-                        // BERT NER Scan button
-                        if BertNERService.shared.isAvailable {
-                            Button(action: { Task { await viewModel.runBertNERScan() } }) {
-                                HStack(spacing: DesignSystem.Spacing.xs) {
-                                    if viewModel.isRunningBertNER {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                            .frame(width: 14, height: 14)
-                                    } else {
-                                        Image(systemName: "text.viewfinder")
-                                    }
-                                    Text("BERT Scan")
-                                }
-                                .font(DesignSystem.Typography.body)
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .disabled(viewModel.isRunningBertNER)
-                            .help("Scan using BERT NER model for names, organizations, and locations")
-                        }
-
                         // XLM-R NER Scan button (multilingual)
                         if XLMRobertaNERService.shared.isAvailable {
                             Button(action: { Task { await viewModel.runXLMRNERScan() } }) {
@@ -475,18 +455,6 @@ private struct RedactEntitySidebar: View {
                             )
                         }
 
-                        // Show BERT NER section if there are BERT findings
-                        if !viewModel.bertNERFindings.isEmpty {
-                            EntityTypeSection(
-                                title: "BERT NER Findings",
-                                icon: "text.viewfinder",
-                                color: .cyan,
-                                entities: viewModel.bertNERFindings,
-                                viewModel: viewModel,
-                                isAISection: true  // Reuse AI section styling
-                            )
-                        }
-
                         // Show XLM-R NER section if there are XLM-R findings
                         if !viewModel.xlmrNERFindings.isEmpty {
                             EntityTypeSection(
@@ -562,12 +530,11 @@ private struct RedactEntitySidebar: View {
         [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
     }
 
-    /// Get entities for a specific type (excluding AI, BERT, and XLM-R findings to avoid duplicates)
+    /// Get entities for a specific type (excluding AI and XLM-R findings to avoid duplicates)
     private func entitiesForType(_ type: EntityType) -> [Entity] {
         let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
-        let bertIds = Set(viewModel.bertNERFindings.map { $0.id })
         let xlmrIds = Set(viewModel.xlmrNERFindings.map { $0.id })
-        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) && !bertIds.contains($0.id) && !xlmrIds.contains($0.id) }
+        return viewModel.allEntities.filter { $0.type == type && !aiIds.contains($0.id) && !xlmrIds.contains($0.id) }
     }
 }
 

@@ -104,11 +104,6 @@ class RedactPhaseState: ObservableObject {
     @Published var piiReviewError: String?
     private var entitiesToRemove: Set<UUID> = []
 
-    // BERT NER scan
-    @Published var bertNERFindings: [Entity] = []
-    @Published var isRunningBertNER: Bool = false
-    @Published var bertNERError: String?
-
     // XLM-R NER scan (multilingual)
     @Published var xlmrNERFindings: [Entity] = []
     @Published var isRunningXLMRNER: Bool = false
@@ -432,11 +427,11 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review + BERT NER + XLM-R NER + Deep Scan findings)
+    /// All entities (detected + custom + PII review + XLM-R NER + Deep Scan findings)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings + bertNERFindings + xlmrNERFindings + deepScanFindings }
+        guard let result = result else { return customEntities + piiReviewFindings + xlmrNERFindings + deepScanFindings }
         let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings + bertNERFindings + xlmrNERFindings + deepScanFindings
+        return baseEntities + customEntities + piiReviewFindings + xlmrNERFindings + deepScanFindings
     }
 
     /// Only active entities (not excluded)
@@ -474,12 +469,6 @@ class RedactPhaseState: ObservableObject {
         // Check piiReviewFindings
         if let idx = piiReviewFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
             piiReviewFindings[idx].nameVariant = variant
-            return true
-        }
-
-        // Check bertNERFindings
-        if let idx = bertNERFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
-            bertNERFindings[idx].nameVariant = variant
             return true
         }
 
@@ -579,14 +568,11 @@ class RedactPhaseState: ObservableObject {
         _excludedIds.removeAll()
         customEntities.removeAll()
         piiReviewFindings.removeAll()
-        bertNERFindings.removeAll()
         xlmrNERFindings.removeAll()
         deepScanFindings.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
-        isRunningBertNER = false
-        bertNERError = nil
         isRunningXLMRNER = false
         xlmrNERError = nil
         isRunningDeepScan = false
@@ -650,7 +636,6 @@ class RedactPhaseState: ObservableObject {
         _excludedIds.removeAll()
         customEntities.removeAll()
         piiReviewFindings.removeAll()
-        bertNERFindings.removeAll()
         xlmrNERFindings.removeAll()
         deepScanFindings.removeAll()
         entitiesToRemove.removeAll()
@@ -823,9 +808,6 @@ class RedactPhaseState: ObservableObject {
         if let idx = piiReviewFindings.firstIndex(where: { $0.id == primaryId }) {
             piiReviewFindings[idx].positions.append(contentsOf: newPositions)
         }
-        if let idx = bertNERFindings.firstIndex(where: { $0.id == primaryId }) {
-            bertNERFindings[idx].positions.append(contentsOf: newPositions)
-        }
         if let idx = xlmrNERFindings.firstIndex(where: { $0.id == primaryId }) {
             xlmrNERFindings[idx].positions.append(contentsOf: newPositions)
         }
@@ -859,9 +841,6 @@ class RedactPhaseState: ObservableObject {
         if let idx = piiReviewFindings.firstIndex(where: { $0.id == entityId }) {
             updateEntity(&piiReviewFindings[idx])
         }
-        if let idx = bertNERFindings.firstIndex(where: { $0.id == entityId }) {
-            updateEntity(&bertNERFindings[idx])
-        }
         if let idx = xlmrNERFindings.firstIndex(where: { $0.id == entityId }) {
             updateEntity(&xlmrNERFindings[idx])
         }
@@ -877,7 +856,6 @@ class RedactPhaseState: ObservableObject {
         }
         customEntities.removeAll { $0.id == entityId }
         piiReviewFindings.removeAll { $0.id == entityId }
-        bertNERFindings.removeAll { $0.id == entityId }
         xlmrNERFindings.removeAll { $0.id == entityId }
         deepScanFindings.removeAll { $0.id == entityId }
     }
@@ -1064,118 +1042,6 @@ class RedactPhaseState: ObservableObject {
             }
         }
         return nil
-    }
-
-    // MARK: - BERT NER Scan
-
-    /// Run BERT-based NER scan using CoreML model
-    func runBertNERScan() async {
-        guard let result = result else {
-            bertNERError = "Please analyze text first"
-            return
-        }
-
-        guard BertNERService.shared.isAvailable else {
-            errorMessage = "BERT NER not available on this device."
-            return
-        }
-
-        isRunningBertNER = true
-        bertNERError = nil
-
-        // Show appropriate status message
-        if !BertNERService.shared.isModelLoaded {
-            successMessage = "Loading BERT model..."
-        } else {
-            successMessage = "Running BERT NER scan..."
-        }
-
-        do {
-            let findings = try await BertNERService.shared.runNERScan(
-                text: result.originalText,
-                existingEntities: allEntities
-            )
-
-            await MainActor.run {
-                processBertNERFindings(findings, originalText: result.originalText)
-                isRunningBertNER = false
-
-                if bertNERFindings.isEmpty {
-                    successMessage = "BERT scan complete - no additional entities found"
-                } else {
-                    successMessage = "BERT scan found \(bertNERFindings.count) additional entity/entities"
-                }
-                autoHideSuccess()
-                redactedTextNeedsUpdate = true
-            }
-        } catch {
-            await MainActor.run {
-                isRunningBertNER = false
-                bertNERError = error.localizedDescription
-                errorMessage = "BERT NER scan failed: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    private func processBertNERFindings(_ findings: [PIIFinding], originalText: String) {
-        var newEntities: [Entity] = []
-
-        for finding in findings {
-            // Skip if text already exists in current entities
-            let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
-            if alreadyExists { continue }
-
-            // Skip if already added in this batch
-            if newEntities.contains(where: { $0.originalText.lowercased() == finding.text.lowercased() }) {
-                continue
-            }
-
-            // Find all occurrences AND extract name components (first/last names)
-            let (positions, componentEntities) = findAllNameOccurrences(of: finding.text, type: finding.suggestedType, in: originalText)
-            guard !positions.isEmpty else { continue }
-
-            // Get replacement code from engine (this also registers it for restore)
-            let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
-
-            let entity = Entity(
-                originalText: finding.text,
-                replacementCode: code,
-                type: finding.suggestedType,
-                positions: positions,
-                confidence: finding.confidence
-            )
-
-            newEntities.append(entity)
-
-            // Add component entities (first name, last name) with variant labels
-            for componentEntity in componentEntities {
-                let componentTextLower = componentEntity.originalText.lowercased()
-
-                // Try to update existing entity's variant first
-                if let variant = componentEntity.nameVariant {
-                    if updateEntityVariant(matchingText: componentEntity.originalText, variant: variant) {
-                        continue  // Updated existing entity
-                    }
-                }
-
-                // Check if component exists in newEntities
-                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
-                    // Update variant if existing has none
-                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
-                        newEntities[idx].nameVariant = variant
-                    }
-                    continue
-                }
-
-                // Component doesn't exist, add it
-                newEntities.append(componentEntity)
-            }
-        }
-
-        // Merge with existing BERT findings, avoiding duplicates
-        let existingBertTexts = Set(bertNERFindings.map { $0.originalText.lowercased() })
-        let uniqueNewEntities = newEntities.filter { !existingBertTexts.contains($0.originalText.lowercased()) }
-        bertNERFindings.append(contentsOf: uniqueNewEntities)
     }
 
     // MARK: - XLM-R NER Scan (Multilingual)
