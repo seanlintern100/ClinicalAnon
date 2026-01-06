@@ -66,10 +66,6 @@ struct Entity: Identifiable, Codable, Hashable {
     /// Optional because not all detection methods provide confidence
     let confidence: Double?
 
-    /// For person entities: which variant of the name this represents
-    /// nil for non-person entities or when variant hasn't been determined
-    var nameVariant: NameVariant?
-
     /// Whether this entity was merged into another entity (making it a child)
     /// When true, this entity displays as a sub-entity regardless of nameVariant
     var isMergedChild: Bool
@@ -83,7 +79,6 @@ struct Entity: Identifiable, Codable, Hashable {
         type: EntityType,
         positions: [[Int]],
         confidence: Double? = nil,
-        nameVariant: NameVariant? = nil,
         isMergedChild: Bool = false
     ) {
         self.id = id
@@ -92,11 +87,31 @@ struct Entity: Identifiable, Codable, Hashable {
         self.type = type
         self.positions = positions
         self.confidence = confidence
-        self.nameVariant = nameVariant
         self.isMergedChild = isMergedChild
     }
 
     // MARK: - Computed Properties
+
+    /// For person entities: which variant of the name this represents
+    /// Computed from replacementCode to ensure single source of truth
+    var nameVariant: NameVariant? {
+        guard type.isPerson else { return nil }
+        return Self.extractVariantFromCode(replacementCode)
+    }
+
+    /// Extract variant from a replacement code string
+    private static func extractVariantFromCode(_ code: String) -> NameVariant? {
+        let uppercased = code.uppercased()
+        // Check longer suffixes first to avoid false matches
+        if uppercased.hasSuffix("_FIRST_LAST]") { return .firstLast }
+        if uppercased.hasSuffix("_FIRST_MID]") { return .firstMiddle }
+        if uppercased.hasSuffix("_FIRST]") { return .first }
+        if uppercased.hasSuffix("_LAST]") { return .last }
+        if uppercased.hasSuffix("_MIDDLE]") { return .middle }
+        if uppercased.hasSuffix("_FORMAL]") { return .formal }
+        if uppercased.hasSuffix("_FULL]") { return .full }
+        return nil
+    }
 
     /// Total number of occurrences in the text
     var occurrenceCount: Int {

@@ -1198,7 +1198,8 @@ struct DuplicateFinderModal: View {
                                 subtitle: "Full name matches with overlapping components",
                                 color: DesignSystem.Colors.success,
                                 groups: highConfidenceGroups,
-                                onToggle: toggleGroup
+                                onToggle: toggleGroup,
+                                onSetAnchor: setAnchor
                             )
                         }
 
@@ -1209,7 +1210,8 @@ struct DuplicateFinderModal: View {
                                 subtitle: "Partial matches without full name anchor",
                                 color: .orange,
                                 groups: lowConfidenceGroups,
-                                onToggle: toggleGroup
+                                onToggle: toggleGroup,
+                                onSetAnchor: setAnchor
                             )
                         }
                     }
@@ -1235,6 +1237,19 @@ struct DuplicateFinderModal: View {
                 }
 
                 Button("Merge Selected") {
+                    #if DEBUG
+                    print("📋 Merge Selected clicked")
+                    print("   ALL groups in modal: \(groups.count)")
+                    for (i, group) in groups.enumerated() {
+                        print("   Group \(i) [selected=\(group.isSelected)]: primary='\(group.primary.originalText)' matches=\(group.matches.map { $0.originalText })")
+                    }
+                    print("   SELECTED groups to merge: \(selectedGroups.count)")
+                    let unselectedGroups = groups.filter { !$0.isSelected }
+                    print("   UNSELECTED groups (should remain untouched): \(unselectedGroups.count)")
+                    for group in unselectedGroups {
+                        print("      - primary='\(group.primary.originalText)' matches=\(group.matches.map { $0.originalText })")
+                    }
+                    #endif
                     viewModel.mergeDuplicateGroups(selectedGroups)
                     dismiss()
                 }
@@ -1254,6 +1269,12 @@ struct DuplicateFinderModal: View {
             groups[idx].isSelected.toggle()
         }
     }
+
+    private func setAnchor(_ group: DuplicateGroup, _ newAnchor: Entity) {
+        if let idx = groups.firstIndex(where: { $0.id == group.id }) {
+            groups[idx] = group.withNewAnchor(newAnchor)
+        }
+    }
 }
 
 // MARK: - Duplicate Section
@@ -1265,6 +1286,7 @@ private struct DuplicateSection: View {
     let color: Color
     let groups: [DuplicateGroup]
     let onToggle: (DuplicateGroup) -> Void
+    let onSetAnchor: (DuplicateGroup, Entity) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
@@ -1287,7 +1309,11 @@ private struct DuplicateSection: View {
 
             // Groups
             ForEach(groups) { group in
-                DuplicateGroupRow(group: group, onToggle: { onToggle(group) })
+                DuplicateGroupRow(
+                    group: group,
+                    onToggle: { onToggle(group) },
+                    onSetAnchor: { newAnchor in onSetAnchor(group, newAnchor) }
+                )
             }
         }
     }
@@ -1299,6 +1325,7 @@ private struct DuplicateGroupRow: View {
 
     let group: DuplicateGroup
     let onToggle: () -> Void
+    let onSetAnchor: (Entity) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
@@ -1314,8 +1341,12 @@ private struct DuplicateGroupRow: View {
 
             // Group content
             VStack(alignment: .leading, spacing: 4) {
-                // Primary entity
+                // Primary entity (anchor) with star indicator
                 HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.yellow)
+
                     Text(group.primary.replacementCode)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(group.primary.type.highlightColor)
@@ -1327,9 +1358,17 @@ private struct DuplicateGroupRow: View {
                     Text(group.primary.originalText)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                    Text("Primary")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.yellow)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.yellow.opacity(0.2))
+                        .cornerRadius(3)
                 }
 
-                // Matches
+                // Matches with "Make Primary" buttons
                 ForEach(group.matches, id: \.id) { match in
                     HStack(spacing: 6) {
                         Text("├─")
@@ -1343,6 +1382,16 @@ private struct DuplicateGroupRow: View {
                         Text(match.replacementCode)
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+
+                        Spacer()
+
+                        Button(action: { onSetAnchor(match) }) {
+                            Text("Make Primary")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.primaryTeal)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Make \(match.originalText) the primary entity")
                     }
                     .padding(.leading, 8)
                 }

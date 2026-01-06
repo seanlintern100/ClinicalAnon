@@ -352,6 +352,12 @@ class WorkflowViewModel: ObservableObject {
             print("⏱️ WorkflowVM cacheManager.rebuildAllCaches: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - cacheStart))s")
         }
         print("⏱️ WorkflowVM.analyze() TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - totalStart))s")
+
+        // Auto-show duplicate finder if groups found
+        let duplicateGroups = redactState.findPotentialDuplicates()
+        if !duplicateGroups.isEmpty {
+            redactState.showDuplicateFinderModal = true
+        }
     }
 
     func clearAll() {
@@ -447,7 +453,7 @@ class WorkflowViewModel: ObservableObject {
     /// Complete merge after variant is determined (either auto-detected or user-selected)
     /// Instead of removing the alias, we update its code to the variant code and keep both entities
     func completeMerge(alias: Entity, into primary: Entity) {
-        #if false  // DEBUG disabled for perf testing
+        #if DEBUG
         print("🔀 completeMerge START: '\(alias.originalText)' into '\(primary.originalText)'")
         print("   Alias in deepScan: \(redactState.deepScanFindings.contains { $0.id == alias.id })")
         print("   Alias in result: \(redactState.result?.entities.contains { $0.id == alias.id } ?? false)")
@@ -498,7 +504,7 @@ class WorkflowViewModel: ObservableObject {
             #endif
         }
 
-        #if false  // DEBUG disabled for perf testing
+        #if DEBUG
         // Check final state
         if let updatedAlias = redactState.allEntities.first(where: { $0.id == alias.id }) {
             print("   FINAL: '\(updatedAlias.originalText)' code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isMergedChild=\(updatedAlias.isMergedChild) isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")
@@ -507,7 +513,7 @@ class WorkflowViewModel: ObservableObject {
         }
         // Check primary state
         if let updatedPrimary = redactState.allEntities.first(where: { $0.id == primary.id }) {
-            print("   PRIMARY: '\(updatedPrimary.originalText)' code=\(updatedPrimary.replacementCode) isAnchor=\(updatedPrimary.isAnchor) isMergedChild=\(updatedPrimary.isMergedChild)")
+            print("   PRIMARY: '\(updatedPrimary.originalText)' code=\(updatedPrimary.replacementCode) nameVariant=\(updatedPrimary.nameVariant?.rawValue ?? "nil") isAnchor=\(updatedPrimary.isAnchor) isMergedChild=\(updatedPrimary.isMergedChild)")
         } else {
             print("   ⚠️ PRIMARY NOT FOUND: '\(primary.originalText)'")
         }
@@ -559,12 +565,25 @@ class WorkflowViewModel: ObservableObject {
 
     /// Merge multiple duplicate groups at once
     func mergeDuplicateGroups(_ groups: [DuplicateGroup]) {
+        #if DEBUG
+        print("🔀 mergeDuplicateGroups called with \(groups.count) groups")
+        print("   Entity count BEFORE merge: \(redactState.allEntities.count)")
+        for (i, group) in groups.enumerated() {
+            print("   Group \(i): primary='\(group.primary.originalText)' matches=\(group.matches.map { $0.originalText })")
+        }
+        #endif
+
         for group in groups {
             // Merge each match into the primary entity
             for match in group.matches {
                 mergeEntities(alias: match, into: group.primary)
             }
         }
+
+        #if DEBUG
+        print("   Entity count AFTER merge: \(redactState.allEntities.count)")
+        print("   Remaining entities: \(redactState.allEntities.map { $0.originalText })")
+        #endif
 
         // Show success message
         let totalMerged = groups.reduce(0) { $0 + $1.matches.count }

@@ -358,23 +358,14 @@ class AnonymizationEngine: ObservableObject {
                 type: entity.type
             )
 
-            // For person entities, try to find and assign variant label
-            var nameVariant: NameVariant? = nil
-            if entity.type.isPerson {
-                if let (_, variant) = entityMapping.findVariant(for: entity.originalText) {
-                    nameVariant = variant
-                }
-            }
-
-            // Create new entity with consistent code and variant
+            // Create new entity with consistent code (nameVariant is computed from code)
             let mappedEntity = Entity(
                 id: entity.id,
                 originalText: entity.originalText,
                 replacementCode: consistentCode,
                 type: entity.type,
                 positions: entity.positions,
-                confidence: entity.confidence,
-                nameVariant: nameVariant
+                confidence: entity.confidence
             )
 
             mappedEntities.append(mappedEntity)

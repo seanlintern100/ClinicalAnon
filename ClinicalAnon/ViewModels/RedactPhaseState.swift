@@ -17,11 +17,34 @@ enum DuplicateConfidence: String {
 }
 
 struct DuplicateGroup: Identifiable {
-    let id = UUID()
-    let primary: Entity  // The most complete name (anchor)
-    let matches: [Entity]  // Entities to merge into primary
+    let id: UUID
+    var primary: Entity  // The most complete name (anchor)
+    var matches: [Entity]  // Entities to merge into primary
     let confidence: DuplicateConfidence
-    var isSelected: Bool = true  // Default to selected for convenience
+    var isSelected: Bool
+
+    init(primary: Entity, matches: [Entity], confidence: DuplicateConfidence, isSelected: Bool = true) {
+        self.id = UUID()
+        self.primary = primary
+        self.matches = matches
+        self.confidence = confidence
+        self.isSelected = isSelected
+    }
+
+    /// Create a copy with swapped anchor (preserves ID for UI state)
+    func withNewAnchor(_ newAnchor: Entity) -> DuplicateGroup {
+        var newMatches = matches.filter { $0.id != newAnchor.id }
+        newMatches.append(primary)
+        return DuplicateGroup(id: self.id, primary: newAnchor, matches: newMatches, confidence: confidence, isSelected: isSelected)
+    }
+
+    private init(id: UUID, primary: Entity, matches: [Entity], confidence: DuplicateConfidence, isSelected: Bool) {
+        self.id = id
+        self.primary = primary
+        self.matches = matches
+        self.confidence = confidence
+        self.isSelected = isSelected
+    }
 }
 
 struct NameComponents {
@@ -434,43 +457,6 @@ class RedactPhaseState: ObservableObject {
         _excludedIds.contains(entity.id)
     }
 
-    /// Update nameVariant for an entity matching the given text
-    /// Searches all entity sources and updates the first match found
-    /// Returns true if an entity was updated
-    @discardableResult
-    private func updateEntityVariant(matchingText text: String, variant: NameVariant) -> Bool {
-        let textLower = text.lowercased()
-
-        // Check result.entities
-        if var r = result {
-            if let idx = r.entities.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
-                r.entities[idx].nameVariant = variant
-                result = r
-                return true
-            }
-        }
-
-        // Check customEntities
-        if let idx = customEntities.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
-            customEntities[idx].nameVariant = variant
-            return true
-        }
-
-        // Check piiReviewFindings
-        if let idx = piiReviewFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
-            piiReviewFindings[idx].nameVariant = variant
-            return true
-        }
-
-        // Check deepScanFindings
-        if let idx = deepScanFindings.firstIndex(where: { $0.originalText.lowercased() == textLower && $0.nameVariant == nil }) {
-            deepScanFindings[idx].nameVariant = variant
-            return true
-        }
-
-        return false
-    }
-
     /// Dynamically generated redacted text based on active entities
     var displayedRedactedText: String {
         // Auto-refresh cache if needed
@@ -615,12 +601,9 @@ class RedactPhaseState: ObservableObject {
                     continue
                 }
 
-                // Check if component exists in newEntities
-                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
-                    // Update variant if existing has none
-                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
-                        newEntities[idx].nameVariant = variant
-                    }
+                // Check if component exists in newEntities - skip if already exists
+                // NOTE: Do NOT auto-assign variants here - leave for manual review in duplicate finder
+                if newEntities.contains(where: { $0.originalText.lowercased() == componentTextLower }) {
                     continue
                 }
 
@@ -897,13 +880,9 @@ class RedactPhaseState: ObservableObject {
 
     /// Update an entity's replacement code and recalculate variant across all entity lists
     func updateEntityReplacementCode(entityId: UUID, newCode: String) {
-        // Helper to update code and extract variant from code suffix
+        // Helper to update replacement code (nameVariant is computed from code)
         func updateEntity(_ entity: inout Entity) {
             entity.replacementCode = newCode
-            // Extract variant directly from replacement code suffix (more reliable than lookup)
-            if entity.type.isPerson {
-                entity.nameVariant = extractVariantFromCode(newCode)
-            }
         }
 
         if var r = result, let idx = r.entities.firstIndex(where: { $0.id == entityId }) {
@@ -1011,11 +990,10 @@ class RedactPhaseState: ObservableObject {
             // Use reclassifyMapping to force new code generation (not getReplacementCode which returns existing)
             let newCode = engine.entityMapping.reclassifyMapping(originalText: e.originalText, to: newType)
 
-            // Create updated entity
+            // Create updated entity (nameVariant is computed from replacementCode)
             var updated = e
             updated.type = newType
             updated.replacementCode = newCode
-            updated.nameVariant = nil  // Clear variant for all reclassifications
 
             // Update in appropriate list
             updateEntityInLists(updated)
@@ -1286,23 +1264,12 @@ class RedactPhaseState: ObservableObject {
 
             newEntities.append(entity)
 
-            // Add component entities (first name, last name) with variant labels
+            // Add component entities (first name, last name) - variant is computed from replacementCode
             for componentEntity in componentEntities {
                 let componentTextLower = componentEntity.originalText.lowercased()
 
-                // Try to update existing entity's variant first
-                if let variant = componentEntity.nameVariant {
-                    if updateEntityVariant(matchingText: componentEntity.originalText, variant: variant) {
-                        continue  // Updated existing entity
-                    }
-                }
-
-                // Check if component exists in newEntities
-                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
-                    // Update variant if existing has none
-                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
-                        newEntities[idx].nameVariant = variant
-                    }
+                // Check if component exists in newEntities - skip if already exists
+                if newEntities.contains(where: { $0.originalText.lowercased() == componentTextLower }) {
                     continue
                 }
 
@@ -1540,8 +1507,7 @@ class RedactPhaseState: ObservableObject {
                     replacementCode: person.placeholder(for: .first),
                     type: type,
                     positions: positions,
-                    confidence: 0.9,
-                    nameVariant: .first
+                    confidence: 0.9
                 ))
             }
         }
@@ -1556,8 +1522,7 @@ class RedactPhaseState: ObservableObject {
                     replacementCode: person.placeholder(for: .last),
                     type: type,
                     positions: positions,
-                    confidence: 0.9,
-                    nameVariant: .last
+                    confidence: 0.9
                 ))
             }
         }
@@ -1573,8 +1538,7 @@ class RedactPhaseState: ObservableObject {
                         replacementCode: person.placeholder(for: .middle),
                         type: type,
                         positions: positions,
-                        confidence: 0.9,
-                        nameVariant: .middle
+                        confidence: 0.9
                     ))
                 }
             }
@@ -1590,8 +1554,7 @@ class RedactPhaseState: ObservableObject {
                     replacementCode: person.placeholder(for: .formal),
                     type: type,
                     positions: positions,
-                    confidence: 0.95,
-                    nameVariant: .formal
+                    confidence: 0.95
                 ))
             }
         }
