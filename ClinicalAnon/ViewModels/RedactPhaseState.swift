@@ -123,10 +123,43 @@ class RedactPhaseState: ObservableObject {
     /// Mark that redacted text needs to be regenerated
     func markRedactedTextNeedsUpdate() {
         redactedTextNeedsUpdate = true
+        normalizedDocumentText = nil  // Clear normalized text cache when document changes
     }
 
     /// Positions of replacement codes in redacted text (for efficient highlighting)
     private(set) var replacementPositions: [(range: NSRange, entityType: EntityType)] = []
+
+    // MARK: - Performance Caches
+
+    /// Cache for compiled regexes to avoid recompilation
+    private var regexCache: [String: NSRegularExpression] = [:]
+
+    /// Static regex for year extraction (compiled once)
+    private static let yearRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: "\\b(19|20)\\d{2}\\b")
+    }()
+
+    /// Cached normalized document text (apostrophe normalization)
+    private var normalizedDocumentText: String?
+
+    /// Get or create cached regex for a pattern
+    private func getCachedRegex(pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression? {
+        let key = "\(pattern)_\(options.rawValue)"
+        if let cached = regexCache[key] { return cached }
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return nil }
+        regexCache[key] = regex
+        return regex
+    }
+
+    /// Get normalized document text (cached)
+    private func getNormalizedText(_ text: String) -> String {
+        if let cached = normalizedDocumentText { return cached }
+        let normalized = text
+            .replacingOccurrences(of: "'", with: "'")
+            .replacingOccurrences(of: "'", with: "'")
+        normalizedDocumentText = normalized
+        return normalized
+    }
 
     // MARK: - UI State
 
@@ -571,15 +604,16 @@ class RedactPhaseState: ObservableObject {
         var updatedResult = result
         var newEntities: [Entity] = []
 
-        for finding in findings {
-            // Skip if text already exists in result entities
-            let alreadyExists = updatedResult.entities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
-            if alreadyExists { continue }
+        // Use Set for O(1) deduplication instead of O(N) .contains() calls
+        var existingKeys = Set(updatedResult.entities.map { $0.originalText.lowercased() })
+        var newEntityKeys = Set<String>()
 
-            // Skip if already added in this batch
-            if newEntities.contains(where: { $0.originalText.lowercased() == finding.text.lowercased() }) {
-                continue
-            }
+        for finding in findings {
+            let findingKeyLower = finding.text.lowercased()
+
+            // Skip if text already exists (O(1) Set lookup)
+            if existingKeys.contains(findingKeyLower) { continue }
+            if newEntityKeys.contains(findingKeyLower) { continue }
 
             // Find all occurrences AND extract name components (first/last names)
             let (positions, componentEntities) = findAllNameOccurrences(of: finding.text, type: finding.suggestedType, in: result.originalText)
@@ -597,20 +631,20 @@ class RedactPhaseState: ObservableObject {
             )
 
             newEntities.append(entity)
+            newEntityKeys.insert(findingKeyLower)
 
             // Add component entities (first name, last name) with variant labels
             for componentEntity in componentEntities {
                 let componentTextLower = componentEntity.originalText.lowercased()
 
-                // Check if component exists in result.entities
-                if updatedResult.entities.contains(where: { $0.originalText.lowercased() == componentTextLower }) {
-                    continue
-                }
+                // Check if component exists (O(1) Set lookups)
+                if existingKeys.contains(componentTextLower) { continue }
 
-                // Check if component exists in newEntities
-                if let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }) {
+                if newEntityKeys.contains(componentTextLower) {
                     // Update variant if existing has none
-                    if let variant = componentEntity.nameVariant, newEntities[idx].nameVariant == nil {
+                    if let variant = componentEntity.nameVariant,
+                       let idx = newEntities.firstIndex(where: { $0.originalText.lowercased() == componentTextLower }),
+                       newEntities[idx].nameVariant == nil {
                         newEntities[idx].nameVariant = variant
                     }
                     continue
@@ -618,6 +652,7 @@ class RedactPhaseState: ObservableObject {
 
                 // Component doesn't exist, add it
                 newEntities.append(componentEntity)
+                newEntityKeys.insert(componentTextLower)
             }
         }
 
@@ -645,6 +680,10 @@ class RedactPhaseState: ObservableObject {
 
         cachedRedactedText = ""
         redactedTextNeedsUpdate = true
+
+        // Clear performance caches
+        regexCache.removeAll()
+        normalizedDocumentText = nil
 
         hasCopiedRedacted = false
         hasPendingChanges = false
@@ -1136,6 +1175,9 @@ class RedactPhaseState: ObservableObject {
     private func processPIIFindings(_ findings: [PIIFinding], originalText: String) {
         var newEntities: [Entity] = []
 
+        // Pre-compute Set for O(1) deduplication
+        let existingEntityKeys = Set(allEntities.map { $0.originalText.lowercased() })
+
         print("DEBUG processPIIFindings: Received \(findings.count) findings")
         for finding in findings {
             print("DEBUG processPIIFindings: Processing '\(finding.text)' type=\(finding.suggestedType)")
@@ -1157,7 +1199,8 @@ class RedactPhaseState: ObservableObject {
                     newEntities.append(replacement)
                 }
             } else {
-                let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
+                // Use Set for O(1) lookup instead of O(N) .contains()
+                let alreadyExists = existingEntityKeys.contains(finding.text.lowercased())
                 if alreadyExists {
                     print("DEBUG processPIIFindings: '\(finding.text)' already exists, skipping")
                     continue
@@ -1444,8 +1487,8 @@ class RedactPhaseState: ObservableObject {
 
     /// Extract year from a date string (e.g., "March 15, 2024" → "2024")
     private func extractYearFromDate(_ dateString: String) -> String? {
-        let yearPattern = "\\b(19|20)\\d{2}\\b"
-        guard let regex = try? NSRegularExpression(pattern: yearPattern) else { return nil }
+        // Use static cached regex instead of recompiling each time
+        guard let regex = Self.yearRegex else { return nil }
         let range = NSRange(dateString.startIndex..., in: dateString)
         if let match = regex.firstMatch(in: dateString, range: range),
            let matchRange = Range(match.range, in: dateString) {
@@ -1455,13 +1498,13 @@ class RedactPhaseState: ObservableObject {
     }
 
     private func findAllOccurrences(of searchText: String, in text: String, includePossessive: Bool = true) -> [[Int]] {
-        // Normalize apostrophes for matching (curly ' and straight ')
+        // Normalize apostrophes for search text
         let normalizedSearch = searchText
             .replacingOccurrences(of: "'", with: "'")
             .replacingOccurrences(of: "'", with: "'")
-        let normalizedText = text
-            .replacingOccurrences(of: "'", with: "'")
-            .replacingOccurrences(of: "'", with: "'")
+
+        // Use cached normalized document text
+        let normalizedText = getNormalizedText(text)
 
         // Use NSString for UTF-16 positions (consistent with redaction system)
         let nsText = normalizedText as NSString
@@ -1478,7 +1521,8 @@ class RedactPhaseState: ObservableObject {
             pattern = "\\b\(escapedSearch)\\b"
         }
 
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+        // Use cached regex instead of recompiling
+        guard let regex = getCachedRegex(pattern: pattern, options: .caseInsensitive) else {
             return positions
         }
 
