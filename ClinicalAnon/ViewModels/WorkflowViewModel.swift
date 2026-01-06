@@ -354,7 +354,9 @@ class WorkflowViewModel: ObservableObject {
         print("⏱️ WorkflowVM.analyze() TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - totalStart))s")
 
         // Auto-show duplicate finder if groups found
+        let dupeStart = CFAbsoluteTimeGetCurrent()
         let duplicateGroups = redactState.findPotentialDuplicates()
+        print("⏱️ findPotentialDuplicates: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - dupeStart))s")
         if !duplicateGroups.isEmpty {
             redactState.showDuplicateFinderModal = true
         }
@@ -388,7 +390,8 @@ class WorkflowViewModel: ObservableObject {
     /// Merge one entity into another (alias adopts primary's replacement code)
     /// The alias entity is removed from the list, its positions added to primary
     /// If variant detection fails, shows prompt for user to select variant
-    func mergeEntities(alias: Entity, into primary: Entity) {
+    /// - Parameter skipCacheRebuild: If true, skips cache rebuild (for batch operations)
+    func mergeEntities(alias: Entity, into primary: Entity, skipCacheRebuild: Bool = false) {
         guard alias.type == primary.type else {
             #if false  // DEBUG disabled for perf testing
             // print("WorkflowViewModel.mergeEntities: Cannot merge different entity types")
@@ -399,7 +402,7 @@ class WorkflowViewModel: ObservableObject {
         // Non-person entities: skip variant detection, use simple merge
         guard alias.type.isPerson else {
             _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
-            completeMerge(alias: alias, into: primary)
+            completeMerge(alias: alias, into: primary, skipCacheRebuild: skipCacheRebuild)
             return
         }
 
@@ -417,7 +420,7 @@ class WorkflowViewModel: ObservableObject {
             #if false  // DEBUG disabled for perf testing
             print("  ✓ Auto-detected variant: \(variant) → \(code)")
             #endif
-            completeMerge(alias: alias, into: primary)
+            completeMerge(alias: alias, into: primary, skipCacheRebuild: skipCacheRebuild)
 
         case .variantNotDetected(let baseId, _):
             // Auto-assign .first and complete merge (modal no longer needed)
@@ -430,7 +433,7 @@ class WorkflowViewModel: ObservableObject {
                 into: primary.originalText,
                 variant: .first
             )
-            completeMerge(alias: alias, into: primary)
+            completeMerge(alias: alias, into: primary, skipCacheRebuild: skipCacheRebuild)
 
         case .primaryNotFound:
             // Fallback to old behavior using mergeMapping()
@@ -438,7 +441,7 @@ class WorkflowViewModel: ObservableObject {
             print("  ⚠️ Primary not found, using fallback")
             #endif
             _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
-            completeMerge(alias: alias, into: primary)
+            completeMerge(alias: alias, into: primary, skipCacheRebuild: skipCacheRebuild)
 
         case .noBaseId:
             // Fallback to old behavior using mergeMapping()
@@ -446,13 +449,14 @@ class WorkflowViewModel: ObservableObject {
             print("  ⚠️ No baseId, using fallback")
             #endif
             _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
-            completeMerge(alias: alias, into: primary)
+            completeMerge(alias: alias, into: primary, skipCacheRebuild: skipCacheRebuild)
         }
     }
 
     /// Complete merge after variant is determined (either auto-detected or user-selected)
     /// Instead of removing the alias, we update its code to the variant code and keep both entities
-    func completeMerge(alias: Entity, into primary: Entity) {
+    /// - Parameter skipCacheRebuild: If true, skips cache rebuild (for batch operations)
+    func completeMerge(alias: Entity, into primary: Entity, skipCacheRebuild: Bool = false) {
         #if DEBUG
         print("🔀 completeMerge START: '\(alias.originalText)' into '\(primary.originalText)'")
         print("   Alias in deepScan: \(redactState.deepScanFindings.contains { $0.id == alias.id })")
@@ -525,8 +529,8 @@ class WorkflowViewModel: ObservableObject {
         // Mark text as needing update
         redactState.markRedactedTextNeedsUpdate()
 
-        // Rebuild caches with updated entities
-        if let result = redactState.result {
+        // Rebuild caches with updated entities (unless skipped for batch operations)
+        if !skipCacheRebuild, let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,
                 allEntities: redactState.allEntities,
@@ -565,6 +569,7 @@ class WorkflowViewModel: ObservableObject {
 
     /// Merge multiple duplicate groups at once
     func mergeDuplicateGroups(_ groups: [DuplicateGroup]) {
+        let mergeStart = CFAbsoluteTimeGetCurrent()
         #if DEBUG
         print("🔀 mergeDuplicateGroups called with \(groups.count) groups")
         print("   Entity count BEFORE merge: \(redactState.allEntities.count)")
@@ -574,10 +579,25 @@ class WorkflowViewModel: ObservableObject {
         #endif
 
         for group in groups {
-            // Merge each match into the primary entity
+            // Merge each match into the primary entity (skip cache rebuild in loop)
             for match in group.matches {
-                mergeEntities(alias: match, into: group.primary)
+                mergeEntities(alias: match, into: group.primary, skipCacheRebuild: true)
             }
+        }
+
+        // Rebuild caches ONCE after all merges complete
+        if let result = redactState.result {
+            let cacheStart = CFAbsoluteTimeGetCurrent()
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
+                restoredText: nil
+            )
+            print("⏱️ mergeDuplicateGroups cacheManager.rebuildAllCaches: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - cacheStart))s")
         }
 
         #if DEBUG
@@ -588,6 +608,7 @@ class WorkflowViewModel: ObservableObject {
         // Show success message
         let totalMerged = groups.reduce(0) { $0 + $1.matches.count }
         redactState.successMessage = "Merged \(totalMerged) duplicate\(totalMerged == 1 ? "" : "s") into \(groups.count) group\(groups.count == 1 ? "" : "s")"
+        print("⏱️ mergeDuplicateGroups TOTAL: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - mergeStart))s")
 
         // Auto-hide success message
         Task {
