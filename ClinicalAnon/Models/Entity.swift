@@ -70,6 +70,10 @@ struct Entity: Identifiable, Codable, Hashable {
     /// nil for non-person entities or when variant hasn't been determined
     var nameVariant: NameVariant?
 
+    /// Whether this entity was merged into another entity (making it a child)
+    /// When true, this entity displays as a sub-entity regardless of nameVariant
+    var isMergedChild: Bool
+
     // MARK: - Initialization
 
     init(
@@ -79,7 +83,8 @@ struct Entity: Identifiable, Codable, Hashable {
         type: EntityType,
         positions: [[Int]],
         confidence: Double? = nil,
-        nameVariant: NameVariant? = nil
+        nameVariant: NameVariant? = nil,
+        isMergedChild: Bool = false
     ) {
         self.id = id
         self.originalText = originalText
@@ -88,6 +93,7 @@ struct Entity: Identifiable, Codable, Hashable {
         self.positions = positions
         self.confidence = confidence
         self.nameVariant = nameVariant
+        self.isMergedChild = isMergedChild
     }
 
     // MARK: - Computed Properties
@@ -150,9 +156,12 @@ struct Entity: Identifiable, Codable, Hashable {
 
     /// Whether this entity is an anchor (full name) vs a connected child (partial name)
     /// Anchors: .full, .firstLast, or nil (standalone/primary)
-    /// Children: .first, .last, .middle, .formal, .firstMiddle
+    /// Children: .first, .last, .middle, .formal, .firstMiddle, OR any merged entity
     var isAnchor: Bool {
         guard type.isPerson else { return true }  // Non-person entities are always "anchors"
+
+        // Merged entities are NEVER anchors, regardless of variant
+        if isMergedChild { return false }
 
         switch nameVariant {
         case .full, .firstLast, nil:

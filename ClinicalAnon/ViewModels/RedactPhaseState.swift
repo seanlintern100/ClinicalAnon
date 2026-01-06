@@ -927,6 +927,23 @@ class RedactPhaseState: ObservableObject {
         }
     }
 
+    /// Mark an entity as a merged child (so it displays as sub-entity regardless of variant)
+    func markEntityAsMergedChild(entityId: UUID) {
+        if var r = result, let idx = r.entities.firstIndex(where: { $0.id == entityId }) {
+            r.entities[idx].isMergedChild = true
+            result = r
+        }
+        if let idx = customEntities.firstIndex(where: { $0.id == entityId }) {
+            customEntities[idx].isMergedChild = true
+        }
+        if let idx = piiReviewFindings.firstIndex(where: { $0.id == entityId }) {
+            piiReviewFindings[idx].isMergedChild = true
+        }
+        if let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) {
+            deepScanFindings[idx].isMergedChild = true
+        }
+    }
+
     /// Remove an entity from all entity lists
     private func removeEntityFromAllLists(entityId: UUID) {
         if result != nil {

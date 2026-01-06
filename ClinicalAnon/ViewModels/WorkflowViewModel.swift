@@ -458,6 +458,9 @@ class WorkflowViewModel: ObservableObject {
             #endif
         }
 
+        // Mark the alias as a merged child so it displays as a sub-entity
+        redactState.markEntityAsMergedChild(entityId: alias.id)
+
         // If alias is a deep scan finding, move it to result.entities
         // so it appears in the main section (not the deep scan section)
         if redactState.deepScanFindings.contains(where: { $0.id == alias.id }) {
@@ -479,7 +482,7 @@ class WorkflowViewModel: ObservableObject {
         #if DEBUG
         // Check final state
         if let updatedAlias = redactState.allEntities.first(where: { $0.id == alias.id }) {
-            print("   FINAL: '\(updatedAlias.originalText)' code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")
+            print("   FINAL: '\(updatedAlias.originalText)' code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isMergedChild=\(updatedAlias.isMergedChild) isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")
         } else {
             print("   ⚠️ FINAL: Alias NOT found in allEntities!")
         }
