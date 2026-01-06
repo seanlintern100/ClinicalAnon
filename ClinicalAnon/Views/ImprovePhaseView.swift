@@ -148,7 +148,7 @@ struct ImprovePhaseView: View {
                     .accessibilityLabel("Copy document to clipboard")
                 }
             }
-            .frame(height: 44)
+            .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)
 
             Divider().opacity(0.15)
@@ -163,21 +163,19 @@ struct ImprovePhaseView: View {
             } else {
                 // Document content - only show streaming if destination is document
                 ScrollView {
-                    if viewModel.isAIProcessing && viewModel.streamingDestination == .document {
-                        // Streaming a document update
-                        MarkdownText(viewModel.aiOutput)
+                    TextContentCard(isSourcePanel: true, isProcessed: true) {
+                        if viewModel.isAIProcessing && viewModel.streamingDestination == .document {
+                            // Streaming a document update
+                            MarkdownText(viewModel.aiOutput)
+                                .textSelection(.enabled)
+                        } else {
+                            // Show stable document with change highlighting
+                            HighlightedDocument(
+                                text: viewModel.currentDocument,
+                                changedLineIndices: viewModel.changedLineIndices
+                            )
                             .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DesignSystem.Spacing.medium)
-                    } else {
-                        // Show stable document with change highlighting
-                        HighlightedDocument(
-                            text: viewModel.currentDocument,
-                            changedLineIndices: viewModel.changedLineIndices
-                        )
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DesignSystem.Spacing.medium)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -185,7 +183,7 @@ struct ImprovePhaseView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                .fill(DesignSystem.Colors.surface)
+                .fill(DesignSystem.Colors.panelWarm)
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
@@ -210,7 +208,7 @@ struct ImprovePhaseView: View {
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
             }
-            .frame(height: 44)
+            .frame(height: 52)
             .padding(.horizontal, DesignSystem.Spacing.medium)
 
             Divider().opacity(0.15)
@@ -231,7 +229,7 @@ struct ImprovePhaseView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                .fill(DesignSystem.Colors.surface)
+                .fill(DesignSystem.Colors.panelNeutral)
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
@@ -364,6 +362,7 @@ struct ImprovePhaseView: View {
     private var chatHistory: some View {
         ScrollViewReader { proxy in
             ScrollView {
+                // Chat content in card styling - fills pane
                 LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                     ForEach(Array(viewModel.chatHistory.enumerated()), id: \.offset) { index, message in
                         ChatMessageView(
@@ -400,6 +399,11 @@ struct ImprovePhaseView: View {
                     }
                 }
                 .padding(DesignSystem.Spacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.white)
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+                .padding(24)
             }
             .onChange(of: viewModel.chatHistory.count) { _ in
                 withAnimation {
@@ -514,9 +518,9 @@ struct ImprovePhaseView: View {
     // MARK: - Empty States
 
     private var documentEmptyState: some View {
-        VStack(spacing: DesignSystem.Spacing.medium) {
+        // Empty state - card fills pane with centered content
+        VStack {
             Spacer()
-
             Image(systemName: "doc.text")
                 .font(.system(size: 40))
                 .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
@@ -530,16 +534,19 @@ struct ImprovePhaseView: View {
                     .font(.system(size: 14))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
-
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DesignSystem.Colors.cardWarm)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+        .padding(24)
     }
 
     private var chatEmptyState: some View {
-        VStack(spacing: DesignSystem.Spacing.medium) {
+        // Empty state - card fills pane with centered content
+        VStack {
             Spacer()
-
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 36))
                 .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
@@ -548,10 +555,13 @@ struct ImprovePhaseView: View {
                 .font(.system(size: 13))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+        .padding(24)
     }
 
     private func errorView(_ error: String) -> some View {

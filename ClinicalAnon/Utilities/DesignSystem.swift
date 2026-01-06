@@ -110,6 +110,17 @@ struct DesignSystem {
 
         /// Teal highlight for read-only state
         static let highlightTeal = primaryTeal.opacity(0.1)
+
+        // MARK: Card & Panel Colors
+
+        /// Warm panel background (source/input panels)
+        static let panelWarm = Color(red: 245/255, green: 243/255, blue: 239/255)  // #F5F3EF
+
+        /// Warm card background
+        static let cardWarm = Color(red: 255/255, green: 253/255, blue: 249/255)   // #FFFDF9
+
+        /// Neutral panel background (output panels)
+        static let panelNeutral = Color(red: 248/255, green: 248/255, blue: 248/255) // #F8F8F8
     }
 
     // MARK: - Typography
@@ -118,26 +129,21 @@ struct DesignSystem {
 
         // MARK: Font Names
 
-        /// Lora font family (serif - for headings)
-        private static let loraRegular = "Lora-Regular"
-        private static let loraBold = "Lora-Bold"
-        private static let loraItalic = "Lora-Italic"
-
-        /// Source Sans 3 font family (sans-serif - for body)
+        /// Source Sans 3 font family (sans-serif - used throughout)
         private static let sourceSansRegular = "SourceSans3-Regular"
         private static let sourceSansSemiBold = "SourceSans3-SemiBold"
         private static let sourceSansBold = "SourceSans3-Bold"
 
         // MARK: Font Styles
 
-        /// Title style - Large serif heading (Lora Bold, 32pt)
-        static let title: Font = .custom(loraBold, size: 32)
+        /// Title style - Large heading (Source Sans Bold, 32pt)
+        static let title: Font = .custom(sourceSansBold, size: 32)
 
-        /// Heading style - Medium serif heading (Lora Bold, 24pt)
-        static let heading: Font = .custom(loraBold, size: 24)
+        /// Heading style - Medium heading (Source Sans Bold, 24pt)
+        static let heading: Font = .custom(sourceSansBold, size: 24)
 
-        /// Subheading style - Small serif heading (Lora SemiBold, 18pt)
-        static let subheading: Font = .custom(loraBold, size: 18)
+        /// Subheading style - Small heading (Source Sans SemiBold, 18pt)
+        static let subheading: Font = .custom(sourceSansSemiBold, size: 18)
 
         /// Body style - Regular body text (Source Sans 3, 16pt)
         static let body: Font = .custom(sourceSansRegular, size: 16)
@@ -506,10 +512,10 @@ struct PrimaryButtonStyle: ButtonStyle {
 struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(DesignSystem.Typography.caption)
+            .font(DesignSystem.Typography.button)
             .foregroundColor(DesignSystem.Colors.textPrimary)
-            .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.vertical, DesignSystem.Spacing.small)
+            .padding(.horizontal, DesignSystem.Spacing.large)
+            .padding(.vertical, DesignSystem.Spacing.small + 2)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
                     .fill(

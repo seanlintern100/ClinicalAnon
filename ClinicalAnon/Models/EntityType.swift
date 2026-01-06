@@ -63,7 +63,7 @@ enum EntityType: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .personClient:
-            return "Client/Patient"
+            return "Primary Client"
         case .personProvider:
             return "Provider"
         case .personOther:

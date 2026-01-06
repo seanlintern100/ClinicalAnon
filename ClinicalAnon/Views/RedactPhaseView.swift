@@ -28,18 +28,26 @@ struct RedactPhaseView: View {
                 RedactEntitySidebar(viewModel: viewModel)
             }
 
-            // Two-pane content: Original | Redacted (equal widths)
-            GeometryReader { geometry in
-                let paneWidth = (geometry.size.width) / 2
+            // Main content area with footer
+            VStack(spacing: 0) {
+                // Two-pane content: Original | Redacted (equal widths)
+                GeometryReader { geometry in
+                    let paneWidth = (geometry.size.width) / 2
 
-                HStack(spacing: 0) {
-                    // LEFT: Original Text
-                    originalTextPane
-                        .frame(width: paneWidth)
+                    HStack(spacing: 0) {
+                        // LEFT: Original Text
+                        originalTextPane
+                            .frame(width: paneWidth)
 
-                    // RIGHT: Redacted Text
-                    redactedTextPane
-                        .frame(width: paneWidth)
+                        // RIGHT: Redacted Text
+                        redactedTextPane
+                            .frame(width: paneWidth)
+                    }
+                }
+
+                // Footer bar spanning both panes (only after analysis)
+                if viewModel.result != nil {
+                    actionFooter
                 }
             }
         }
@@ -135,50 +143,50 @@ struct RedactPhaseView: View {
             if let result = viewModel.result {
                 if let cachedOriginal = viewModel.cachedOriginalAttributed {
                     ScrollView {
-                        Text(cachedOriginal)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DesignSystem.Spacing.medium)
+                        TextContentCard(isSourcePanel: true, isProcessed: true) {
+                            Text(cachedOriginal)
+                                .textSelection(.enabled)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
                 } else {
                     // Show plain text while highlights build
                     ScrollView {
-                        Text(result.originalText)
-                            .textSelection(.enabled)
-                            .font(.system(size: 14))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DesignSystem.Spacing.medium)
+                        TextContentCard(isSourcePanel: true, isProcessed: true) {
+                            Text(result.originalText)
+                                .textSelection(.enabled)
+                                .font(.system(size: 14))
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
+                // Initial input state - card fills pane
                 ZStack(alignment: .topLeading) {
                     if viewModel.inputText.isEmpty {
                         Text("Paste clinical text here to anonymize...")
                             .font(.system(size: 14))
                             .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.5))
-                            .padding(DesignSystem.Spacing.medium)
+                            .padding(32)
                     }
 
                     TextEditor(text: $viewModel.inputText)
                         .font(.system(size: 14))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
                         .scrollContentBackground(.hidden)
-                        .padding(DesignSystem.Spacing.medium)
+                        .padding(32)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.clear)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(.white)
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+                .padding(24)
             }
         }
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                .fill(
-                    viewModel.result != nil
-                        ? DesignSystem.Colors.success.opacity(0.05)
-                        : DesignSystem.Colors.surface
-                )
+                .fill(DesignSystem.Colors.panelWarm)
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
@@ -235,28 +243,28 @@ struct RedactPhaseView: View {
             if let result = viewModel.result {
                 if let cachedRedacted = viewModel.cachedRedactedAttributed {
                     ScrollView {
-                        Text(cachedRedacted)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DesignSystem.Spacing.medium)
+                        TextContentCard(isSourcePanel: false, isProcessed: false) {
+                            Text(cachedRedacted)
+                                .textSelection(.enabled)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
                 } else {
                     // Show plain redacted text while highlights build
                     ScrollView {
-                        Text(viewModel.displayedRedactedText)
-                            .textSelection(.enabled)
-                            .font(.system(size: 14))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(DesignSystem.Spacing.medium)
+                        TextContentCard(isSourcePanel: false, isProcessed: false) {
+                            Text(viewModel.displayedRedactedText)
+                                .textSelection(.enabled)
+                                .font(.system(size: 14))
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
-                VStack(spacing: DesignSystem.Spacing.medium) {
+                // Empty state - card fills pane with centered content
+                VStack {
                     Spacer()
-
                     Image(systemName: "lock.fill")
                         .font(.system(size: 48))
                         .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
@@ -264,106 +272,115 @@ struct RedactPhaseView: View {
                     Text("Redacted text will appear here")
                         .font(.system(size: 14))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
-
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            // LLM Scan and Continue buttons at bottom
-            if viewModel.result != nil {
-                Divider().opacity(0.15)
-
-                VStack(spacing: DesignSystem.Spacing.small) {
-                    // Status messages
-                    if let error = viewModel.errorMessage {
-                        ErrorBanner(
-                            message: error,
-                            onDismiss: { viewModel.errorMessage = nil }
-                        )
-                    }
-
-                    if let success = viewModel.successMessage {
-                        SuccessBanner(
-                            message: success,
-                            onDismiss: nil
-                        )
-                    }
-
-                    // Buttons
-                    HStack {
-                        Spacer()
-
-                        // LLM Scan button (if local LLM available)
-                        if LocalLLMService.shared.isAvailable {
-                            Button(action: { Task { await viewModel.runLocalPIIReview() } }) {
-                                HStack(spacing: DesignSystem.Spacing.xs) {
-                                    if viewModel.isReviewingPII {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                            .frame(width: 14, height: 14)
-                                    } else {
-                                        Image(systemName: "brain")
-                                    }
-                                    Text("LLM Scan")
-                                }
-                                .font(DesignSystem.Typography.body)
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .disabled(viewModel.isReviewingPII)
-                            .help("Scan for missed PII using local AI")
-                        }
-
-                        // Deep Scan button (Apple NER at lower confidence)
-                        Button(action: { Task { await viewModel.runDeepScan() } }) {
-                            HStack(spacing: DesignSystem.Spacing.xs) {
-                                if viewModel.isRunningDeepScan {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                        .frame(width: 14, height: 14)
-                                } else {
-                                    Image(systemName: "magnifyingglass.circle.fill")
-                                }
-                                Text("Deep Scan")
-                            }
-                            .font(DesignSystem.Typography.body)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .disabled(viewModel.isRunningDeepScan)
-                        .help("Run Apple NER with lower confidence (0.75) to catch additional names")
-
-                        // Add More Docs button - shows classification modal first
-                        Button(action: { showAddMoreDocsModal = true }) {
-                            HStack(spacing: DesignSystem.Spacing.xs) {
-                                Image(systemName: "doc.badge.plus")
-                                Text("Add More Docs")
-                            }
-                            .font(DesignSystem.Typography.body)
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(!viewModel.canContinueFromRedact || viewModel.hasPendingChanges)
-                        .help("Save this document and add another source document")
-
-                        Button(action: { viewModel.continueToNextPhase() }) {
-                            HStack(spacing: DesignSystem.Spacing.xs) {
-                                Text("Continue")
-                                Image(systemName: "arrow.right")
-                            }
-                            .font(DesignSystem.Typography.body)
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(!viewModel.canContinueFromRedact)
-                    }
-                }
-                .padding(DesignSystem.Spacing.medium)
+                .background(.white)
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+                .padding(24)
             }
         }
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                .fill(DesignSystem.Colors.surface)
+                .fill(DesignSystem.Colors.panelNeutral)
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
+    }
+
+    // MARK: - Action Footer
+
+    private var actionFooter: some View {
+        VStack(spacing: DesignSystem.Spacing.small) {
+            Divider().opacity(0.15)
+
+            // Status messages
+            if let error = viewModel.errorMessage {
+                ErrorBanner(
+                    message: error,
+                    onDismiss: { viewModel.errorMessage = nil }
+                )
+            }
+
+            if let success = viewModel.successMessage {
+                SuccessBanner(
+                    message: success,
+                    onDismiss: nil
+                )
+            }
+
+            // Buttons
+            HStack {
+                Spacer()
+
+                // LLM Scan button (if local LLM available)
+                if LocalLLMService.shared.isAvailable {
+                    Button(action: { Task { await viewModel.runLocalPIIReview() } }) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            if viewModel.isReviewingPII {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Image(systemName: "brain")
+                            }
+                            Text("LLM Scan")
+                        }
+                        .font(DesignSystem.Typography.body)
+                        .frame(minWidth: 120)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(viewModel.isReviewingPII)
+                    .help("Scan for missed PII using local AI")
+                }
+
+                // Deep Scan button (Apple NER at lower confidence)
+                Button(action: { Task { await viewModel.runDeepScan() } }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        if viewModel.isRunningDeepScan {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .frame(width: 14, height: 14)
+                        } else {
+                            Image(systemName: "magnifyingglass.circle.fill")
+                        }
+                        Text("Deep Scan")
+                    }
+                    .font(DesignSystem.Typography.body)
+                    .frame(minWidth: 120)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(viewModel.isRunningDeepScan)
+                .help("Run Apple NER with lower confidence (0.75) to catch additional names")
+
+                // Add More Docs button - shows classification modal first
+                Button(action: { showAddMoreDocsModal = true }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: "doc.badge.plus")
+                        Text("Add More Docs")
+                    }
+                    .font(DesignSystem.Typography.body)
+                    .frame(minWidth: 120)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!viewModel.canContinueFromRedact || viewModel.hasPendingChanges)
+                .help("Save this document and add another source document")
+
+                Button(action: { viewModel.continueToNextPhase() }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Text("Continue")
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(DesignSystem.Typography.body)
+                    .frame(minWidth: 120)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!viewModel.canContinueFromRedact)
+            }
+        }
+        .padding(DesignSystem.Spacing.medium)
+        .background(DesignSystem.Colors.surface)
     }
 }
 
@@ -374,6 +391,8 @@ private struct RedactEntitySidebar: View {
 
     @ObservedObject var viewModel: WorkflowViewModel
     @State private var isCollapsed: Bool = false
+    @State private var showAddTooltip: Bool = false
+    @State private var showDuplicateTooltip: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -392,6 +411,19 @@ private struct RedactEntitySidebar: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .onHover { showAddTooltip = $0 }
+                    .overlay(alignment: .bottom) {
+                        if showAddTooltip {
+                            Text("Add custom entity")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.8))
+                                .cornerRadius(4)
+                                .offset(y: 24)
+                        }
+                    }
                     .accessibilityLabel("Add custom entity")
 
                     Button(action: { viewModel.openDuplicateFinder() }) {
@@ -400,7 +432,19 @@ private struct RedactEntitySidebar: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .help("Find potential duplicate names")
+                    .onHover { showDuplicateTooltip = $0 }
+                    .overlay(alignment: .bottom) {
+                        if showDuplicateTooltip {
+                            Text("Find duplicate names")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.8))
+                                .cornerRadius(4)
+                                .offset(y: 24)
+                        }
+                    }
                     .accessibilityLabel("Find duplicate names")
                     .disabled(personEntityCount < 2)
                     .opacity(personEntityCount < 2 ? 0.4 : 1.0)
@@ -443,7 +487,7 @@ private struct RedactEntitySidebar: View {
                                 color: .purple,
                                 entities: viewModel.deepScanFindings,
                                 viewModel: viewModel,
-                                isAISection: true  // Reuse AI section styling
+                                isAISection: false
                             )
                         }
 
@@ -581,7 +625,8 @@ private struct EntityTypeSection: View {
                 onToggle: { viewModel.toggleEntity(entity) },
                 mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
                 onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) },
-                onEditNameStructure: { viewModel.redactState.startEditingNameStructure(entity) }
+                onEditNameStructure: { viewModel.redactState.startEditingNameStructure(entity) },
+                onChangeType: { newType in viewModel.reclassifyEntity(entity.id, to: newType) }
             )
         }
     }
@@ -604,13 +649,13 @@ private struct EntityTypeSection: View {
                 Button(action: { withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() } }) {
                     HStack(spacing: 6) {
                         Image(systemName: icon)
-                            .font(.system(size: 10))
+                            .font(.system(size: 14))
                             .foregroundColor(color)
-                            .frame(width: 14)
+                            .frame(width: 16)
 
-                        Text(title)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(color)
+                        Text(title.uppercased())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
 
                         Text("(\(entities.count))")
                             .font(.system(size: 10))
@@ -628,7 +673,7 @@ private struct EntityTypeSection: View {
             }
             .padding(.vertical, 6)
             .padding(.horizontal, DesignSystem.Spacing.xs)
-            .background(color.opacity(0.08))
+            .background(color.opacity(0.15))
             .cornerRadius(4)
 
             // Entity rows (grouped by anchor with children indented)
@@ -662,6 +707,7 @@ private struct RedactEntityRow: View {
     let mergeTargets: [Entity]
     let onMerge: (Entity) -> Void
     let onEditNameStructure: () -> Void
+    let onChangeType: (EntityType) -> Void
 
     /// Text color: gray for excluded or child entities, primary for anchors
     private var textColor: Color {
@@ -740,6 +786,15 @@ private struct RedactEntityRow: View {
             if entity.type.isPerson {
                 Button(action: onEditNameStructure) {
                     Label("Edit Name Structure", systemImage: "person.text.rectangle")
+                }
+            }
+
+            // Change Type submenu
+            Menu("Change Type") {
+                ForEach(EntityType.allCases.filter { $0 != entity.type }, id: \.self) { newType in
+                    Button(newType.displayName) {
+                        onChangeType(newType)
+                    }
                 }
             }
         }

@@ -56,7 +56,7 @@ struct Entity: Identifiable, Codable, Hashable {
     var replacementCode: String
 
     /// The type of entity
-    let type: EntityType
+    var type: EntityType
 
     /// Positions where this entity appears in the original text
     /// Array of [startIndex, endIndex] pairs

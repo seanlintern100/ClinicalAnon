@@ -534,6 +534,32 @@ class EntityMapping: ObservableObject {
         }
     }
 
+    /// Reclassify an entity to a new type, generating a new replacement code
+    /// - Parameters:
+    ///   - originalText: The text being reclassified
+    ///   - newType: The new entity type
+    /// - Returns: The new replacement code for the new type
+    func reclassifyMapping(originalText: String, to newType: EntityType) -> String {
+        let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Remove old mapping if exists
+        mappings.removeValue(forKey: key)
+
+        // Generate new code for the new type
+        let counter = counters[newType] ?? 0
+        let newCode = newType.replacementCode(for: counter)
+
+        // Store new mapping
+        mappings[key] = (original: originalText, replacement: newCode)
+        counters[newType] = counter + 1
+
+        #if DEBUG
+        print("EntityMapping.reclassifyMapping: '\(originalText)' → \(newCode) (type: \(newType.displayName))")
+        #endif
+
+        return newCode
+    }
+
     /// Merge one entity's mapping into another (alias → primary)
     /// Creates a RedactedPerson anchor and assigns variant-specific codes
     /// - Parameters:

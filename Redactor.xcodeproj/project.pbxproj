@@ -81,6 +81,7 @@
 		SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */; };
 		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
 		DATENORM001000000000000001 /* DateNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DATENORM001000000000000002 /* DateNormalizer.swift */; };
+		TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXTCNTCRD00100000000000002 /* TextContentCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -170,6 +171,7 @@
 		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
 		MEMSTOR001000000000000002 /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
 		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
+		TXTCNTCRD00100000000000002 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -375,6 +377,7 @@
 				7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */,
 				86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */,
 				06463A5E2CDA5C7A80638837 /* StatusBar.swift */,
+				TXTCNTCRD00100000000000002 /* TextContentCard.swift */,
 				D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */,
 			);
 			path = Components;
@@ -556,6 +559,7 @@
 				SRCDOC000100000000000001 /* SourceDocument.swift in Sources */,
 				MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */,
 				DATENORM001000000000000001 /* DateNormalizer.swift in Sources */,
+				TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

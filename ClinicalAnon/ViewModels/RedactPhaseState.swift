@@ -944,6 +944,75 @@ class RedactPhaseState: ObservableObject {
         excludedEntityIds.remove(entityId)
     }
 
+    // MARK: - Entity Reclassification
+
+    /// Find entity across all lists by ID
+    private func findEntity(_ id: UUID) -> Entity? {
+        if let e = result?.entities.first(where: { $0.id == id }) { return e }
+        if let e = customEntities.first(where: { $0.id == id }) { return e }
+        if let e = piiReviewFindings.first(where: { $0.id == id }) { return e }
+        if let e = deepScanFindings.first(where: { $0.id == id }) { return e }
+        return nil
+    }
+
+    /// Update entity in whichever list contains it
+    private func updateEntityInLists(_ entity: Entity) {
+        if let idx = result?.entities.firstIndex(where: { $0.id == entity.id }) {
+            result?.entities[idx] = entity
+        } else if let idx = customEntities.firstIndex(where: { $0.id == entity.id }) {
+            customEntities[idx] = entity
+        } else if let idx = piiReviewFindings.firstIndex(where: { $0.id == entity.id }) {
+            piiReviewFindings[idx] = entity
+        } else if let idx = deepScanFindings.firstIndex(where: { $0.id == entity.id }) {
+            deepScanFindings[idx] = entity
+        }
+    }
+
+    /// Reclassify entity to a new type
+    /// If entity is a person anchor, also reclassifies all children
+    func reclassifyEntity(_ entityId: UUID, to newType: EntityType) {
+        guard let entity = findEntity(entityId) else { return }
+
+        // Collect entities to reclassify (entity + children if anchor)
+        var entitiesToReclassify: [Entity] = [entity]
+
+        if entity.type.isPerson && entity.isAnchor, let baseId = entity.baseId {
+            // Find all children with same baseId
+            let children = allEntities.filter {
+                $0.id != entity.id &&
+                $0.baseId == baseId &&
+                !$0.isAnchor
+            }
+            entitiesToReclassify.append(contentsOf: children)
+        }
+
+        #if DEBUG
+        print("RedactPhaseState.reclassifyEntity: Reclassifying \(entitiesToReclassify.count) entity(ies) from \(entity.type.displayName) to \(newType.displayName)")
+        #endif
+
+        // Reclassify each entity
+        for e in entitiesToReclassify {
+            // Use reclassifyMapping to force new code generation (not getReplacementCode which returns existing)
+            let newCode = engine.entityMapping.reclassifyMapping(originalText: e.originalText, to: newType)
+
+            // Create updated entity
+            var updated = e
+            updated.type = newType
+            updated.replacementCode = newCode
+            updated.nameVariant = nil  // Clear variant for all reclassifications
+
+            // Update in appropriate list
+            updateEntityInLists(updated)
+
+            #if DEBUG
+            print("  '\(e.originalText)': \(e.replacementCode) → \(newCode)")
+            #endif
+        }
+
+        // Redacted text is regenerated from entities, so just mark for refresh
+        redactedTextNeedsUpdate = true
+    }
+
     func openAddCustomEntity(withText text: String? = nil) {
         prefilledText = text
         showingAddCustom = true

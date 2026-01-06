@@ -77,20 +77,20 @@ struct RestorePhaseView: View {
             // Content
             if let cachedRestored = viewModel.cachedRestoredAttributed, !viewModel.finalRestoredText.isEmpty {
                 ScrollView {
-                    Text(cachedRestored)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DesignSystem.Spacing.medium)
+                    TextContentCard(isSourcePanel: false, isProcessed: false) {
+                        Text(cachedRestored)
+                            .textSelection(.enabled)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !viewModel.finalRestoredText.isEmpty {
                 ScrollView {
-                    Text(viewModel.finalRestoredText)
-                        .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DesignSystem.Spacing.medium)
+                    TextContentCard(isSourcePanel: false, isProcessed: false) {
+                        Text(viewModel.finalRestoredText)
+                            .font(.system(size: 14))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .textSelection(.enabled)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -134,12 +134,14 @@ struct RestorePhaseView: View {
             .padding(DesignSystem.Spacing.medium)
         }
         .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                .fill(
-                    viewModel.finalRestoredText.isEmpty
-                        ? DesignSystem.Colors.surface
-                        : DesignSystem.Colors.success.opacity(0.05)
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .fill(DesignSystem.Colors.panelNeutral)
+                if !viewModel.finalRestoredText.isEmpty {
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                        .fill(DesignSystem.Colors.success.opacity(0.05))
+                }
+            }
         )
         .cornerRadius(DesignSystem.CornerRadius.medium)
         .padding(6)
@@ -191,7 +193,7 @@ struct RestorePhaseView: View {
             }
             .padding(DesignSystem.Spacing.medium)
         }
-        .frame(width: 200)
+        .frame(width: 270)
         .background(DesignSystem.Colors.surface)
     }
 }

@@ -230,10 +230,10 @@ class WorkflowViewModel: ObservableObject {
     var allEntities: [Entity] { redactState.allEntities }
     var activeEntities: [Entity] { redactState.activeEntities }
 
-    /// Entities actually restored in the output - only those whose placeholders appear in the AI output
+    /// Entities actually restored in the output - only those whose placeholders appear in the document
     /// Deduplicates by originalText to avoid showing same entity multiple times
     var restoredEntities: [Entity] {
-        let output = aiOutput
+        let output = currentDocument
         guard !output.isEmpty else { return [] }
 
         var seen = Set<String>()
@@ -242,7 +242,7 @@ class WorkflowViewModel: ObservableObject {
         // First add entities from source documents (multi-doc flow)
         for doc in improveState.sourceDocuments {
             for entity in doc.entities {
-                // Only include if placeholder appears in AI output
+                // Only include if placeholder appears in document
                 guard output.contains(entity.replacementCode) else { continue }
 
                 let key = entity.originalText.lowercased()
@@ -255,7 +255,7 @@ class WorkflowViewModel: ObservableObject {
 
         // Then add current active entities (single-doc flow or unsaved current doc)
         for entity in redactState.activeEntities {
-            // Only include if placeholder appears in AI output
+            // Only include if placeholder appears in document
             guard output.contains(entity.replacementCode) else { continue }
 
             let key = entity.originalText.lowercased()
@@ -494,6 +494,24 @@ class WorkflowViewModel: ObservableObject {
 
         // Complete the entity merge
         completeMerge(alias: alias, into: primary)
+    }
+
+    /// Reclassify entity to a new type (pass-through to RedactPhaseState)
+    func reclassifyEntity(_ entityId: UUID, to newType: EntityType) {
+        redactState.reclassifyEntity(entityId, to: newType)
+
+        // Rebuild caches with updated entities
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
+                restoredText: nil
+            )
+        }
     }
 
     /// Open the duplicate finder modal
