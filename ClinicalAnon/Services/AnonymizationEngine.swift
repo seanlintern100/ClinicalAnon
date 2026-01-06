@@ -135,6 +135,7 @@ class AnonymizationEngine: ObservableObject {
         // Detect entities using selected method
         let rawEntities: [Entity]
 
+        let detectStart = CFAbsoluteTimeGetCurrent()
         switch detectionMode {
         #if ENABLE_AI_FEATURES
         case .aiModel:
@@ -145,6 +146,7 @@ class AnonymizationEngine: ObservableObject {
         case .patterns:
             // Pattern-only detection (fast)
             rawEntities = try await swiftNERService.detectEntities(in: originalText)
+            print("⏱️ swiftNERService.detectEntities: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - detectStart))s")
 
         #if ENABLE_AI_FEATURES
         case .hybrid:
@@ -162,7 +164,9 @@ class AnonymizationEngine: ObservableObject {
         // Step 4: Apply entity mapping for consistency
         statusMessage = "Applying entity mapping..."
 
+        let mappingStart = CFAbsoluteTimeGetCurrent()
         let mappedEntities = applyEntityMapping(to: rawEntities)
+        print("⏱️ applyEntityMapping: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - mappingStart))s")
 
         // Step 5: Generate anonymized text locally using TextReplacer
         statusMessage = "Anonymizing text..."
@@ -170,19 +174,23 @@ class AnonymizationEngine: ObservableObject {
         let anonymizedText = try TextReplacer.replaceEntities(in: originalText, with: mappedEntities)
 
         // Step 5b: Fix any partial leaks (e.g., [PERSON_P]rray → [PERSON_P])
+        let fixLeaksStart = CFAbsoluteTimeGetCurrent()
         let (fixedText, _) = TextReplacer.fixPartialLeaks(
             in: anonymizedText,
             entities: mappedEntities,
             originalText: originalText
         )
+        print("⏱️ fixPartialLeaks: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - fixLeaksStart))s")
 
         // Step 6: Validate positions
         statusMessage = "Validating results..."
 
+        let validateStart = CFAbsoluteTimeGetCurrent()
         let validationIssues = EntityDetector.validatePositions(
             entities: mappedEntities,
             originalText: originalText
         )
+        print("⏱️ validatePositions: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - validateStart))s")
 
         // Note: Validation issues are logged but don't prevent processing
         // The LLM may have slightly imprecise position markers but correct replacements

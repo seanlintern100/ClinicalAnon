@@ -16,17 +16,22 @@ class TextReplacer {
     // MARK: - Public Methods
 
     /// Replace all entities in text with their replacement codes
+    /// Uses single-pass replacement for O(n+m) instead of O(n×m) complexity
     /// - Parameters:
     ///   - originalText: The original clinical text
     ///   - entities: Array of entities to replace
     /// - Returns: The anonymized text with replacement codes
     /// - Throws: AppError if replacement fails
     static func replaceEntities(in originalText: String, with entities: [Entity]) throws -> String {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        defer {
+            print("⏱️ TextReplacer.replaceEntities: \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - startTime))s")
+        }
+
         guard !originalText.isEmpty else {
             throw AppError.textValidationFailed("Original text is empty")
         }
 
-        // If no entities, return original text
         if entities.isEmpty {
             return originalText
         }
@@ -35,71 +40,67 @@ class TextReplacer {
         let dateRedactionSetting = UserDefaults.standard.string(forKey: SettingsKeys.dateRedactionLevel) ?? "keepYear"
         let keepYear = dateRedactionSetting == "keepYear"
 
-        #if DEBUG
-        let dateEntities = entities.filter { $0.type == .date }
-        if !dateEntities.isEmpty {
-            print("📅 TextReplacer.replaceEntities: Date redaction")
-            print("  Setting: '\(dateRedactionSetting)', keepYear: \(keepYear)")
-            print("  Date entities to process: \(dateEntities.count)")
-            for (i, entity) in dateEntities.enumerated() {
-                print("    [\(i)] '\(entity.originalText)' → \(entity.replacementCode)")
-            }
-        }
-        #endif
-
-        // IMPROVED: Don't trust LLM positions - find text ourselves
-        // This is more reliable since LLMs think in tokens, not characters
-        var result = originalText
-
-        // Process entities in order of first occurrence
-        // This ensures we don't mess up positions by replacing later text first
+        // Build entity lookup by original text (case-insensitive)
+        // Pre-compute replacements including date year handling
+        var entityMap: [String: (entity: Entity, replacement: String)] = [:]
         for entity in entities {
-            // Build pattern that also catches possessive forms (e.g., "Seans", "Sean's")
-            // This handles informal writing where apostrophes are omitted
-            let escapedText = NSRegularExpression.escapedPattern(for: entity.originalText)
-
-            // For person entities, also match possessive forms
-            let pattern: String
-            if entity.type.isPerson {
-                // Match: exact text, text+'s, text+s (possessive without apostrophe)
-                // Use word boundary to avoid matching "Seansation" etc.
-                pattern = "\(escapedText)(?:'s|s(?![a-zA-Z]))?"
-            } else {
-                pattern = escapedText
-            }
-
-            // Determine replacement text
+            let key = entity.originalText.lowercased()
             var replacement = entity.replacementCode
 
             // For dates with keepYear, append the year
             if entity.type == .date && keepYear {
                 if let year = extractYear(from: entity.originalText) {
                     replacement = "\(entity.replacementCode) \(year)"
-                    #if DEBUG
-                    print("📅 TextReplacer: Date '\(entity.originalText)' → '\(replacement)' (year extracted: \(year))")
-                    #endif
-                } else {
-                    #if DEBUG
-                    print("📅 TextReplacer: Date '\(entity.originalText)' → '\(replacement)' (no year found)")
-                    #endif
                 }
             }
 
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                let range = NSRange(result.startIndex..., in: result)
-                let beforeReplace = result
-                result = regex.stringByReplacingMatches(
-                    in: result,
-                    options: [],
-                    range: range,
-                    withTemplate: replacement
-                )
-                #if DEBUG
-                if entity.type == .date && beforeReplace != result {
-                    let count = beforeReplace.occurrences(of: entity.originalText)
-                    print("📅 TextReplacer: Replaced \(count) occurrence(s) of '\(entity.originalText)'")
+            entityMap[key] = (entity, replacement)
+        }
+
+        // Build single combined regex (longest first to prevent partial matches)
+        // This avoids O(n×m) by doing one pass instead of m passes
+        let sortedEntities = entities.sorted { $0.originalText.count > $1.originalText.count }
+        let escapedPatterns = sortedEntities.map { entity -> String in
+            let escaped = NSRegularExpression.escapedPattern(for: entity.originalText)
+            // For person entities, also match possessive forms
+            if entity.type.isPerson {
+                return "\(escaped)(?:'s|s(?![a-zA-Z]))?"
+            }
+            return escaped
+        }
+
+        let combinedPattern = "(?:\\b|(?<=\\s)|(?<=^))(" + escapedPatterns.joined(separator: "|") + ")(?:\\b|(?=\\s)|(?=$))"
+        guard let regex = try? NSRegularExpression(pattern: combinedPattern, options: .caseInsensitive) else {
+            // Fallback: return original if regex fails (shouldn't happen)
+            print("⚠️ TextReplacer: Failed to build combined regex")
+            return originalText
+        }
+
+        // Single pass: find all matches
+        let nsText = originalText as NSString
+        let matches = regex.matches(in: originalText, range: NSRange(location: 0, length: nsText.length))
+
+        // Process in reverse order to maintain string positions during replacement
+        var result = originalText
+        for match in matches.reversed() {
+            let matchedText = nsText.substring(with: match.range)
+
+            // Normalize key: lowercase and strip possessive suffix for lookup
+            var key = matchedText.lowercased()
+            if key.hasSuffix("'s") {
+                key = String(key.dropLast(2))
+            } else if key.hasSuffix("s") {
+                // Check if the base form (without 's') exists in our map
+                let baseKey = String(key.dropLast())
+                if entityMap[baseKey] != nil && entityMap[key] == nil {
+                    key = baseKey
                 }
-                #endif
+            }
+
+            if let (_, replacement) = entityMap[key] {
+                if let range = Range(match.range, in: result) {
+                    result.replaceSubrange(range, with: replacement)
+                }
             }
         }
 
