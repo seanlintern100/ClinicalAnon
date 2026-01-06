@@ -246,9 +246,21 @@ class ImprovePhaseState: ObservableObject {
                 print("🤖 AI Processing: Stream complete - \(chunkCount) chunks, \(aiOutput.count) chars")
                 #endif
 
-                currentDocument = aiOutput
-                isInRefinementMode = true
-                chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+                // Check if AI responded with a question instead of a document
+                let conversationMarker = "[CONVERSATION]"
+                if aiOutput.hasPrefix(conversationMarker) {
+                    // AI asked a question - route to chat instead of document
+                    let cleanedOutput = String(aiOutput.dropFirst(conversationMarker.count))
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    chatHistory.append((role: "assistant", content: cleanedOutput))
+                    isInRefinementMode = true
+                    // Don't set currentDocument - leave it empty so chat shows
+                } else {
+                    // Normal document generation
+                    currentDocument = aiOutput
+                    isInRefinementMode = true
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+                }
                 isAIProcessing = false
             } catch {
                 #if DEBUG
@@ -424,9 +436,21 @@ class ImprovePhaseState: ObservableObject {
             )
 
             aiOutput = result
-            currentDocument = result
-            isInRefinementMode = true
-            chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+
+            // Check if AI responded with a question instead of a document
+            let conversationMarker = "[CONVERSATION]"
+            if result.hasPrefix(conversationMarker) {
+                // AI asked a question - route to chat instead of document
+                let cleanedOutput = String(result.dropFirst(conversationMarker.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                chatHistory.append((role: "assistant", content: cleanedOutput))
+                isInRefinementMode = true
+            } else {
+                // Normal document generation
+                currentDocument = result
+                isInRefinementMode = true
+                chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+            }
             isAIProcessing = false
 
             #if DEBUG

@@ -409,12 +409,18 @@ class WorkflowViewModel: ObservableObject {
             #endif
             completeMerge(alias: alias, into: primary)
 
-        case .variantNotDetected(let baseId, let primaryCode):
-            // Show variant selection modal for user to specify
+        case .variantNotDetected(let baseId, _):
+            // Auto-assign .first and complete merge (modal no longer needed)
+            // Restoration uses RedactedPerson which has all variants
             #if DEBUG
-            print("  ⚠️ Variant not detected, showing prompt (baseId: \(baseId), primaryCode: \(primaryCode))")
+            print("  ⚠️ Variant not detected, auto-assigning .first (baseId: \(baseId))")
             #endif
-            redactState.startVariantSelection(alias: alias, primary: primary)
+            _ = engine.entityMapping.completeMergeWithVariant(
+                alias: alias.originalText,
+                into: primary.originalText,
+                variant: .first
+            )
+            completeMerge(alias: alias, into: primary)
 
         case .primaryNotFound:
             // Fallback to old behavior using mergeMapping()
@@ -517,24 +523,6 @@ class WorkflowViewModel: ObservableObject {
         }
     }
 
-    /// Complete merge with user-selected variant
-    func completeMergeWithVariant(_ variant: NameVariant) {
-        guard let alias = redactState.variantSelectionAlias,
-              let primary = redactState.variantSelectionPrimary else {
-            redactState.cancelVariantSelection()
-            return
-        }
-
-        // Complete the mapping with user-selected variant
-        _ = engine.entityMapping.completeMergeWithVariant(
-            alias: alias.originalText,
-            into: primary.originalText,
-            variant: variant
-        )
-
-        // Complete the entity merge
-        completeMerge(alias: alias, into: primary)
-    }
 
     /// Reclassify entity to a new type (pass-through to RedactPhaseState)
     func reclassifyEntity(_ entityId: UUID, to newType: EntityType) {

@@ -84,12 +84,6 @@ struct RedactPhaseView: View {
                 EditNameStructureModal(entity: entity, viewModel: viewModel)
             }
         }
-        .sheet(isPresented: $viewModel.redactState.isSelectingVariant) {
-            if let alias = viewModel.redactState.variantSelectionAlias,
-               let primary = viewModel.redactState.variantSelectionPrimary {
-                VariantSelectionModal(alias: alias, primary: primary, viewModel: viewModel)
-            }
-        }
         .alert("Deep Scan Complete", isPresented: $viewModel.redactState.showDeepScanCompleteMessage) {
             Button("OK") { }
         } message: {
@@ -1011,111 +1005,6 @@ struct EditNameStructureModal: View {
         if !middleName.isEmpty { parts.append(middleName) }
         if !lastName.isEmpty { parts.append(lastName) }
         return parts.joined(separator: " ")
-    }
-}
-
-// MARK: - Variant Selection Modal
-
-struct VariantSelectionModal: View {
-
-    let alias: Entity
-    let primary: Entity
-    @ObservedObject var viewModel: WorkflowViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            // Header
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Link Name to Anchor")
-                    .font(DesignSystem.Typography.heading)
-                Text("How should '\(alias.originalText)' be linked to '\(primary.originalText)'?")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-
-            Divider()
-
-            // Variant options
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                Text("Select the name type:")
-                    .font(DesignSystem.Typography.body)
-
-                Button(action: { selectVariant(.first) }) {
-                    HStack {
-                        Image(systemName: "person.fill")
-                        VStack(alignment: .leading) {
-                            Text("First Name")
-                                .fontWeight(.medium)
-                            Text("'\(alias.originalText)' is a first name or nickname")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(DesignSystem.Spacing.small)
-                    .background(DesignSystem.Colors.surface)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-
-                Button(action: { selectVariant(.last) }) {
-                    HStack {
-                        Image(systemName: "person.2.fill")
-                        VStack(alignment: .leading) {
-                            Text("Last Name")
-                                .fontWeight(.medium)
-                            Text("'\(alias.originalText)' is a surname/family name")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(DesignSystem.Spacing.small)
-                    .background(DesignSystem.Colors.surface)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-
-                Button(action: { selectVariant(.firstLast) }) {
-                    HStack {
-                        Image(systemName: "person.text.rectangle")
-                        VStack(alignment: .leading) {
-                            Text("Full Name")
-                                .fontWeight(.medium)
-                            Text("'\(alias.originalText)' is the complete name")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(DesignSystem.Spacing.small)
-                    .background(DesignSystem.Colors.surface)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Divider()
-
-            // Cancel button
-            HStack {
-                Button("Cancel") {
-                    viewModel.redactState.cancelVariantSelection()
-                    dismiss()
-                }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Spacer()
-            }
-        }
-        .padding(DesignSystem.Spacing.large)
-        .frame(width: 400)
-    }
-
-    private func selectVariant(_ variant: NameVariant) {
-        viewModel.completeMergeWithVariant(variant)
-        dismiss()
     }
 }
 

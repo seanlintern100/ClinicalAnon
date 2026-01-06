@@ -141,11 +141,6 @@ class RedactPhaseState: ObservableObject {
     @Published var isEditingNameStructure: Bool = false
     @Published var nameStructureEditEntity: Entity? = nil
 
-    // Variant Selection Modal (shown when merge variant detection fails)
-    @Published var isSelectingVariant: Bool = false
-    @Published var variantSelectionAlias: Entity? = nil
-    @Published var variantSelectionPrimary: Entity? = nil
-
     // MARK: - Duplicate Detection
 
     /// Find potential duplicate person entities based on name overlap
@@ -852,20 +847,11 @@ class RedactPhaseState: ObservableObject {
         #endif
     }
 
-    // MARK: - Variant Selection Modal
+    // MARK: - Variant Selection (no-op, modal removed)
 
-    /// Start variant selection for a merge where automatic detection failed
-    func startVariantSelection(alias: Entity, primary: Entity) {
-        variantSelectionAlias = alias
-        variantSelectionPrimary = primary
-        isSelectingVariant = true
-    }
-
-    /// Cancel variant selection
+    /// No-op - variant selection modal removed, kept for API compatibility
     func cancelVariantSelection() {
-        isSelectingVariant = false
-        variantSelectionAlias = nil
-        variantSelectionPrimary = nil
+        // Modal removed - variants auto-assigned during merge
     }
 
     /// Add positions to primary entity across all entity lists
