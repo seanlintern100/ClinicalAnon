@@ -177,9 +177,11 @@ class EntityDetector {
     }
 
     /// Validate entity positions against original text
+    /// Uses NSString for O(1) index access instead of Swift String's O(N)
     static func validatePositions(entities: [Entity], originalText: String) -> [ValidationIssue] {
         var issues: [ValidationIssue] = []
-        let textLength = originalText.count
+        let nsText = originalText as NSString  // O(1) index access
+        let textLength = nsText.length
 
         for entity in entities {
             for (index, position) in entity.positions.enumerated() {
@@ -206,9 +208,7 @@ class EntityDetector {
 
                 // Check if the text at this position matches the entity
                 if start >= 0 && end <= textLength && start < end {
-                    let startIndex = originalText.index(originalText.startIndex, offsetBy: start)
-                    let endIndex = originalText.index(originalText.startIndex, offsetBy: end)
-                    let extractedText = String(originalText[startIndex..<endIndex])
+                    let extractedText = nsText.substring(with: NSRange(location: start, length: end - start))
 
                     if extractedText != entity.originalText {
                         issues.append(.textMismatch(
