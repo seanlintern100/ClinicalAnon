@@ -501,6 +501,12 @@ class WorkflowViewModel: ObservableObject {
         } else {
             print("   ⚠️ FINAL: Alias NOT found in allEntities!")
         }
+        // Check primary state
+        if let updatedPrimary = redactState.allEntities.first(where: { $0.id == primary.id }) {
+            print("   PRIMARY: '\(updatedPrimary.originalText)' code=\(updatedPrimary.replacementCode) isAnchor=\(updatedPrimary.isAnchor) isMergedChild=\(updatedPrimary.isMergedChild)")
+        } else {
+            print("   ⚠️ PRIMARY NOT FOUND: '\(primary.originalText)'")
+        }
         #endif
 
         // Close variant selection modal if open
