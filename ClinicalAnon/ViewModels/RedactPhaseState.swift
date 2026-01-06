@@ -927,6 +927,41 @@ class RedactPhaseState: ObservableObject {
         deepScanFindings.removeAll { $0.id == entityId }
     }
 
+    /// Remove all entities matching the given text (case-insensitive)
+    func removeEntitiesByText(_ text: String) {
+        let normalizedText = text.lowercased()
+
+        // Find all matching entity IDs across all lists
+        var idsToRemove: Set<UUID> = []
+
+        if let entities = result?.entities {
+            for entity in entities where entity.originalText.lowercased() == normalizedText {
+                idsToRemove.insert(entity.id)
+            }
+        }
+        for entity in customEntities where entity.originalText.lowercased() == normalizedText {
+            idsToRemove.insert(entity.id)
+        }
+        for entity in piiReviewFindings where entity.originalText.lowercased() == normalizedText {
+            idsToRemove.insert(entity.id)
+        }
+        for entity in deepScanFindings where entity.originalText.lowercased() == normalizedText {
+            idsToRemove.insert(entity.id)
+        }
+
+        // Remove all matching entities
+        for entityId in idsToRemove {
+            removeEntityFromAllLists(entityId: entityId)
+            _excludedIds.remove(entityId)
+        }
+        excludedEntityIds = _excludedIds
+
+        // Trigger redacted text rebuild if we removed any entities
+        if !idsToRemove.isEmpty {
+            redactedTextNeedsUpdate = true
+        }
+    }
+
     /// Move a deep scan finding to result.entities (after merge)
     /// This ensures the merged entity appears in the main section, not the deep scan section
     func moveDeepScanFindingToResult(_ entityId: UUID) {

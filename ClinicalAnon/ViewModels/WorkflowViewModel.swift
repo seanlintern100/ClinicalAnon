@@ -675,6 +675,21 @@ class WorkflowViewModel: ObservableObject {
         showingAddCustom = true
     }
 
+    func removeEntitiesByText(_ text: String) {
+        redactState.removeEntitiesByText(text)
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
+                restoredText: nil
+            )
+        }
+    }
+
     func addCustomEntity(text: String, type: EntityType) {
         redactState.addCustomEntity(text: text, type: type)
         if let result = redactState.result {

@@ -138,9 +138,15 @@ struct RedactPhaseView: View {
             if let result = viewModel.result {
                 if let cachedOriginal = viewModel.cachedOriginalAttributed {
                     TextContentCard(isSourcePanel: true, isProcessed: true) {
-                        FastTextView(attributedText: cachedOriginal) { selectedText in
-                            viewModel.openAddCustomEntity(withText: selectedText)
-                        }
+                        FastTextView(
+                            attributedText: cachedOriginal,
+                            onRightClick: { selectedText in
+                                viewModel.openAddCustomEntity(withText: selectedText)
+                            },
+                            onRemoveEntity: { selectedText in
+                                viewModel.removeEntitiesByText(selectedText)
+                            }
+                        )
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("original-highlighted-\(result.id)-\(viewModel.customEntities.count)")
@@ -256,9 +262,15 @@ struct RedactPhaseView: View {
             if let result = viewModel.result {
                 if let cachedRedacted = viewModel.cachedRedactedAttributed {
                     TextContentCard(isSourcePanel: false, isProcessed: false) {
-                        FastTextView(attributedText: cachedRedacted) { selectedText in
-                            viewModel.openAddCustomEntity(withText: selectedText)
-                        }
+                        FastTextView(
+                            attributedText: cachedRedacted,
+                            onRightClick: { selectedText in
+                                viewModel.openAddCustomEntity(withText: selectedText)
+                            },
+                            onRemoveEntity: { selectedText in
+                                viewModel.removeEntitiesByText(selectedText)
+                            }
+                        )
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("redacted-\(result.id)-\(viewModel.customEntities.count)")
@@ -487,7 +499,8 @@ private struct RedactEntitySidebar: View {
                                 color: .orange,
                                 entities: viewModel.piiReviewFindings,
                                 viewModel: viewModel,
-                                isAISection: true
+                                isAISection: true,
+                                isDeepScanSection: false
                             )
                         }
 
@@ -499,7 +512,8 @@ private struct RedactEntitySidebar: View {
                                 color: .purple,
                                 entities: viewModel.deepScanFindings,
                                 viewModel: viewModel,
-                                isAISection: false
+                                isAISection: false,
+                                isDeepScanSection: true
                             )
                         }
 
@@ -513,7 +527,8 @@ private struct RedactEntitySidebar: View {
                                     color: entityType.highlightColor,
                                     entities: entities,
                                     viewModel: viewModel,
-                                    isAISection: false
+                                    isAISection: false,
+                                    isDeepScanSection: false
                                 )
                             }
                         }
@@ -573,6 +588,7 @@ private struct EntityTypeSection: View {
     let entities: [Entity]
     @ObservedObject var viewModel: WorkflowViewModel
     let isAISection: Bool
+    let isDeepScanSection: Bool
 
     @State private var isExpanded: Bool = true
 
@@ -633,6 +649,7 @@ private struct EntityTypeSection: View {
                 entity: entity,
                 isExcluded: viewModel.isEntityExcluded(entity),
                 isFromAIReview: isAISection,
+                isFromDeepScan: isDeepScanSection,
                 isChild: indented,
                 onToggle: { viewModel.toggleEntity(entity) },
                 mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id && $0.isAnchor }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
@@ -714,6 +731,7 @@ private struct RedactEntityRow: View {
     let entity: Entity
     let isExcluded: Bool
     let isFromAIReview: Bool
+    let isFromDeepScan: Bool
     let isChild: Bool  // Whether this is an indented child entity
     let onToggle: () -> Void
     let mergeTargets: [Entity]
@@ -742,7 +760,7 @@ private struct RedactEntityRow: View {
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(textColor)
                         .lineLimit(1)
-                        .strikethrough(isExcluded)
+                        .strikethrough(isExcluded && !isFromDeepScan)
 
                     if isFromAIReview {
                         Text("AI")
@@ -1412,9 +1430,10 @@ private struct DuplicateGroupRow: View {
 
 // MARK: - Custom NSTextView with Context Menu
 
-/// NSTextView subclass that adds "Add as entity" to right-click menu
+/// NSTextView subclass that adds "Add as entity" and "Remove from entities" to right-click menu
 class FastTextViewWithMenu: NSTextView {
     var onRightClickWithSelection: ((String) -> Void)?
+    var onRemoveEntity: ((String) -> Void)?
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()
@@ -1425,11 +1444,16 @@ class FastTextViewWithMenu: NSTextView {
            let storage = self.textStorage {
             let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
             if !selectedText.isEmpty {
-                // Add custom item at top
+                // Add custom items at top
                 let addItem = NSMenuItem(title: "Add '\(selectedText)' as entity...", action: #selector(addAsEntity), keyEquivalent: "")
                 addItem.target = self
                 menu.insertItem(addItem, at: 0)
-                menu.insertItem(NSMenuItem.separator(), at: 1)
+
+                let removeItem = NSMenuItem(title: "Remove '\(selectedText)' from entities", action: #selector(removeFromEntities), keyEquivalent: "")
+                removeItem.target = self
+                menu.insertItem(removeItem, at: 1)
+
+                menu.insertItem(NSMenuItem.separator(), at: 2)
             }
         }
 
@@ -1446,6 +1470,17 @@ class FastTextViewWithMenu: NSTextView {
             }
         }
     }
+
+    @objc private func removeFromEntities() {
+        let selectedRange = self.selectedRange()
+        if selectedRange.length > 0,
+           let storage = self.textStorage {
+            let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !selectedText.isEmpty {
+                onRemoveEntity?(selectedText)
+            }
+        }
+    }
 }
 
 // MARK: - Fast Text View (NSTextView wrapper for performance)
@@ -1456,6 +1491,7 @@ class FastTextViewWithMenu: NSTextView {
 struct FastTextView: NSViewRepresentable {
     let attributedText: AttributedString
     var onRightClick: ((String) -> Void)? = nil
+    var onRemoveEntity: ((String) -> Void)? = nil
 
     func makeNSView(context: Context) -> NSScrollView {
         // Create text storage, layout manager, and text container manually for proper setup
@@ -1479,6 +1515,7 @@ struct FastTextView: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.onRightClickWithSelection = onRightClick
+        textView.onRemoveEntity = onRemoveEntity
 
         // Set initial text
         textStorage.setAttributedString(NSAttributedString(attributedText))
@@ -1501,8 +1538,9 @@ struct FastTextView: NSViewRepresentable {
         // Update the attributed text
         textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
 
-        // Update callback in case it changed
+        // Update callbacks in case they changed
         textView.onRightClickWithSelection = onRightClick
+        textView.onRemoveEntity = onRemoveEntity
 
         // Ensure text container tracks width properly
         let contentWidth = max(scrollView.contentSize.width - 32, 100)  // Account for insets
