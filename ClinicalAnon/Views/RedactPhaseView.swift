@@ -673,12 +673,12 @@ private struct EntityTypeSection: View {
             }
             .padding(.vertical, 6)
             .padding(.horizontal, DesignSystem.Spacing.xs)
-            .background(color.opacity(0.15))
+            .background(color.opacity(0.6))
             .cornerRadius(4)
 
             // Entity rows (grouped by anchor with children indented)
             if isExpanded {
-                VStack(spacing: 2) {
+                VStack(spacing: 6) {
                     ForEach(groupedEntities(), id: \.anchor.id) { group in
                         // Anchor row (no indent)
                         entityRow(for: group.anchor, indented: false)
@@ -946,14 +946,13 @@ struct EditNameStructureModal: View {
                     viewModel.redactState.saveNameStructure(
                         firstName: firstName,
                         middleName: middleName.isEmpty ? nil : middleName,
-                        lastName: lastName,
+                        lastName: lastName.isEmpty ? nil : lastName,  // Allow blank surname for single-name people
                         title: title.isEmpty ? nil : title
                     )
                     dismiss()
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(firstName.trimmingCharacters(in: .whitespaces).isEmpty ||
-                         lastName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(firstName.trimmingCharacters(in: .whitespaces).isEmpty)  // Only require first name
             }
         }
         .padding(DesignSystem.Spacing.large)

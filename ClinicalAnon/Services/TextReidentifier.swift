@@ -37,17 +37,6 @@ class TextReidentifier {
         // Example: [PERSON_AB] should be replaced before [PERSON_A]
         let sorted = reverseMappings.sorted { $0.placeholder.count > $1.placeholder.count }
 
-        #if DEBUG
-        print("🔄 TextReidentifier: Restoring \(sorted.count) placeholders")
-        let dateMappings = sorted.filter { $0.placeholder.contains("DATE") }
-        if !dateMappings.isEmpty {
-            print("📅 TextReidentifier: Date mappings to restore:")
-            for dm in dateMappings {
-                print("    \(dm.placeholder) → '\(dm.original)'")
-            }
-        }
-        #endif
-
         // Replace each placeholder with original text
         for mapping in sorted {
             // For date placeholders, also match trailing year if present
@@ -56,39 +45,9 @@ class TextReidentifier {
                 let escapedPlaceholder = NSRegularExpression.escapedPattern(for: mapping.placeholder)
                 let pattern = escapedPlaceholder + "(\\s+(19|20)\\d{2})?"
 
-                #if DEBUG
-                print("📅 TextReidentifier: Processing \(mapping.placeholder)")
-                print("    Pattern: \(pattern)")
-                print("    Replacement: '\(mapping.original)'")
-                #endif
-
                 if let regex = try? NSRegularExpression(pattern: pattern) {
                     let range = NSRange(result.startIndex..., in: result)
-
-                    // Find matches before replacing
-                    #if DEBUG
-                    let matches = regex.matches(in: result, range: range)
-                    if !matches.isEmpty {
-                        print("    Found \(matches.count) match(es):")
-                        for match in matches {
-                            if let matchRange = Range(match.range, in: result) {
-                                let matchedText = String(result[matchRange])
-                                print("      '\(matchedText)'")
-                            }
-                        }
-                    }
-                    #endif
-
-                    let beforeResult = result
                     result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: mapping.original)
-
-                    #if DEBUG
-                    if beforeResult != result {
-                        print("    ✓ Replaced → '\(mapping.original)'")
-                    } else {
-                        print("    ⚠️ No matches found in text")
-                    }
-                    #endif
                 }
             } else {
                 let occurrences = result.occurrences(of: mapping.placeholder)
@@ -97,9 +56,6 @@ class TextReidentifier {
                         of: mapping.placeholder,
                         with: mapping.original
                     )
-                    #if DEBUG
-                    print("  ✓ Replaced \(mapping.placeholder) → '\(mapping.original)' (\(occurrences) times)")
-                    #endif
                 }
             }
         }
@@ -134,20 +90,6 @@ class TextReidentifier {
         // Sort by placeholder length (longest first to avoid partial replacements)
         let sorted = reverseMappings.sorted { $0.placeholder.count > $1.placeholder.count }
 
-        #if DEBUG
-        let overrideCount = overrides.count
-        print("🔄 TextReidentifier.restoreWithOverrides: Restoring \(sorted.count) placeholders (\(overrideCount) overrides)")
-        let dateMappings = sorted.filter { $0.placeholder.contains("DATE") }
-        if !dateMappings.isEmpty {
-            print("📅 TextReidentifier: Date mappings to restore:")
-            for dm in dateMappings {
-                let isOverride = overrides[dm.placeholder] != nil
-                let marker = isOverride ? "📝" : "  "
-                print("  \(marker) \(dm.placeholder) → '\(dm.original)'")
-            }
-        }
-        #endif
-
         // Replace each placeholder with original/override text
         for mapping in sorted {
             // For date placeholders, also match trailing year if present
@@ -156,40 +98,9 @@ class TextReidentifier {
                 let escapedPlaceholder = NSRegularExpression.escapedPattern(for: mapping.placeholder)
                 let pattern = escapedPlaceholder + "(\\s+(19|20)\\d{2})?"
 
-                #if DEBUG
-                print("📅 TextReidentifier: Processing \(mapping.placeholder)")
-                print("    Pattern: \(pattern)")
-                print("    Replacement: '\(mapping.original)'")
-                #endif
-
                 if let regex = try? NSRegularExpression(pattern: pattern) {
                     let range = NSRange(result.startIndex..., in: result)
-
-                    #if DEBUG
-                    let matches = regex.matches(in: result, range: range)
-                    if !matches.isEmpty {
-                        print("    Found \(matches.count) match(es):")
-                        for match in matches {
-                            if let matchRange = Range(match.range, in: result) {
-                                let matchedText = String(result[matchRange])
-                                print("      '\(matchedText)'")
-                            }
-                        }
-                    }
-                    #endif
-
-                    let beforeResult = result
                     result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: mapping.original)
-
-                    #if DEBUG
-                    if beforeResult != result {
-                        let isOverride = overrides[mapping.placeholder] != nil
-                        let marker = isOverride ? "📝" : "✓"
-                        print("    \(marker) Replaced → '\(mapping.original)'")
-                    } else {
-                        print("    ⚠️ No matches found in text")
-                    }
-                    #endif
                 }
             } else {
                 let occurrences = result.occurrences(of: mapping.placeholder)
@@ -198,11 +109,6 @@ class TextReidentifier {
                         of: mapping.placeholder,
                         with: mapping.original
                     )
-                    #if DEBUG
-                    let isOverride = overrides[mapping.placeholder] != nil
-                    let marker = isOverride ? "📝" : "✓"
-                    print("  \(marker) Replaced \(mapping.placeholder) → '\(mapping.original)' (\(occurrences) times)")
-                    #endif
                 }
             }
         }

@@ -386,7 +386,14 @@ class WorkflowViewModel: ObservableObject {
             return
         }
 
-        // Try merge with variant detection
+        // Non-person entities: skip variant detection, use simple merge
+        guard alias.type.isPerson else {
+            _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
+            completeMerge(alias: alias, into: primary)
+            return
+        }
+
+        // Person entities: try merge with variant detection
         let result = engine.entityMapping.tryMergeMapping(alias: alias.originalText, into: primary.originalText)
 
         #if DEBUG

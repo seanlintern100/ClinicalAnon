@@ -387,12 +387,19 @@ struct ImprovePhaseView: View {
 
                     // Show status indicator while processing
                     if viewModel.isAIProcessing {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                            Text(viewModel.streamingDestination == .chat ? "Thinking..." : "Updating document...")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                Text(viewModel.streamingDestination == .chat ? "Thinking..." : "Updating document...")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                            if viewModel.streamingDestination == .document {
+                                Text("This may take several minutes depending on the amount of information shared.")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                            }
                         }
                         .padding(.leading, DesignSystem.Spacing.medium)
                         .id("generating")

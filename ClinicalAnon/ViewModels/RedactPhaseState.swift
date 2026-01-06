@@ -823,15 +823,20 @@ class RedactPhaseState: ObservableObject {
     }
 
     /// Save the edited name structure
-    func saveNameStructure(firstName: String, middleName: String?, lastName: String, title: String?) {
+    /// lastName can be nil for single-name people
+    func saveNameStructure(firstName: String, middleName: String?, lastName: String?, title: String?) {
         guard let entity = nameStructureEditEntity else { return }
+
+        // For single-name people (nil lastName), use firstName as lastName
+        // This allows firstLast computed property to return just the first name
+        let effectiveLastName = lastName ?? firstName
 
         // Update the RedactedPerson in EntityMapping
         engine.entityMapping.updatePersonStructure(
             replacementCode: entity.replacementCode,
             firstName: firstName,
             middleName: middleName,
-            lastName: lastName,
+            lastName: effectiveLastName,
             title: title
         )
 
