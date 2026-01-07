@@ -87,6 +87,11 @@
 		TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXTCNTCRD00100000000000002 /* TextContentCard.swift */; };
 		MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */; };
 		ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = ONNX0002000000000000000001 /* CONNXRuntime */; };
+		HLPCNT001000000000000001 /* HelpContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPCNT001000000000000002 /* HelpContent.swift */; };
+		MKDRNDR001000000000000001 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MKDRNDR001000000000000002 /* MarkdownRenderer.swift */; };
+		HLPMDL001000000000000001 /* HelpModalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPMDL001000000000000002 /* HelpModalView.swift */; };
+		HLPBTN001000000000000001 /* HelpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPBTN001000000000000002 /* HelpButton.swift */; };
+		HLPWND001000000000000001 /* HelpWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPWND001000000000000002 /* HelpWindowController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -181,6 +186,11 @@
 		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
 		TXTCNTCRD00100000000000002 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
 		MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
+		HLPCNT001000000000000002 /* HelpContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpContent.swift; sourceTree = "<group>"; };
+		MKDRNDR001000000000000002 /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
+		HLPMDL001000000000000002 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
+		HLPBTN001000000000000002 /* HelpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpButton.swift; sourceTree = "<group>"; };
+		HLPWND001000000000000002 /* HelpWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -202,6 +212,8 @@
 				44D0C9224315FD3A09A4F7B6 /* AISettingsView.swift */,
 				E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */,
 				A899922CA47101C73867E8EB /* ExclusionSettingsView.swift */,
+				HLPMDL001000000000000002 /* HelpModalView.swift */,
+				HLPWND001000000000000002 /* HelpWindowController.swift */,
 				USRINC0030000000000000002 /* InclusionSettingsView.swift */,
 				51BF6876F36D56149F2DB144 /* ImprovePhaseView.swift */,
 				C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */,
@@ -240,7 +252,9 @@
 			children = (
 				846F1B468F8E9926702E98A0 /* AppError.swift */,
 				EFD141C928FBD98682F47FE2 /* DesignSystem.swift */,
+				HLPCNT001000000000000002 /* HelpContent.swift */,
 				F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */,
+				MKDRNDR001000000000000002 /* MarkdownRenderer.swift */,
 				SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */,
 				STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */,
 			);
@@ -388,10 +402,11 @@
 			children = (
 				AD4A3288CEF816ED9D3925CC /* ActionBar.swift */,
 				7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */,
+				HLPBTN001000000000000002 /* HelpButton.swift */,
 				86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */,
+				MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */,
 				06463A5E2CDA5C7A80638837 /* StatusBar.swift */,
 				TXTCNTCRD00100000000000002 /* TextContentCard.swift */,
-				MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */,
 				D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */,
 			);
 			path = Components;
@@ -580,6 +595,11 @@
 				DATENORM001000000000000001 /* DateNormalizer.swift in Sources */,
 				TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */,
 				MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */,
+				HLPCNT001000000000000001 /* HelpContent.swift in Sources */,
+				MKDRNDR001000000000000001 /* MarkdownRenderer.swift in Sources */,
+				HLPMDL001000000000000001 /* HelpModalView.swift in Sources */,
+				HLPBTN001000000000000001 /* HelpButton.swift in Sources */,
+				HLPWND001000000000000001 /* HelpWindowController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

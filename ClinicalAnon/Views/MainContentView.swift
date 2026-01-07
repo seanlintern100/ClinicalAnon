@@ -34,12 +34,32 @@ struct MainContentView: View {
         .frame(minWidth: 1000, minHeight: 600)
     }
 
+    /// Returns the appropriate help content type based on current phase
+    private var currentHelpContentType: HelpContentType {
+        switch viewModel.currentPhase {
+        case .redact: return .redactPhase
+        case .improve: return .improvePhase
+        case .restore: return .restorePhase
+        }
+    }
+
+    /// Opens help window with current phase content
+    private func showHelp() {
+        HelpWindowController.shared.showHelp(contentType: currentHelpContentType)
+    }
+
     // MARK: - Header View
 
     private var headerView: some View {
         ZStack {
             // Phase indicator centered
             PhaseIndicator(viewModel: viewModel)
+
+            // Left-aligned help button
+            HStack {
+                HelpButton(action: showHelp)
+                Spacer()
+            }
 
             // Right-aligned buttons
             HStack {

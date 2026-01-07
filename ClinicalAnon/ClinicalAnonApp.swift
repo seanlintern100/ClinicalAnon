@@ -46,6 +46,15 @@ struct ClinicalAnonApp: App {
                 viewModel.clearAll()
             }
         }
+        .commands {
+            // Help menu
+            CommandGroup(replacing: .help) {
+                Button("Redactor User Guide") {
+                    HelpWindowController.shared.showHelp(contentType: .fullGuide)
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
+        }
 
         // Settings window (Cmd+,)
         Settings {
