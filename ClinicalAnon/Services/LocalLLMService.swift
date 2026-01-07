@@ -327,9 +327,18 @@ class LocalLLMService: ObservableObject {
 
     /// Process a single chunk of text for PII
     private func reviewSingleChunk(_ text: String) async throws -> [PIIFinding] {
-        guard let session = chatSession else {
+        guard let context = modelContext else {
             throw AppError.localLLMModelNotLoaded
         }
+
+        // Create fresh session for this chunk (avoids context accumulation across chunks)
+        let generateParams = GenerateParameters(
+            maxTokens: 1000,
+            temperature: 0.1,
+            topP: 0.9,
+            repetitionPenalty: 1.1
+        )
+        let session = ChatSession(context, instructions: systemInstructions, generateParameters: generateParams)
 
         // Detailed prompt for better name detection
         let prompt = """
