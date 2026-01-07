@@ -500,7 +500,7 @@ class WorkflowViewModel: ObservableObject {
     /// - Parameter skipCacheRebuild: If true, skips cache rebuild (for batch operations)
     func completeMerge(alias: Entity, into primary: Entity, skipCacheRebuild: Bool = false) {
         #if DEBUG
-        print("🔀 completeMerge START: '\(alias.originalText)' into '\(primary.originalText)'")
+        print("🔀 completeMerge START: \(alias.id) → \(primary.id) [\(alias.replacementCode) → \(primary.replacementCode)]")
         print("   Alias in deepScan: \(redactState.deepScanFindings.contains { $0.id == alias.id })")
         print("   Alias in result: \(redactState.result?.entities.contains { $0.id == alias.id } ?? false)")
         #endif
@@ -550,7 +550,7 @@ class WorkflowViewModel: ObservableObject {
                 redactState.markEntityAsMergedChild(entityId: orphan.id)
 
                 #if DEBUG
-                print("   Transferred orphan: '\(orphan.originalText)' \(oldCode) → \(newCode)")
+                print("   Transferred orphan: \(orphan.id) \(oldCode) → \(newCode)")
                 #endif
             }
         }
@@ -585,15 +585,15 @@ class WorkflowViewModel: ObservableObject {
         #if DEBUG
         // Check final state
         if let updatedAlias = redactState.allEntities.first(where: { $0.id == alias.id }) {
-            print("   FINAL: '\(updatedAlias.originalText)' code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isMergedChild=\(updatedAlias.isMergedChild) isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")
+            print("   FINAL: \(updatedAlias.id) code=\(updatedAlias.replacementCode) variant=\(updatedAlias.nameVariant?.rawValue ?? "nil") isMergedChild=\(updatedAlias.isMergedChild) isAnchor=\(updatedAlias.isAnchor) baseId=\(updatedAlias.baseId ?? "nil")")
         } else {
             print("   ⚠️ FINAL: Alias NOT found in allEntities!")
         }
         // Check primary state
         if let updatedPrimary = redactState.allEntities.first(where: { $0.id == primary.id }) {
-            print("   PRIMARY: '\(updatedPrimary.originalText)' code=\(updatedPrimary.replacementCode) nameVariant=\(updatedPrimary.nameVariant?.rawValue ?? "nil") isAnchor=\(updatedPrimary.isAnchor) isMergedChild=\(updatedPrimary.isMergedChild)")
+            print("   PRIMARY: \(updatedPrimary.id) code=\(updatedPrimary.replacementCode) nameVariant=\(updatedPrimary.nameVariant?.rawValue ?? "nil") isAnchor=\(updatedPrimary.isAnchor) isMergedChild=\(updatedPrimary.isMergedChild)")
         } else {
-            print("   ⚠️ PRIMARY NOT FOUND: '\(primary.originalText)'")
+            print("   ⚠️ PRIMARY NOT FOUND: \(primary.id)")
         }
         #endif
 
@@ -648,7 +648,7 @@ class WorkflowViewModel: ObservableObject {
         print("🔀 mergeDuplicateGroups called with \(groups.count) groups")
         print("   Entity count BEFORE merge: \(redactState.allEntities.count)")
         for (i, group) in groups.enumerated() {
-            print("   Group \(i): primary='\(group.primary.originalText)' matches=\(group.matches.map { $0.originalText })")
+            print("   Group \(i): primary=\(group.primary.replacementCode) matches=\(group.matches.map { $0.replacementCode })")
         }
         #endif
 
@@ -676,7 +676,7 @@ class WorkflowViewModel: ObservableObject {
 
         #if DEBUG
         print("   Entity count AFTER merge: \(redactState.allEntities.count)")
-        print("   Remaining entities: \(redactState.allEntities.map { $0.originalText })")
+        print("   Remaining entities: \(redactState.allEntities.map { $0.replacementCode })")
         #endif
 
         // Show success message

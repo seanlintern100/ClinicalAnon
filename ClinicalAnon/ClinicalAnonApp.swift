@@ -32,6 +32,11 @@ struct ClinicalAnonApp: App {
                     await LocalLLMService.shared.preloadIfCached()
                     await XLMRobertaNERService.shared.preloadIfCached()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    // Clear memory storage on app termination (security hardening)
+                    viewModel.improveState.resetMemoryModeOnLaunch()
+                    viewModel.clearAll()
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 700)

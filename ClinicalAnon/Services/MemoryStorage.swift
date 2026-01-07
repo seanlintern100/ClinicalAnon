@@ -75,9 +75,9 @@ class MemoryStorage: ObservableObject {
     // MARK: - Initialization
 
     init() {
-        // Use app's caches directory
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        memoryDirectory = caches.appendingPathComponent("memories", isDirectory: true)
+        // Use temp directory (auto-cleared by OS, more secure than Caches)
+        let temp = FileManager.default.temporaryDirectory
+        memoryDirectory = temp.appendingPathComponent("memories", isDirectory: true)
 
         // Create directory if needed
         try? FileManager.default.createDirectory(at: memoryDirectory, withIntermediateDirectories: true)
