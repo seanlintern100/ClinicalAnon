@@ -13,75 +13,74 @@ struct LocalLLMSettingsView: View {
     @StateObject private var llmService = LocalLLMService.shared
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
-                // Header
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Local LLM Scan")
-                        .font(DesignSystem.Typography.heading)
-
-                    Text("Use a local AI model to scan redacted text for missed personal information. Models run entirely on your device.")
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-
-                Divider()
-
-                // Status Section
-                statusSection
-
-                Divider()
-
-                // Model Selection
-                if llmService.isAvailable {
-                    modelSelectionSection
-                    Divider()
-                }
-
-                // Download/Load Section
-                if llmService.isAvailable {
-                    modelLoadSection
-                } else {
-                    notSupportedSection
-                }
-
-                Spacer()
-            }
-            .padding(DesignSystem.Spacing.large)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    // MARK: - Status Section
-
-    private var statusSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            HStack {
-                Text("Status")
-                    .font(DesignSystem.Typography.subheading)
-
-                Spacer()
-
-                // Status indicator
-                HStack(spacing: 6) {
+        Form {
+            // Status Section
+            Section {
+                HStack {
                     Circle()
                         .fill(statusColor)
                         .frame(width: 8, height: 8)
-
                     Text(statusText)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(statusColor)
+                        .font(.body)
+                }
+
+                if let error = llmService.lastError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            } header: {
+                Text("Status")
+            } footer: {
+                Text("Use a local AI model to scan redacted text for missed personal information. Models run entirely on your device.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            // Model Selection
+            if llmService.isAvailable {
+                Section {
+                    ForEach(LocalLLMService.availableModels) { model in
+                        modelRow(model)
+                    }
+                } header: {
+                    Text("Model")
+                } footer: {
+                    Text("Select which model to use for PII review. Larger models are more accurate but use more memory.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 
-            // Error message
-            if let error = llmService.lastError {
-                Text(error)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(.orange)
+            // Model Status Section
+            if llmService.isAvailable {
+                Section {
+                    modelStatusContent
+                } header: {
+                    Text("Model Status")
+                }
+            } else {
+                Section {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Local LLM requires Apple Silicon (M1/M2/M3/M4)")
+                            .font(.body)
+                    }
+                } header: {
+                    Text("Requirements")
+                } footer: {
+                    Text("This feature uses Metal Performance Shaders which are only available on Apple Silicon Macs.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         }
+        .formStyle(.grouped)
+        .padding()
     }
+
+    // MARK: - Status Helpers
 
     private var statusColor: Color {
         if !llmService.isAvailable {
@@ -109,215 +108,115 @@ struct LocalLLMSettingsView: View {
         }
     }
 
-    // MARK: - Model Selection Section
-
-    private var modelSelectionSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-            Text("Model")
-                .font(DesignSystem.Typography.subheading)
-
-            ForEach(LocalLLMService.availableModels) { model in
-                modelRow(model)
-            }
-        }
-    }
+    // MARK: - Model Row
 
     private func modelRow(_ model: LocalLLMModelInfo) -> some View {
         let isSelected = llmService.selectedModelId == model.id
 
-        return HStack(spacing: DesignSystem.Spacing.small) {
+        return HStack {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .foregroundColor(isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
-                .font(.system(size: 16))
+                .foregroundColor(isSelected ? .accentColor : .secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(model.name)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-
+                        .font(.body)
                     Text(model.size)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(DesignSystem.Colors.background)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.2))
                         .cornerRadius(4)
                 }
-
                 Text(model.description)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Spacer()
         }
-        .padding(DesignSystem.Spacing.small)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                .fill(isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.1) : Color.clear)
-        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !llmService.isDownloading {
                 llmService.selectedModelId = model.id
             }
         }
-        .disabled(llmService.isDownloading)
     }
 
-    // MARK: - Model Load Section
+    // MARK: - Model Status Content
 
-    private var modelLoadSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Model Status")
-                .font(DesignSystem.Typography.subheading)
-
-            if llmService.isDownloading {
-                // Download progress
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                    Text(llmService.downloadStatus)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                    ProgressView(value: llmService.downloadProgress)
-                        .progressViewStyle(.linear)
-
-                    Text("\(Int(llmService.downloadProgress * 100))%")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-                .padding(DesignSystem.Spacing.medium)
-                .background(DesignSystem.Colors.background)
-                .cornerRadius(DesignSystem.CornerRadius.medium)
-
-            } else if llmService.isModelLoaded {
-                // Model loaded
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Model Ready")
-                                .font(DesignSystem.Typography.body)
-                                .foregroundColor(.green)
-                        }
-
-                        if let modelInfo = llmService.selectedModelInfo {
-                            Text("\(modelInfo.name) is loaded and ready to use")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    Button(action: { llmService.unloadModel() }) {
-                        Text("Unload")
-                    }
-                    .buttonStyle(.bordered)
-                }
-                .padding(DesignSystem.Spacing.medium)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(DesignSystem.CornerRadius.medium)
-
-            } else if llmService.isModelCached {
-                // Model downloaded but not loaded
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+    @ViewBuilder
+    private var modelStatusContent: some View {
+        if llmService.isDownloading {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(llmService.downloadStatus)
+                    .font(.body)
+                ProgressView(value: llmService.downloadProgress)
+                    .progressViewStyle(.linear)
+                Text("\(Int(llmService.downloadProgress * 100))%")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        } else if llmService.isModelLoaded {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .foregroundColor(.blue)
-                                Text("Model Downloaded")
-                                    .font(DesignSystem.Typography.body)
-                                    .foregroundColor(.blue)
-                            }
-
-                            if let modelInfo = llmService.selectedModelInfo {
-                                Text("\(modelInfo.name) is ready to load")
-                                    .font(DesignSystem.Typography.caption)
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                            }
-                        }
-
-                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Model Ready")
+                            .font(.body)
                     }
-
-                    HStack(spacing: DesignSystem.Spacing.small) {
-                        Button(action: loadModel) {
-                            HStack {
-                                Image(systemName: "play.circle")
-                                Text("Load Model")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button(action: { llmService.deleteModel() }) {
-                            HStack {
-                                Image(systemName: "trash")
-                                Text("Delete")
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .foregroundColor(.red)
+                    if let modelInfo = llmService.selectedModelInfo {
+                        Text("\(modelInfo.name) is loaded and ready")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
-                .padding(DesignSystem.Spacing.medium)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(DesignSystem.CornerRadius.medium)
-
-            } else {
-                // Model not downloaded
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                    if let modelInfo = llmService.selectedModelInfo {
-                        Text("Selected: \(modelInfo.name)")
-                            .font(DesignSystem.Typography.body)
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                        Text("The model will be downloaded automatically when you first use LLM Scan, or you can download it now.")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
-
-                    Button(action: loadModel) {
-                        HStack {
-                            Image(systemName: "arrow.down.circle")
-                            Text("Download & Load Model")
-                        }
+                Spacer()
+                Button("Unload") {
+                    llmService.unloadModel()
+                }
+            }
+        } else if llmService.isModelCached {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundColor(.blue)
+                    Text("Model Downloaded")
+                        .font(.body)
+                }
+                if let modelInfo = llmService.selectedModelInfo {
+                    Text("\(modelInfo.name) is ready to load")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Button("Load Model") {
+                        loadModel()
                     }
                     .buttonStyle(.borderedProminent)
+
+                    Button("Delete") {
+                        llmService.deleteModel()
+                    }
+                    .foregroundColor(.red)
                 }
-                .padding(DesignSystem.Spacing.medium)
-                .background(DesignSystem.Colors.background)
-                .cornerRadius(DesignSystem.CornerRadius.medium)
             }
-        }
-    }
-
-    // MARK: - Not Supported Section
-
-    private var notSupportedSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Apple Silicon Required")
-                .font(DesignSystem.Typography.subheading)
-
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Local LLM requires an Apple Silicon Mac (M1, M2, M3, or M4)")
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                if let modelInfo = llmService.selectedModelInfo {
+                    Text("Selected: \(modelInfo.name)")
+                        .font(.body)
+                    Text("The model will download automatically when first used, or you can download now.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-
-                Text("This feature uses Metal Performance Shaders (MPS) which are only available on Apple Silicon.")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Button("Download & Load Model") {
+                    loadModel()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .padding(DesignSystem.Spacing.medium)
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(DesignSystem.CornerRadius.medium)
         }
     }
 
@@ -328,7 +227,7 @@ struct LocalLLMSettingsView: View {
             do {
                 try await llmService.loadModel()
             } catch {
-                // Error is already captured in llmService.lastError
+                // Error captured in llmService.lastError
             }
         }
     }
@@ -340,7 +239,7 @@ struct LocalLLMSettingsView: View {
 struct LocalLLMSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         LocalLLMSettingsView()
-            .frame(width: 500, height: 500)
+            .frame(width: 500, height: 450)
     }
 }
 #endif
