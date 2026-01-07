@@ -366,7 +366,6 @@ struct ImprovePhaseView: View {
     private var chatHistory: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                // Chat content in card styling - fills pane
                 LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                     ForEach(Array(viewModel.chatHistory.enumerated()), id: \.offset) { index, message in
                         ChatMessageView(
@@ -410,11 +409,6 @@ struct ImprovePhaseView: View {
                     }
                 }
                 .padding(DesignSystem.Spacing.medium)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white)
-                .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
-                .padding(24)
             }
             .onChange(of: viewModel.chatHistory.count) { _ in
                 withAnimation {
@@ -430,6 +424,10 @@ struct ImprovePhaseView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+        .padding(24)
     }
 
     // MARK: - Chat Input Bar
@@ -438,26 +436,44 @@ struct ImprovePhaseView: View {
         VStack(spacing: 0) {
             Divider().opacity(0.15)
 
-            HStack(spacing: DesignSystem.Spacing.small) {
-                TextField("Ask for changes...", text: $viewModel.refinementInput)
-                    .textFieldStyle(.plain)
+            HStack(alignment: .bottom, spacing: DesignSystem.Spacing.small) {
+                TextEditor(text: $viewModel.refinementInput)
                     .font(.system(size: 13))
-                    .padding(DesignSystem.Spacing.small)
-                    .background(DesignSystem.Colors.background)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(DesignSystem.Colors.surface)
                     .cornerRadius(DesignSystem.CornerRadius.small)
-                    .onSubmit {
-                        viewModel.sendRefinement()
+                    .frame(minHeight: 36, maxHeight: 100)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                            .stroke(DesignSystem.Colors.textSecondary.opacity(0.2), lineWidth: 1)
+                    )
+                    .onKeyPress { keyPress in
+                        if keyPress.key == .return {
+                            if keyPress.modifiers.contains(.command) {
+                                viewModel.refinementInput += "\n"
+                                return .handled
+                            } else {
+                                if !viewModel.refinementInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                   && !viewModel.isAIProcessing {
+                                    viewModel.sendRefinement()
+                                }
+                                return .handled
+                            }
+                        }
+                        return .ignored
                     }
 
                 Button(action: { viewModel.sendRefinement() }) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(viewModel.refinementInput.isEmpty || viewModel.isAIProcessing
+                        .foregroundColor(viewModel.refinementInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isAIProcessing
                             ? DesignSystem.Colors.textSecondary.opacity(0.3)
                             : DesignSystem.Colors.primaryTeal)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.refinementInput.isEmpty || viewModel.isAIProcessing)
+                .disabled(viewModel.refinementInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isAIProcessing)
             }
             .padding(DesignSystem.Spacing.small)
         }

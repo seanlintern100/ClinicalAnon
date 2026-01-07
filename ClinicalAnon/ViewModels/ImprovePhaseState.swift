@@ -264,10 +264,21 @@ class ImprovePhaseState: ObservableObject {
                     isInRefinementMode = true
                     // Don't set currentDocument - leave it empty so chat shows
                 } else {
-                    // Normal document generation
-                    currentDocument = aiOutput
+                    // Normal document generation - check for [REVIEW] marker to split
+                    let reviewMarker = "[REVIEW]"
+                    if let range = aiOutput.range(of: reviewMarker) {
+                        // Split: document before marker, review after
+                        currentDocument = String(aiOutput[..<range.lowerBound])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        let reviewContent = String(aiOutput[range.upperBound...])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        chatHistory.append((role: "assistant", content: reviewContent))
+                    } else {
+                        // No review section - just document
+                        currentDocument = aiOutput
+                        chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+                    }
                     isInRefinementMode = true
-                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
                 }
                 isAIProcessing = false
             } catch {
@@ -881,6 +892,7 @@ class ImprovePhaseState: ObservableObject {
         aiService.cancel()
 
         // Clear AI output and chat
+        isChatMode = false
         aiOutput = ""
         chatHistory = []
         aiError = nil
@@ -910,6 +922,7 @@ class ImprovePhaseState: ObservableObject {
 
     /// Reset all state (for clearAll)
     func clearAll() {
+        isChatMode = false
         aiOutput = ""
         aiError = nil
         currentDocument = ""

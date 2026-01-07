@@ -206,9 +206,20 @@ private struct RestoredEntityRow: View {
     let overrideText: String?
     let onEdit: () -> Void
 
-    /// Display text - uses override if available, otherwise original
+    /// Whether this is an AI-generated placeholder with no original text
+    private var isAIGenerated: Bool {
+        entity.originalText.isEmpty && overrideText == nil
+    }
+
+    /// Display text - uses override if available, otherwise original, or placeholder for AI-generated
     private var displayText: String {
-        overrideText ?? entity.originalText
+        if let override = overrideText {
+            return override
+        }
+        if entity.originalText.isEmpty {
+            return "(needs replacement)"
+        }
+        return entity.originalText
     }
 
     /// Whether this entity has a custom override
@@ -218,15 +229,16 @@ private struct RestoredEntityRow: View {
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
-            Image(systemName: hasOverride ? "pencil.circle.fill" : "checkmark.circle.fill")
-                .foregroundColor(hasOverride ? .orange : DesignSystem.Colors.success)
+            Image(systemName: isAIGenerated ? "exclamationmark.circle.fill" : (hasOverride ? "pencil.circle.fill" : "checkmark.circle.fill"))
+                .foregroundColor(isAIGenerated ? .red : (hasOverride ? .orange : DesignSystem.Colors.success))
                 .font(.system(size: 12))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(displayText)
                         .font(DesignSystem.Typography.caption)
-                        .foregroundColor(hasOverride ? .orange : DesignSystem.Colors.textPrimary)
+                        .foregroundColor(isAIGenerated ? .red : (hasOverride ? .orange : DesignSystem.Colors.textPrimary))
+                        .italic(isAIGenerated)
 
                     if let variant = entity.nameVariant {
                         Text(variant.displayName)
@@ -235,6 +247,16 @@ private struct RestoredEntityRow: View {
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(entity.type.highlightColor.opacity(0.8))
+                            .cornerRadius(3)
+                    }
+
+                    if isAIGenerated {
+                        Text("AI")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.red.opacity(0.8))
                             .cornerRadius(3)
                     }
                 }
@@ -254,7 +276,7 @@ private struct RestoredEntityRow: View {
         .padding(.horizontal, DesignSystem.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(hasOverride ? Color.orange.opacity(0.1) : entity.type.highlightColor.opacity(0.1))
+                .fill(isAIGenerated ? Color.red.opacity(0.1) : (hasOverride ? Color.orange.opacity(0.1) : entity.type.highlightColor.opacity(0.1)))
         )
         .contextMenu {
             Button(action: onEdit) {

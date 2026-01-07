@@ -807,10 +807,34 @@ class WorkflowViewModel: ObservableObject {
             }
         }
 
+        // Detect AI-generated placeholders that weren't in original redacted text
+        // These appear when AI creates person references without names in source
+        detectAIGeneratedPlaceholders(in: improveState.currentDocument)
+
         restoreState.restoreNamesFromAIOutput()
         // Rebuild restored text cache using strong reference
         if !restoreState.finalRestoredText.isEmpty {
             cacheManager.rebuildRestoredCache(restoredText: restoreState.finalRestoredText)
+        }
+    }
+
+    /// Detect person-type placeholders in AI output that weren't in original redacted text
+    /// These are added to entityMapping with empty original for user to fill in during Restore
+    private func detectAIGeneratedPlaceholders(in text: String) {
+        // Match person-type placeholders: [PERSON_A_FIRST], [CLIENT_B_FIRST_LAST], etc.
+        let pattern = "\\[(PERSON|CLIENT|PROVIDER|CLINICIAN)_[A-Z](?:_(?:FIRST|LAST|MIDDLE|FIRST_LAST|FULL))*\\]"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
+
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+
+        for match in matches {
+            guard let matchRange = Range(match.range, in: text) else { continue }
+            let placeholder = String(text[matchRange])
+
+            // Add to mapping if not already present (will have empty original)
+            engine.entityMapping.addAIGeneratedPlaceholder(placeholder)
         }
     }
 
