@@ -27,6 +27,7 @@
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */; };
 		XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = XLMR0001000000000000000002 /* XLMRobertaNERService.swift */; };
+		GLINR001000000000000000001 /* GLiNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = GLINR001000000000000000002 /* GLiNERService.swift */; };
 		XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */; };
 		XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0003000000000000000002 /* sentencepiece.bpe.model */; };
 		XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0004000000000000000002 /* xlmr_vocab.json */; };
@@ -82,6 +83,9 @@
 		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
 		DATENORM001000000000000001 /* DateNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DATENORM001000000000000002 /* DateNormalizer.swift */; };
 		TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXTCNTCRD00100000000000002 /* TextContentCard.swift */; };
+		MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */; };
+		ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = ONNX0002000000000000000001 /* CONNXRuntime */; };
+		GLINER0001000000000000001 /* GLiNERBundle in Resources */ = {isa = PBXBuildFile; fileRef = GLINER0001000000000000002 /* GLiNERBundle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -166,12 +170,15 @@
 		SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtensions.swift; sourceTree = "<group>"; };
 		XLMR0001000000000000000002 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
+		GLINR001000000000000000002 /* GLiNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLiNERService.swift; sourceTree = "<group>"; };
 		XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
 		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sentencepiece.bpe.model"; sourceTree = "<group>"; };
 		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
 		MEMSTOR001000000000000002 /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
 		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
 		TXTCNTCRD00100000000000002 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
+		MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
+		GLINER0001000000000000002 /* GLiNERBundle */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GLiNERBundle; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +187,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9305F0A93AE56D10A9BEB497 /* AWSBedrockRuntime in Frameworks */,
+				ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -312,6 +320,7 @@
 				304B514DF56B1A7F70285358 /* Info.plist */,
 				75E756C851010DB88E0108F7 /* Fonts */,
 				AB0B1B86621F3357358F1C51 /* BERT */,
+				GLINER0001000000000000002 /* GLiNERBundle */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -336,6 +345,7 @@
 				5F2551C5C15BE3034D62CB24 /* DocumentTypeManager.swift */,
 				D283D54D8952DB9D71D72D79 /* EntityDetector.swift */,
 				A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */,
+				GLINR001000000000000000002 /* GLiNERService.swift */,
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */,
 				MEMSTOR001000000000000002 /* MemoryStorage.swift */,
 				B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */,
@@ -378,6 +388,7 @@
 				86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */,
 				06463A5E2CDA5C7A80638837 /* StatusBar.swift */,
 				TXTCNTCRD00100000000000002 /* TextContentCard.swift */,
+				MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */,
 				D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */,
 			);
 			path = Components;
@@ -411,6 +422,7 @@
 				B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */,
 				E1F2A3B4C5D6E7F8A9B0C1D2 /* MLXLLM */,
 				E1F2A3B4C5D6E7F8A9B0C1D3 /* MLXLMCommon */,
+				ONNX0002000000000000000001 /* CONNXRuntime */,
 			);
 			productName = Redactor;
 			productReference = 212E6C017812F7CA53B24F18 /* Redactor.app */;
@@ -459,6 +471,7 @@
 			packageReferences = (
 				117C3E2CDC8D8C97B6CB9ABE /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
 				A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				ONNX0001000000000000000001 /* XCRemoteSwiftPackageReference "swift-onnxruntime" */,
 			);
 			preferredProjectObjectVersion = 54;
 			productRefGroup = 6B04B03B5ED1D07A8284B4AA /* Products */;
@@ -487,6 +500,7 @@
 				XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */,
 				XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */,
 				XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */,
+				GLINER0001000000000000001 /* GLiNERBundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -556,10 +570,12 @@
 				E4F5A6B7C8D9E0F1A2B3C4D5 /* RestorePhaseState.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* HighlightCacheManager.swift in Sources */,
 				XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */,
+				GLINR001000000000000000001 /* GLiNERService.swift in Sources */,
 				SRCDOC000100000000000001 /* SourceDocument.swift in Sources */,
 				MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */,
 				DATENORM001000000000000001 /* DateNormalizer.swift in Sources */,
 				TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */,
+				MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -843,6 +859,14 @@
 				minimumVersion = 2.29.1;
 			};
 		};
+		ONNX0001000000000000000001 /* XCRemoteSwiftPackageReference "swift-onnxruntime" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/readdle/swift-onnxruntime.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.20.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -860,6 +884,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		ONNX0002000000000000000001 /* CONNXRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = ONNX0001000000000000000001 /* XCRemoteSwiftPackageReference "swift-onnxruntime" */;
+			productName = CONNXRuntime;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
