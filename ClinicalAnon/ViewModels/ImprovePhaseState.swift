@@ -598,9 +598,21 @@ class ImprovePhaseState: ObservableObject {
                 }
 
                 if streamingDestination == .document {
-                    currentDocument = aiOutput
-                    changedLineIndices = computeChangedLines(from: previousDocument, to: aiOutput)
-                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                    // Check for [REVIEW] marker to split document and review
+                    let reviewMarker = "[REVIEW]"
+                    if let range = aiOutput.range(of: reviewMarker) {
+                        let documentContent = String(aiOutput[..<range.lowerBound])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        currentDocument = documentContent
+                        changedLineIndices = computeChangedLines(from: previousDocument, to: documentContent)
+                        let reviewContent = String(aiOutput[range.upperBound...])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        chatHistory.append((role: "assistant", content: reviewContent))
+                    } else {
+                        currentDocument = aiOutput
+                        changedLineIndices = computeChangedLines(from: previousDocument, to: aiOutput)
+                        chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                    }
                 } else {
                     chatHistory.append((role: "assistant", content: aiOutput))
                 }
@@ -703,8 +715,18 @@ class ImprovePhaseState: ObservableObject {
                 }
 
                 if streamingDestination == .document {
-                    currentDocument = aiOutput
-                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+                    // Check for [REVIEW] marker to split document and review
+                    let reviewMarker = "[REVIEW]"
+                    if let range = aiOutput.range(of: reviewMarker) {
+                        currentDocument = String(aiOutput[..<range.lowerBound])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        let reviewContent = String(aiOutput[range.upperBound...])
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        chatHistory.append((role: "assistant", content: reviewContent))
+                    } else {
+                        currentDocument = aiOutput
+                        chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+                    }
                 } else {
                     chatHistory.append((role: "assistant", content: aiOutput))
                 }
