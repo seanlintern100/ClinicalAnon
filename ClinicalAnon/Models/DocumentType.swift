@@ -584,6 +584,8 @@ struct DocumentType: Identifiable, Codable, Equatable {
 
             ---
 
+            **IMPORTANT:** Before section 3, you MUST output the literal text `[REVIEW]` on its own line. This marker separates the document from the chat-only review.
+
             [REVIEW]
 
             ### 3. CLINICAL REVIEW (For chat only—not for documentation)
