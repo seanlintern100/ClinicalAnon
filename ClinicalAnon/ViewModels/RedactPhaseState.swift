@@ -943,22 +943,22 @@ class RedactPhaseState: ObservableObject {
     }
 
     /// Remove all entities matching the given text (case-insensitive)
-    /// Also removes children of anchor entities (entities sharing the same baseId)
+    /// Also removes the entire entity group (all entities sharing the same baseId)
     func removeEntitiesByText(_ text: String) {
         let normalizedText = text.lowercased()
         var idsToRemove: Set<UUID> = []
         var baseIdsToRemove: Set<String> = []
 
-        // First pass: find matching entities and collect baseIds from anchors
+        // First pass: find matching entities and collect their baseIds (anchor or child)
         for entity in allEntities where entity.originalText.lowercased() == normalizedText {
             idsToRemove.insert(entity.id)
-            // If this is an anchor, collect its baseId to remove children too
-            if entity.isAnchor, let baseId = entity.baseId {
+            // Collect baseId from ANY matched entity to remove entire group
+            if let baseId = entity.baseId {
                 baseIdsToRemove.insert(baseId)
             }
         }
 
-        // Second pass: find all entities (including children) with matching baseIds
+        // Second pass: find all entities in the same group (sharing baseId)
         if !baseIdsToRemove.isEmpty {
             for entity in allEntities {
                 if let baseId = entity.baseId, baseIdsToRemove.contains(baseId) {
