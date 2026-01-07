@@ -57,7 +57,7 @@ class GLiNERService: ObservableObject {
     ]
 
     /// Confidence threshold for entity detection (lower = more sensitive)
-    private let confidenceThreshold: Double = 0.3
+    private let confidenceThreshold: Double = 0.15
 
     // MARK: - Bundle Paths
 
