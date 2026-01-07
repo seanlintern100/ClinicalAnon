@@ -980,6 +980,31 @@ class RedactPhaseState: ObservableObject {
         }
     }
 
+    /// Get the anchor name for display when removing an entity by text
+    /// If the text matches a child entity, returns the anchor's originalText instead
+    func getAnchorNameForText(_ text: String) -> String? {
+        let normalizedText = text.lowercased()
+
+        // Find entity matching this text
+        guard let entity = allEntities.first(where: { $0.originalText.lowercased() == normalizedText }) else {
+            return nil
+        }
+
+        // If it's already an anchor, return its text
+        if entity.isAnchor {
+            return entity.originalText
+        }
+
+        // Find the anchor with the same baseId
+        if let baseId = entity.baseId,
+           let anchor = allEntities.first(where: { $0.isAnchor && $0.baseId == baseId }) {
+            return anchor.originalText
+        }
+
+        // Fallback to entity's own text
+        return entity.originalText
+    }
+
     /// Move a deep scan finding to result.entities (after merge)
     /// This ensures the merged entity appears in the main section, not the deep scan section
     func moveDeepScanFindingToResult(_ entityId: UUID) {

@@ -145,6 +145,9 @@ struct RedactPhaseView: View {
                             },
                             onRemoveEntity: { selectedText in
                                 viewModel.removeEntitiesByText(selectedText)
+                            },
+                            getAnchorName: { selectedText in
+                                viewModel.redactState.getAnchorNameForText(selectedText)
                             }
                         )
                     }
@@ -269,6 +272,9 @@ struct RedactPhaseView: View {
                             },
                             onRemoveEntity: { selectedText in
                                 viewModel.removeEntitiesByText(selectedText)
+                            },
+                            getAnchorName: { selectedText in
+                                viewModel.redactState.getAnchorNameForText(selectedText)
                             }
                         )
                     }
@@ -1434,6 +1440,7 @@ private struct DuplicateGroupRow: View {
 class FastTextViewWithMenu: NSTextView {
     var onRightClickWithSelection: ((String) -> Void)?
     var onRemoveEntity: ((String) -> Void)?
+    var getAnchorName: ((String) -> String?)?
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()
@@ -1449,7 +1456,9 @@ class FastTextViewWithMenu: NSTextView {
                 addItem.target = self
                 menu.insertItem(addItem, at: 0)
 
-                let removeItem = NSMenuItem(title: "Remove '\(selectedText)' from entities", action: #selector(removeFromEntities), keyEquivalent: "")
+                // For remove, show anchor name if this is a child entity
+                let displayName = getAnchorName?(selectedText) ?? selectedText
+                let removeItem = NSMenuItem(title: "Remove '\(displayName)' from entities", action: #selector(removeFromEntities), keyEquivalent: "")
                 removeItem.target = self
                 menu.insertItem(removeItem, at: 1)
 
@@ -1492,6 +1501,7 @@ struct FastTextView: NSViewRepresentable {
     let attributedText: AttributedString
     var onRightClick: ((String) -> Void)? = nil
     var onRemoveEntity: ((String) -> Void)? = nil
+    var getAnchorName: ((String) -> String?)? = nil
 
     func makeNSView(context: Context) -> NSScrollView {
         // Create text storage, layout manager, and text container manually for proper setup
@@ -1516,6 +1526,7 @@ struct FastTextView: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.onRightClickWithSelection = onRightClick
         textView.onRemoveEntity = onRemoveEntity
+        textView.getAnchorName = getAnchorName
 
         // Set initial text
         textStorage.setAttributedString(NSAttributedString(attributedText))
@@ -1541,6 +1552,7 @@ struct FastTextView: NSViewRepresentable {
         // Update callbacks in case they changed
         textView.onRightClickWithSelection = onRightClick
         textView.onRemoveEntity = onRemoveEntity
+        textView.getAnchorName = getAnchorName
 
         // Ensure text container tracks width properly
         let contentWidth = max(scrollView.contentSize.width - 32, 100)  // Account for insets
