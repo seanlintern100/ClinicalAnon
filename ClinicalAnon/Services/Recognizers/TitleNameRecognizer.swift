@@ -21,7 +21,8 @@ class TitleNameRecognizer: EntityRecognizer {
     private let titles: [String] = [
         "Mr", "Mrs", "Ms", "Miss", "Dr", "Prof",
         "Pastor", "Reverend", "Rev", "Father", "Fr",
-        "Sir", "Dame", "Lord", "Lady"
+        "Sir", "Dame", "Lord", "Lady",
+        "Sister", "Nurse"  // Clinical titles
     ]
 
     // MARK: - Entity Recognition
