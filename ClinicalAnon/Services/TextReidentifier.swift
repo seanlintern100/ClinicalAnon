@@ -39,6 +39,10 @@ class TextReidentifier {
 
         // Replace each placeholder with original text
         for mapping in sorted {
+            // Skip if original is empty - leave placeholder in text for user to fill in
+            // This handles AI-generated placeholders that have no original text
+            guard !mapping.original.isEmpty else { continue }
+
             // For date placeholders, also match trailing year if present
             // This handles keepYear format: "[DATE_A] 1978" → "18/05/1978"
             if mapping.placeholder.contains("DATE") {
@@ -92,6 +96,10 @@ class TextReidentifier {
 
         // Replace each placeholder with original/override text
         for mapping in sorted {
+            // Skip if replacement is empty - leave placeholder in text for user to fill in
+            // This handles AI-generated placeholders that have no original text and no override yet
+            guard !mapping.original.isEmpty else { continue }
+
             // For date placeholders, also match trailing year if present
             // This handles keepYear format: "[DATE_A] 1978" → "18/05/1978"
             if mapping.placeholder.contains("DATE") {
