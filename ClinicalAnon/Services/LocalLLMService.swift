@@ -241,6 +241,17 @@ class LocalLLMService: ObservableObject {
         print("LocalLLMService: Model unloaded")
     }
 
+    // MARK: - Chunking Configuration
+
+    /// Maximum text length before chunking is applied
+    private let chunkingThreshold = 8_000
+
+    /// Chunk size for processing (conservative for 8B model)
+    private let chunkSize = 6_000
+
+    /// Overlap between chunks to catch names at boundaries
+    private let chunkOverlap = 200
+
     /// Review original text for PII and return only findings not already covered by existing entities
     /// - Parameters:
     ///   - originalText: The original (unredacted) text to analyze
@@ -263,12 +274,62 @@ class LocalLLMService: ObservableObject {
         // Notify caller that analysis is starting (model is now loaded)
         onAnalysisStarted?()
 
-        guard let session = chatSession else {
+        guard chatSession != nil else {
             throw AppError.localLLMModelNotLoaded
         }
 
         isProcessing = true
         defer { isProcessing = false }
+
+        print("LocalLLMService: Starting PII review, text length: \(originalText.count) chars")
+        print("LocalLLMService: Using model: \(selectedModelId)")
+        print("LocalLLMService: Existing entities to compare: \(existingEntities.count)")
+
+        let startTime = Date()
+        var allFindings: [PIIFinding] = []
+
+        // Use chunking for long texts to avoid overwhelming the model
+        if originalText.count > chunkingThreshold {
+            let chunks = ChunkManager.splitWithOverlap(
+                originalText,
+                chunkSize: chunkSize,
+                overlap: chunkOverlap
+            )
+            print("LocalLLMService: Text exceeds \(chunkingThreshold) chars, split into \(chunks.count) chunks")
+
+            for (index, chunk) in chunks.enumerated() {
+                print("LocalLLMService: Processing chunk \(index + 1)/\(chunks.count) (\(chunk.text.count) chars)")
+
+                do {
+                    let chunkFindings = try await reviewSingleChunk(chunk.text)
+                    print("LocalLLMService: Chunk \(index + 1) found \(chunkFindings.count) findings")
+                    allFindings.append(contentsOf: chunkFindings)
+                } catch {
+                    print("LocalLLMService: Chunk \(index + 1) failed: \(error.localizedDescription)")
+                    // Continue with other chunks even if one fails
+                }
+            }
+        } else {
+            // Short text - process in single call
+            allFindings = try await reviewSingleChunk(originalText)
+        }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        print("LocalLLMService: Total processing time: \(String(format: "%.1f", elapsed))s")
+        print("LocalLLMService: Total findings before dedup: \(allFindings.count)")
+
+        // Filter to only findings not already covered by existing entities (delta)
+        let deltaFindings = filterToDeltas(allFindings, existingEntities: existingEntities, in: originalText)
+        print("LocalLLMService: Delta findings (new): \(deltaFindings.count)")
+
+        return deltaFindings
+    }
+
+    /// Process a single chunk of text for PII
+    private func reviewSingleChunk(_ text: String) async throws -> [PIIFinding] {
+        guard let session = chatSession else {
+            throw AppError.localLLMModelNotLoaded
+        }
 
         // Detailed prompt for better name detection
         let prompt = """
@@ -278,6 +339,7 @@ class LocalLLMService: ObservableObject {
             1. Copy text EXACTLY as it appears - do not paraphrase or summarize
             2. Output ONLY in pipe format below - no markdown, no bullets, no headers
             3. One finding per line, nothing else
+            4. Do NOT summarize or describe the content
 
             NAMES TO LOOK FOR:
             - Uncommon or non-Western names (Māori, Pacific, Asian, European)
@@ -308,37 +370,22 @@ class LocalLLMService: ObservableObject {
 
             If nothing found, output only: NO_ISSUES_FOUND
 
-            Extract from this text:
+            Extract from this section (may be part of a larger document):
 
-            \(originalText)
+            \(text)
             """
-        print("LocalLLMService: Starting PII review on original text, prompt length: \(prompt.count) chars")
-        print("LocalLLMService: Using model: \(selectedModelId)")
-        print("LocalLLMService: Existing entities to compare: \(existingEntities.count)")
 
-        let startTime = Date()
+        let responseText = try await session.respond(to: prompt)
+        print("LocalLLMService: Response length: \(responseText.count) chars")
 
-        do {
-            // Use the simple ChatSession API
-            let responseText = try await session.respond(to: prompt)
-
-            let elapsed = Date().timeIntervalSince(startTime)
-            print("LocalLLMService: Got response in \(String(format: "%.1f", elapsed))s, length: \(responseText.count) chars")
-            print("LocalLLMService: Response: \(responseText)")
-
-            let allFindings = parseFindings(response: responseText)
-            print("LocalLLMService: Parsed \(allFindings.count) total findings")
-
-            // Filter to only findings not already covered by existing entities (delta)
-            let deltaFindings = filterToDeltas(allFindings, existingEntities: existingEntities, in: originalText)
-            print("LocalLLMService: Delta findings (new): \(deltaFindings.count)")
-
-            return deltaFindings
-
-        } catch {
-            print("LocalLLMService: Generation failed: \(error)")
-            throw AppError.localLLMGenerationFailed(error.localizedDescription)
+        // Check if response looks like a summary instead of findings
+        if responseText.count > 200 && !responseText.contains("|") && !responseText.uppercased().contains("NO_ISSUES_FOUND") {
+            print("LocalLLMService: WARNING - Response appears to be a summary, not structured findings")
+            return []
         }
+
+        let findings = parseFindings(response: responseText)
+        return findings
     }
 
     // MARK: - Private Methods
