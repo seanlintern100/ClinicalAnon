@@ -762,21 +762,17 @@ class AnonymizationViewModel: ObservableObject {
         allReplacements.sort { $0.start > $1.start }
 
         // Replace each position from last to first
+        // Use NSMutableString for consistent indexing with emoji/special chars
+        let mutableText = NSMutableString(string: text)
         for replacement in allReplacements {
-            guard replacement.start < text.count && replacement.end <= text.count else {
+            let nsRange = NSRange(location: replacement.start, length: replacement.end - replacement.start)
+            guard nsRange.location >= 0,
+                  nsRange.location + nsRange.length <= mutableText.length else {
                 continue
             }
-
-            let start = text.index(text.startIndex, offsetBy: replacement.start)
-            let end = text.index(text.startIndex, offsetBy: replacement.end)
-
-            // Validate string indices before replacement
-            guard start < text.endIndex && end <= text.endIndex && start < end else {
-                continue
-            }
-
-            text.replaceSubrange(start..<end, with: replacement.code)
+            mutableText.replaceCharacters(in: nsRange, with: replacement.code)
         }
+        text = mutableText as String
 
         cachedRedactedText = text
         redactedTextNeedsUpdate = false
@@ -817,6 +813,9 @@ class AnonymizationViewModel: ObservableObject {
         attributedString.font = NSFont.systemFont(ofSize: 14)
         attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
 
+        // Use NSString length for bounds checking (positions come from NSString-based detection)
+        let nsTextLength = (text as NSString).length
+
         // Apply highlights using stored positions (O(n) - no text search!)
         for entity in allEntities {
             let isExcluded = _excludedIds.contains(entity.id)
@@ -832,16 +831,15 @@ class AnonymizationViewModel: ObservableObject {
                 let start = position[0]
                 let end = position[1]
 
-                // Convert Int positions to AttributedString indices
-                guard start >= 0 && end <= text.count && start < end else { continue }
+                // Validate using NSString length (consistent with entity detection)
+                guard start >= 0 && end <= nsTextLength && start < end else { continue }
 
-                let startIdx = attributedString.index(attributedString.startIndex, offsetByCharacters: start)
-                let endIdx = attributedString.index(attributedString.startIndex, offsetByCharacters: end)
-
-                guard startIdx < attributedString.endIndex && endIdx <= attributedString.endIndex else { continue }
-
-                attributedString[startIdx..<endIdx].backgroundColor = bgColor
-                attributedString[startIdx..<endIdx].foregroundColor = fgColor
+                // Use NSRange for safe conversion to AttributedString range
+                let nsRange = NSRange(location: start, length: end - start)
+                if let range = Range(nsRange, in: attributedString) {
+                    attributedString[range].backgroundColor = bgColor
+                    attributedString[range].foregroundColor = fgColor
+                }
             }
         }
 
@@ -910,6 +908,7 @@ class AnonymizationViewModel: ObservableObject {
         // Update original text highlighting for this entity only
         if var original = cachedOriginalAttributed {
             let text = result.originalText
+            let nsTextLength = (text as NSString).length
             let bgColor = isNowExcluded
                 ? NSColor.gray.withAlphaComponent(0.3)
                 : NSColor(entity.type.highlightColor)
@@ -922,15 +921,15 @@ class AnonymizationViewModel: ObservableObject {
                 let start = position[0]
                 let end = position[1]
 
-                guard start >= 0 && end <= text.count && start < end else { continue }
+                // Validate using NSString length (consistent with entity detection)
+                guard start >= 0 && end <= nsTextLength && start < end else { continue }
 
-                let startIdx = original.index(original.startIndex, offsetByCharacters: start)
-                let endIdx = original.index(original.startIndex, offsetByCharacters: end)
-
-                guard startIdx < original.endIndex && endIdx <= original.endIndex else { continue }
-
-                original[startIdx..<endIdx].backgroundColor = bgColor
-                original[startIdx..<endIdx].foregroundColor = fgColor
+                // Use NSRange for safe conversion to AttributedString range
+                let nsRange = NSRange(location: start, length: end - start)
+                if let range = Range(nsRange, in: original) {
+                    original[range].backgroundColor = bgColor
+                    original[range].foregroundColor = fgColor
+                }
             }
 
             cachedOriginalAttributed = original

@@ -46,6 +46,9 @@ struct HighlightedTextView: View {
         attributedString.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         attributedString.foregroundColor = NSColor(DesignSystem.Colors.textPrimary)
 
+        // Use NSString length for bounds checking (positions come from NSString-based detection)
+        let nsTextLength = (text as NSString).length
+
         // Highlight each entity
         for entity in entities {
             for position in entity.positions {
@@ -54,14 +57,10 @@ struct HighlightedTextView: View {
                 let start = position[0]
                 let end = position[1]
 
-                // Validate bounds
-                guard start >= 0, end <= text.count, start < end else { continue }
+                // Validate using NSString length (consistent with entity detection)
+                guard start >= 0, end <= nsTextLength, start < end else { continue }
 
-                // Get string indices
-                let startIndex = text.index(text.startIndex, offsetBy: start)
-                let endIndex = text.index(text.startIndex, offsetBy: end)
-
-                // Convert to AttributedString range
+                // Convert to AttributedString range using NSRange
                 if let range = Range<AttributedString.Index>(
                     NSRange(location: start, length: end - start),
                     in: attributedString
