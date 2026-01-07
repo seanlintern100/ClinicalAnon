@@ -18,9 +18,9 @@ bedrock_config = Config(
 bedrock_runtime = boto3.client('bedrock-runtime', config=bedrock_config)
 
 # Allowed model patterns (security: prevent model injection)
+# Only allow AU prefix to enforce Australian data residency
 ALLOWED_MODEL_PATTERNS = [
-    'anthropic.claude-',
-    'apac.anthropic.claude-',
+    'au.anthropic.claude-',
 ]
 
 # Maximum tokens limit (cost protection)

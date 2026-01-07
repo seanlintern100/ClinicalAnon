@@ -117,9 +117,9 @@ class BedrockService: ObservableObject {
         let testMessages = [["role": "user", "content": "Say 'ok'"]]
 
         do {
-            // Use Sonnet 4 for connection test (Haiku may have access restrictions)
+            // Use Sonnet 4.5 for connection test (AU prefix enforces Australian data residency)
             let _ = try await callProxy(
-                model: "apac.anthropic.claude-sonnet-4-20250514-v1:0",
+                model: "au.anthropic.claude-sonnet-4-5-20250929-v1:0",
                 messages: testMessages,
                 systemPrompt: nil,
                 maxTokens: 10
