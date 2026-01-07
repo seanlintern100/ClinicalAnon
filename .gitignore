@@ -130,3 +130,6 @@ temp/
 # Large ML models (regenerate with scripts/convert_xlmr_to_coreml.py)
 ClinicalAnon/Resources/BERT/XLMRobertaNER.mlpackage/
 ClinicalAnon/Resources/BERT/tokenizer/
+
+# GLiNER Python bundle (~1.3GB) - created with python-build-standalone
+ClinicalAnon/Resources/GLiNERBundle/
