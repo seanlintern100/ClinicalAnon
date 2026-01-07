@@ -543,7 +543,7 @@ struct CompactHeaderView: View {
         .padding(.vertical, DesignSystem.Spacing.small)
         .background(DesignSystem.Colors.background)
         .sheet(isPresented: $showingHelp) {
-            HelpModalView(isPresented: $showingHelp)
+            HelpGuideModalView(contentType: .fullGuide)
         }
     }
 }
