@@ -58,7 +58,7 @@ class GLiNERService: ObservableObject {
 
     /// Path to the Python interpreter in the bundle
     private var pythonPath: URL {
-        bundlePath.appendingPathComponent("gliner-env/bin/python3")
+        bundlePath.appendingPathComponent("python/bin/python3")
     }
 
     /// Path to the gliner_scan.py script
@@ -187,6 +187,11 @@ class GLiNERService: ObservableObject {
 
     // MARK: - Private Methods
 
+    /// Path to the site-packages in the virtual environment
+    private var sitePackagesPath: URL {
+        bundlePath.appendingPathComponent("gliner-env/lib/python3.11/site-packages")
+    }
+
     /// Run the Python script as subprocess
     private func runPythonScan(text: String) async throws -> [GLiNEREntity] {
         let input = GLiNERInput(
@@ -197,9 +202,10 @@ class GLiNERService: ObservableObject {
 
         let inputJSON = try JSONEncoder().encode(input)
 
-        // Capture URLs before entering async context to avoid Sendable warnings
+        // Capture paths before entering async context to avoid Sendable warnings
         let pythonURL = pythonPath
         let scriptURL = scriptPath
+        let sitePackages = sitePackagesPath.path
 
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -207,6 +213,11 @@ class GLiNERService: ObservableObject {
                     let process = Process()
                     process.executableURL = pythonURL
                     process.arguments = [scriptURL.path, "--stdin"]
+
+                    // Set PYTHONPATH so standalone Python finds packages in gliner-env
+                    var env = ProcessInfo.processInfo.environment
+                    env["PYTHONPATH"] = sitePackages
+                    process.environment = env
 
                     let inputPipe = Pipe()
                     let outputPipe = Pipe()
