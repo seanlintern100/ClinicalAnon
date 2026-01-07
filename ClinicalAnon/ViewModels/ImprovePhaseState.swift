@@ -266,14 +266,18 @@ class ImprovePhaseState: ObservableObject {
                 } else {
                     // Normal document generation - check for [REVIEW] marker to split
                     let reviewMarker = "[REVIEW]"
+                    print("🔍 [REVIEW] Check (standard mode): Searching in aiOutput of \(aiOutput.count) chars")
                     if let range = aiOutput.range(of: reviewMarker) {
                         // Split: document before marker, review after
+                        print("🔍 [REVIEW] Found at position \(aiOutput.distance(from: aiOutput.startIndex, to: range.lowerBound))")
                         currentDocument = String(aiOutput[..<range.lowerBound])
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                         let reviewContent = String(aiOutput[range.upperBound...])
                             .trimmingCharacters(in: .whitespacesAndNewlines)
+                        print("🔍 [REVIEW] Review content: \(reviewContent.count) chars")
                         chatHistory.append((role: "assistant", content: reviewContent))
                     } else {
+                        print("🔍 [REVIEW] NOT found in standard mode output")
                         // No review section - just document
                         currentDocument = aiOutput
                         chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
@@ -465,10 +469,25 @@ class ImprovePhaseState: ObservableObject {
                 chatHistory.append((role: "assistant", content: cleanedOutput))
                 isInRefinementMode = true
             } else {
-                // Normal document generation
-                currentDocument = result
+                // Normal document generation - check for [REVIEW] marker to split
+                let reviewMarker = "[REVIEW]"
+                print("🔍 [REVIEW] Check (memory mode): Searching in result of \(result.count) chars")
+                if let range = result.range(of: reviewMarker) {
+                    // Split: document before marker, review after
+                    print("🔍 [REVIEW] Found at position \(result.distance(from: result.startIndex, to: range.lowerBound))")
+                    currentDocument = String(result[..<range.lowerBound])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let reviewContent = String(result[range.upperBound...])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    print("🔍 [REVIEW] Content length: \(reviewContent.count) chars")
+                    chatHistory.append((role: "assistant", content: reviewContent))
+                } else {
+                    print("🔍 [REVIEW] NOT found in memory mode result")
+                    // No review section - just document
+                    currentDocument = result
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
+                }
                 isInRefinementMode = true
-                chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
             }
             isAIProcessing = false
 
@@ -847,9 +866,25 @@ class ImprovePhaseState: ObservableObject {
                 chatHistory.append((role: "assistant", content: cleanedResult))
             } else {
                 aiOutput = result
-                currentDocument = result
-                changedLineIndices = computeChangedLines(from: previousDocument, to: result)
-                chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                // Check for [REVIEW] marker to split document and review
+                let reviewMarker = "[REVIEW]"
+                print("🔍 [REVIEW] Check (memory refinement): Searching in result of \(result.count) chars")
+                if let range = result.range(of: reviewMarker) {
+                    let documentContent = String(result[..<range.lowerBound])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    print("🔍 [REVIEW] Found - doc: \(documentContent.count) chars")
+                    currentDocument = documentContent
+                    changedLineIndices = computeChangedLines(from: previousDocument, to: documentContent)
+                    let reviewContent = String(result[range.upperBound...])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    print("🔍 [REVIEW] Review content: \(reviewContent.count) chars")
+                    chatHistory.append((role: "assistant", content: reviewContent))
+                } else {
+                    print("🔍 [REVIEW] NOT found in memory refinement result")
+                    currentDocument = result
+                    changedLineIndices = computeChangedLines(from: previousDocument, to: result)
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                }
             }
 
             isAIProcessing = false
