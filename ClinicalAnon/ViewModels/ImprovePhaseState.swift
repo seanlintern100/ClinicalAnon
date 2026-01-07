@@ -39,6 +39,7 @@ class ImprovePhaseState: ObservableObject {
     // MARK: - Refinement Mode
 
     @Published var isInRefinementMode: Bool = false
+    @Published var isChatMode: Bool = false  // True when user clicked Chat button (freeform mode)
     @Published var refinementInput: String = ""
     @Published var chatHistory: [(role: String, content: String)] = []
     @Published var streamingDestination: StreamingDestination = .unknown
@@ -123,6 +124,12 @@ class ImprovePhaseState: ObservableObject {
 
     // MARK: - Actions
 
+    /// Start chat mode - enables freeform conversation without template
+    func startChatMode() {
+        isChatMode = true
+        isInRefinementMode = true
+    }
+
     /// Process text with AI using selected document type
     func processWithAI() {
         #if false  // DEBUG disabled for perf testing
@@ -167,6 +174,7 @@ class ImprovePhaseState: ObservableObject {
         aiError = nil
         isAIProcessing = true
         chatHistory = []
+        isChatMode = false  // Reset chat mode when using template generation
 
         lastProcessedRedactedText = inputForAI
         previousDocument = ""
@@ -473,6 +481,13 @@ class ImprovePhaseState: ObservableObject {
     func sendRefinement() {
         let request = refinementInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !request.isEmpty else { return }
+
+        // If this is the first message in chat mode, send with full document context
+        if chatHistory.isEmpty && isChatMode {
+            sendFirstChatMessage(request)
+            return
+        }
+
         guard !aiOutput.isEmpty else { return }
 
         chatHistory.append((role: "user", content: request))
@@ -575,6 +590,110 @@ class ImprovePhaseState: ObservableObject {
                     currentDocument = aiOutput
                     changedLineIndices = computeChangedLines(from: previousDocument, to: aiOutput)
                     chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
+                } else {
+                    chatHistory.append((role: "assistant", content: aiOutput))
+                }
+
+                streamingDestination = .unknown
+                isAIProcessing = false
+            } catch {
+                if !Task.isCancelled {
+                    aiError = error.localizedDescription
+                    isAIProcessing = false
+                }
+            }
+        }
+    }
+
+    /// Send first message in chat mode with full document context
+    private func sendFirstChatMessage(_ userMessage: String) {
+        guard let getText = getRedactedText else {
+            aiError = "No text provider configured"
+            return
+        }
+
+        let inputForAI = getText()
+        guard !inputForAI.isEmpty else {
+            aiError = "No redacted text to process"
+            return
+        }
+
+        chatHistory.append((role: "user", content: userMessage))
+        refinementInput = ""
+
+        currentAITask?.cancel()
+        aiService.cancel()
+
+        aiError = nil
+        isAIProcessing = true
+        aiOutput = ""
+        currentDocument = ""
+        previousDocument = ""
+        changedLineIndices = []
+
+        // Build document context
+        let documentContext: String
+        if sourceDocuments.count > 1 {
+            documentContext = formatSourceDocumentsForAI()
+        } else {
+            documentContext = inputForAI
+        }
+
+        let fullMessage = """
+            Here is the clinical text to work with:
+
+            ---
+            \(documentContext)
+            ---
+
+            User's instructions: \(userMessage)
+            """
+
+        let systemPrompt = """
+            You are a clinical writing assistant. The user will provide clinical text and their instructions.
+
+            RESPONSE FORMAT - THIS IS CRITICAL:
+
+            1. CONVERSATION RESPONSE (for questions, clarifications, discussing the content):
+               - Start with exactly: [CONVERSATION]
+               - Then provide your conversational reply
+
+            2. DOCUMENT OUTPUT (for generating, rewriting, or transforming content):
+               - Return ONLY the document text
+               - NO prefix, NO preamble
+               - The very first character must be the start of the content
+
+            CRITICAL RULES:
+            - Placeholders like [PERSON_A], [DATE_A], [ORG_B] must be preserved exactly as written
+            - Do not invent or assume details not in the source text
+            - Do not reveal or reference the original identifiers behind placeholders
+            """
+
+        streamingDestination = .unknown
+
+        currentAITask = Task {
+            do {
+                let conversationMarker = "[CONVERSATION]"
+                let stream = aiService.processStreaming(text: fullMessage, prompt: systemPrompt)
+
+                for try await chunk in stream {
+                    if Task.isCancelled { break }
+                    aiOutput += chunk
+
+                    if streamingDestination == .unknown && aiOutput.count >= conversationMarker.count {
+                        if aiOutput.hasPrefix(conversationMarker) {
+                            streamingDestination = .chat
+                            aiOutput = String(aiOutput.dropFirst(conversationMarker.count))
+                            aiOutput = aiOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        } else {
+                            streamingDestination = .document
+                        }
+                    }
+                }
+
+                if streamingDestination == .document {
+                    currentDocument = aiOutput
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
                 } else {
                     chatHistory.append((role: "assistant", content: aiOutput))
                 }

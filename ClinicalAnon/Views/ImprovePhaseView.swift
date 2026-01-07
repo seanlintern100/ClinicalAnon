@@ -206,6 +206,10 @@ struct ImprovePhaseView: View {
                     Text("Ask for changes")
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
+                } else if viewModel.improveState.isChatMode {
+                    Text("Enter your instructions")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
             }
             .frame(height: 52)
@@ -214,15 +218,15 @@ struct ImprovePhaseView: View {
             Divider().opacity(0.15)
 
             // Chat content
-            if !viewModel.hasGeneratedOutput && !viewModel.isAIProcessing {
-                // Empty state
+            if !viewModel.hasGeneratedOutput && !viewModel.isAIProcessing && !viewModel.improveState.isChatMode {
+                // Empty state (before generation or chat mode)
                 chatEmptyState
             } else {
                 // Chat history
                 chatHistory
 
-                // Input field (only after first generation)
-                if viewModel.hasGeneratedOutput {
+                // Input field (after generation OR in chat mode)
+                if viewModel.hasGeneratedOutput || viewModel.improveState.isChatMode {
                     chatInputBar
                 }
             }
@@ -488,7 +492,18 @@ struct ImprovePhaseView: View {
                     viewModel.cancelAIRequest()
                 }
                 .buttonStyle(SecondaryButtonStyle())
-            } else if !viewModel.hasGeneratedOutput {
+            } else if !viewModel.hasGeneratedOutput && !viewModel.improveState.isChatMode {
+                // Chat button (freeform conversation)
+                Button(action: { viewModel.improveState.startChatMode() }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                        Text("Chat")
+                    }
+                    .font(DesignSystem.Typography.body)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(viewModel.displayedRedactedText.isEmpty && viewModel.improveState.sourceDocuments.isEmpty)
+
                 // Generate button
                 Button(action: { viewModel.processWithAI() }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
@@ -528,11 +543,15 @@ struct ImprovePhaseView: View {
         // Empty state - card fills pane with centered content
         VStack {
             Spacer()
-            Image(systemName: "doc.text")
+            Image(systemName: viewModel.improveState.isChatMode ? "bubble.left.and.bubble.right" : "doc.text")
                 .font(.system(size: 40))
                 .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.3))
 
-            if let docType = viewModel.selectedDocumentType {
+            if viewModel.improveState.isChatMode {
+                Text("AI response will appear here")
+                    .font(.system(size: 14))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            } else if let docType = viewModel.selectedDocumentType {
                 Text("Your \(docType.name.lowercased()) will appear here")
                     .font(.system(size: 14))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
