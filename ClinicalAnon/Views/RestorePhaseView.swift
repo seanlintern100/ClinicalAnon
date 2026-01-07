@@ -175,6 +175,34 @@ struct RestorePhaseView: View {
                             onEdit: { viewModel.restoreState.startEditingReplacement(entity) }
                         )
                     }
+
+                    // Missing Entities Section
+                    if !viewModel.missingEntities.isEmpty {
+                        Divider()
+                            .padding(.vertical, DesignSystem.Spacing.small)
+
+                        // Section header
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 12))
+                            Text("Missing Entities")
+                                .font(DesignSystem.Typography.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                            Spacer()
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.xs)
+                        .padding(.bottom, DesignSystem.Spacing.xs)
+
+                        ForEach(viewModel.missingEntities, id: \.placeholder) { missing in
+                            MissingEntityRow(
+                                placeholder: missing.placeholder,
+                                override: missing.override,
+                                onEdit: { viewModel.restoreState.startEditingMissingEntity(missing.placeholder) }
+                            )
+                        }
+                    }
                 }
                 .padding(DesignSystem.Spacing.small)
             }
@@ -185,9 +213,17 @@ struct RestorePhaseView: View {
             HStack {
                 Spacer()
 
-                Text("\(viewModel.restoredEntities.count) \(viewModel.restoredEntities.count == 1 ? "entity" : "entities") restored")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                VStack(spacing: 2) {
+                    Text("\(viewModel.restoredEntities.count) \(viewModel.restoredEntities.count == 1 ? "entity" : "entities") restored")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                    if !viewModel.missingEntities.isEmpty {
+                        Text("\(viewModel.missingEntities.count) missing")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
 
                 Spacer()
             }
@@ -286,6 +322,74 @@ private struct RestoredEntityRow: View {
     }
 }
 
+// MARK: - Missing Entity Row
+
+private struct MissingEntityRow: View {
+
+    let placeholder: String
+    let override: String?
+    let onEdit: () -> Void
+
+    /// Display text - uses override if available, otherwise shows needs replacement
+    private var displayText: String {
+        if let override = override, !override.isEmpty {
+            return override
+        }
+        return "(needs replacement)"
+    }
+
+    /// Whether this entity has a custom override
+    private var hasOverride: Bool {
+        override != nil && !(override?.isEmpty ?? true)
+    }
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            Image(systemName: hasOverride ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundColor(hasOverride ? DesignSystem.Colors.success : .red)
+                .font(.system(size: 12))
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(displayText)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(hasOverride ? DesignSystem.Colors.textPrimary : .red)
+                        .italic(!hasOverride)
+
+                    Text("AI")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.orange.opacity(0.8))
+                        .cornerRadius(3)
+                }
+
+                HStack(spacing: 4) {
+                    Text("←")
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text(placeholder)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                .font(.system(size: 11))
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, DesignSystem.Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(hasOverride ? DesignSystem.Colors.success.opacity(0.1) : Color.red.opacity(0.1))
+        )
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("Edit Replacement", systemImage: "pencil")
+            }
+        }
+    }
+}
+
 // MARK: - Edit Replacement Modal
 
 struct EditReplacementModal: View {
@@ -311,7 +415,7 @@ struct EditReplacementModal: View {
                 .accessibilityLabel("Close dialog")
             }
 
-            // Entity info
+            // Entity info - regular entity
             if let entity = viewModel.restoreState.entityBeingEdited {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
                     HStack {
@@ -341,6 +445,45 @@ struct EditReplacementModal: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(DesignSystem.Spacing.medium)
                 .background(DesignSystem.Colors.surface)
+                .cornerRadius(8)
+            }
+            // Missing entity info - AI-generated placeholder
+            else if let placeholder = viewModel.restoreState.missingEntityBeingEdited {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    HStack {
+                        Text("Placeholder:")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                        Text(placeholder)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.15))
+                            .cornerRadius(4)
+
+                        Text("AI")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.8))
+                            .cornerRadius(3)
+                    }
+
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 12))
+                        Text("This placeholder was generated by AI and has no original text.")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DesignSystem.Spacing.medium)
+                .background(Color.orange.opacity(0.1))
                 .cornerRadius(8)
             }
 

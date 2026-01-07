@@ -268,6 +268,44 @@ class WorkflowViewModel: ObservableObject {
         return result
     }
 
+    /// Missing entities - placeholders in the restored text that have no replacement
+    /// These are typically AI-generated placeholders that weren't in the original redaction
+    var missingEntities: [(placeholder: String, override: String?)] {
+        let output = finalRestoredText
+        guard !output.isEmpty else { return [] }
+
+        // Broad pattern to match any placeholder format: [WORD_X...] or [WORD_X_WORD...]
+        let pattern = "\\[[A-Z]+_[A-Z](?:_[A-Z]+)*\\]"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        let range = NSRange(output.startIndex..., in: output)
+        let matches = regex.matches(in: output, range: range)
+
+        // Get all replacement codes from restored entities
+        let restoredCodes = Set(restoredEntities.map { $0.replacementCode })
+
+        var seen = Set<String>()
+        var result: [(placeholder: String, override: String?)] = []
+
+        for match in matches {
+            guard let matchRange = Range(match.range, in: output) else { continue }
+            let placeholder = String(output[matchRange])
+
+            // Skip if already in restored entities (it has an original)
+            guard !restoredCodes.contains(placeholder) else { continue }
+
+            // Skip duplicates
+            guard !seen.contains(placeholder) else { continue }
+            seen.insert(placeholder)
+
+            // Check if user has provided an override
+            let override = restoreState.replacementOverrides[placeholder]
+            result.append((placeholder: placeholder, override: override))
+        }
+
+        return result
+    }
+
     func isEntityExcluded(_ entity: Entity) -> Bool {
         redactState.isEntityExcluded(entity)
     }

@@ -32,6 +32,7 @@ class RestorePhaseState: ObservableObject {
 
     @Published var showEditReplacementModal: Bool = false
     @Published var entityBeingEdited: Entity?
+    @Published var missingEntityBeingEdited: String?  // Placeholder string for missing entities
     @Published var editedReplacementText: String = ""
 
     /// Custom overrides: [replacementCode: customText]
@@ -92,6 +93,7 @@ class RestorePhaseState: ObservableObject {
         replacementOverrides.removeAll()
         showEditReplacementModal = false
         entityBeingEdited = nil
+        missingEntityBeingEdited = nil
         editedReplacementText = ""
     }
 
@@ -104,13 +106,38 @@ class RestorePhaseState: ObservableObject {
     /// Start editing a replacement - opens modal with current text
     func startEditingReplacement(_ entity: Entity) {
         entityBeingEdited = entity
+        missingEntityBeingEdited = nil
         // Use override if exists, otherwise use original text
         editedReplacementText = replacementOverrides[entity.replacementCode] ?? entity.originalText
         showEditReplacementModal = true
     }
 
+    /// Start editing a missing entity (AI-generated placeholder)
+    func startEditingMissingEntity(_ placeholder: String) {
+        missingEntityBeingEdited = placeholder
+        entityBeingEdited = nil
+        // Use override if exists, otherwise empty
+        editedReplacementText = replacementOverrides[placeholder] ?? ""
+        showEditReplacementModal = true
+    }
+
     /// Apply the edited replacement text
     func applyReplacementEdit() {
+        // Handle missing entity edit
+        if let placeholder = missingEntityBeingEdited {
+            // Store the override
+            replacementOverrides[placeholder] = editedReplacementText
+
+            // Rebuild restored text with new override
+            rebuildRestoredText()
+
+            // Close modal
+            showEditReplacementModal = false
+            missingEntityBeingEdited = nil
+            return
+        }
+
+        // Handle regular entity edit
         guard let entity = entityBeingEdited else { return }
 
         // Store the override
@@ -128,6 +155,7 @@ class RestorePhaseState: ObservableObject {
     func cancelReplacementEdit() {
         showEditReplacementModal = false
         entityBeingEdited = nil
+        missingEntityBeingEdited = nil
         editedReplacementText = ""
     }
 

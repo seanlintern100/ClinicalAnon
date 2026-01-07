@@ -121,6 +121,15 @@ class TextReidentifier {
             }
         }
 
+        // Second pass: Apply overrides for placeholders NOT in the mapping
+        // This handles AI-generated placeholders that user has provided replacement text for
+        let mappedPlaceholders = Set(allMappings.map { $0.replacement })
+        for (placeholder, customText) in overrides where !mappedPlaceholders.contains(placeholder) {
+            // Only replace if custom text is not empty
+            guard !customText.isEmpty else { continue }
+            result = result.replacingOccurrences(of: placeholder, with: customText)
+        }
+
         // Normalize dates to dd/MM/yyyy format
         if normalizeDates {
             result = DateNormalizer.normalizeAllDates(in: result)
