@@ -231,12 +231,28 @@ struct DocumentType: Identifiable, Codable, Equatable {
 
             First, output the cleaned clinical notes (this becomes the formal record).
 
-            Then add the marker [REVIEW] on its own line, followed by a brief clinical review covering:
-            - Unclear or ambiguous content (what you flagged and why)
-            - Risk indicators identified (suicidal ideation, self-harm, safeguarding concerns, etc.)
-            - Suggested follow-up actions (assessments, referrals, gaps to clarify)
+            Then add the marker [REVIEW] on its own line, followed by a clinical review.
 
-            Keep the review concise and actionable.
+            ## Clinical Review Guidelines
+
+            Your role is to FLAG content, not to FORMULATE or RECOMMEND. Stay factual and within the bounds of what was documented.
+
+            **Unclear or ambiguous content:**
+            - List anything unclear, contradictory, or incomplete
+            - State what was unclear—do not suggest what to do about it
+
+            **Risk-related content identified:**
+            - List ONLY risk-related statements explicitly present in the notes
+            - Report factually without adding clinical weight (avoid "significant," "concerning," "warrants monitoring")
+            - Do not infer patterns across sessions unless explicitly noted
+
+            **Content for clinician's attention:**
+            - List factual observations the clinician may wish to consider
+            - State what was noted, not what it means
+            - Do not recommend assessments, tools, or clinical actions
+            - Do not generate hypotheses or suggest connections
+
+            The clinician will make their own clinical judgments.
             """,
         icon: "doc.text",
         isBuiltIn: true,
