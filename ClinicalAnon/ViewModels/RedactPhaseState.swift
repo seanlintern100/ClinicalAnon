@@ -1844,7 +1844,10 @@ class RedactPhaseState: ObservableObject {
     private func autoHideSuccess() {
         Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            successMessage = nil
+            // Don't hide if a long-running scan is in progress
+            if !isRunningGLiNERScan && !isRunningDeepScan {
+                successMessage = nil
+            }
         }
     }
 
