@@ -31,10 +31,18 @@ class GLiNERService: ObservableObject {
     /// Default PII entity labels to search for
     private let entityLabels = [
         "person",
+        "name",
+        "patient name",
+        "doctor name",
         "organization",
+        "hospital",
+        "clinic",
         "phone number",
         "email",
         "address",
+        "location",
+        "city",
+        "date",
         "date of birth",
         "social security number",
         "credit card number",
@@ -43,11 +51,13 @@ class GLiNERService: ObservableObject {
         "driver license number",
         "health insurance id",
         "medical record number",
+        "account number",
+        "id number",
         "ip address"
     ]
 
-    /// Confidence threshold for entity detection
-    private let confidenceThreshold: Double = 0.5
+    /// Confidence threshold for entity detection (lower = more sensitive)
+    private let confidenceThreshold: Double = 0.3
 
     // MARK: - Bundle Paths
 
@@ -274,19 +284,19 @@ class GLiNERService: ObservableObject {
     /// Map GLiNER labels to EntityType
     private func mapGLiNERLabel(_ label: String) -> EntityType {
         switch label.lowercased() {
-        case "person", "name":
+        case "person", "name", "patient name", "doctor name":
             return .personOther
-        case "organization", "company":
+        case "organization", "company", "hospital", "clinic":
             return .organization
         case "phone number", "mobile phone number", "email":
             return .contact
-        case "address", "location":
+        case "address", "location", "city":
             return .location
-        case "date of birth", "dob":
+        case "date", "date of birth", "dob":
             return .date
         case "social security number", "ssn", "credit card number", "bank account number",
              "passport number", "driver license number", "health insurance id",
-             "medical record number", "mrn", "ip address":
+             "medical record number", "mrn", "ip address", "account number", "id number":
             return .identifier
         default:
             return .identifier  // Default to identifier for unknown PII types
