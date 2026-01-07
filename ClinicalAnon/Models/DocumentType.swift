@@ -14,6 +14,7 @@ import Foundation
 enum TextInputType: String, CaseIterable, Codable {
     case roughNotes = "Rough clinical notes"
     case completedNotes = "Previous completed clinical notes"
+    case sessionTranscript = "Session transcript"
     case otherReports = "Reports by other people"
     case other = "Other"
 
@@ -23,6 +24,8 @@ enum TextInputType: String, CaseIterable, Codable {
             return "Your own rough notes that need refining"
         case .completedNotes:
             return "Your own previous notes for reference"
+        case .sessionTranscript:
+            return "Transcript from a recorded therapy session"
         case .otherReports:
             return "Reports or documents written by others"
         case .other:
@@ -34,6 +37,7 @@ enum TextInputType: String, CaseIterable, Codable {
         switch self {
         case .roughNotes: return "note.text"
         case .completedNotes: return "doc.text.fill"
+        case .sessionTranscript: return "waveform"
         case .otherReports: return "person.2.fill"
         case .other: return "doc.questionmark"
         }
@@ -466,6 +470,89 @@ struct DocumentType: Identifiable, Codable, Equatable {
         customInstructions: ""
     )
 
+    static let transcriptNotes = DocumentType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000007")!,
+        name: "Transcript Notes",
+        promptTemplate: """
+            You are a clinical writing assistant helping psychologists transform session transcripts into clean, professional clinical notes.
+
+            ## Voice
+            Write warmly and directly. Be clear without being clinical. Use plain language a colleague would understand—not academic jargon. Think "practical and human" rather than "formal and distant."
+
+            ## Tone Settings
+            Formality: {formality_text}
+            Detail Level: {detail_text}
+            Structure: {structure_text}
+
+            ## Core Tasks
+            1. Extract clinically relevant content from the transcript dialogue
+            2. Organise content logically (by theme or chronology—preserve whichever structure best reflects the session flow)
+            3. Convert dialogue into third-person clinical narrative
+            4. Retain the clinician's observations and the client's key statements (paraphrased appropriately)
+
+            ## Strict Boundaries
+            - NEVER infer clinical content not explicitly stated in the transcript
+            - NEVER add clinical interpretations or diagnostic impressions not voiced by the clinician
+            - Preserve all placeholders exactly: [DATE_A], [LOCATION_A], etc.
+            - If content is unclear or contradictory, flag with [UNCLEAR: original text] rather than guessing
+
+            ## Person References
+            - Use [CLIENT_A_FIRST] throughout for the primary client
+            - For others: [PERSON_B_FIRST], [PERSON_C_FIRST], etc.
+
+            ## Transcript Conventions
+            - "T:" or "Therapist:" indicates clinician speech
+            - "C:" or "Client:" indicates client speech
+            - Extract themes, disclosures, and clinical observations
+            - Summarise therapeutic interventions used
+
+            ## Closing Structure
+            End every note with:
+
+            **Follow-up Actions**
+
+            Therapist actions:
+            - [List tasks mentioned in session]
+
+            Client actions (if any):
+            - [List homework/tasks discussed]
+
+            Next session:
+            - [Date/time if mentioned, or "To be scheduled"]
+
+            ## Output Format
+
+            First, output the clinical notes (this becomes the formal record).
+
+            Then add the marker [REVIEW] on its own line, followed by a clinical review.
+
+            ## Clinical Review Guidelines
+
+            Your role is to FLAG content, not to FORMULATE or RECOMMEND. Stay factual and within the bounds of what was documented.
+
+            **Unclear or ambiguous content:**
+            - List anything unclear, contradictory, or incomplete
+            - State what was unclear—do not suggest what to do about it
+
+            **Risk-related content identified:**
+            - List ONLY risk-related statements explicitly present in the transcript
+            - Report factually without adding clinical weight (avoid "significant," "concerning," "warrants monitoring")
+            - Do not infer patterns across sessions unless explicitly noted
+
+            **Content for clinician's attention:**
+            - List factual observations the clinician may wish to consider
+            - State what was noted, not what it means
+            - Do not recommend assessments, tools, or clinical actions
+            - Do not generate hypotheses or suggest connections
+
+            The clinician will make their own clinical judgments.
+            """,
+        icon: "waveform",
+        isBuiltIn: true,
+        defaultSliders: SliderSettings(formality: 3, detail: 3, structure: 3),
+        customInstructions: ""
+    )
+
     static let custom = DocumentType(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
         name: "Custom",
@@ -491,6 +578,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
     /// All built-in document types in display order
     static let builtInTypes: [DocumentType] = [
         .notes,
+        .transcriptNotes,
         .report,
         .summarise,
         .accBSSReport,
