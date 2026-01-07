@@ -23,7 +23,7 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.healthcare-fitness</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
+	<string>14.0</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2025 3 Big Things. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
