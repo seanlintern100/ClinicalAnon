@@ -169,6 +169,10 @@ class WorkflowViewModel: ObservableObject {
     var isRunningDeepScan: Bool { redactState.isRunningDeepScan }
     var deepScanError: String? { redactState.deepScanError }
 
+    var gliNERFindings: [Entity] { redactState.gliNERFindings }
+    var isRunningGLiNERScan: Bool { redactState.isRunningGLiNERScan }
+    var gliNERScanError: String? { redactState.gliNERScanError }
+
     var cachedRedactedText: String { redactState.cachedRedactedText }
 
     var prefilledText: String? {
@@ -760,6 +764,21 @@ class WorkflowViewModel: ObservableObject {
 
     func runDeepScan() async {
         await redactState.runDeepScan()
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
+                restoredText: nil
+            )
+        }
+    }
+
+    func runGLiNERScan() async {
+        await redactState.runGLiNERScan()
         if let result = redactState.result {
             cacheManager.rebuildAllCaches(
                 originalText: result.originalText,

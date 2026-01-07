@@ -134,6 +134,11 @@ class RedactPhaseState: ObservableObject {
     @Published var showDeepScanCompleteMessage: Bool = false
     @Published var deepScanFindingsCount: Int = 0
 
+    // GLiNER PII Scan
+    @Published var gliNERFindings: [Entity] = []
+    @Published var isRunningGLiNERScan: Bool = false
+    @Published var gliNERScanError: String?
+
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
     @Published var hasPendingChanges: Bool = false
@@ -440,11 +445,11 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review + Deep Scan findings)
+    /// All entities (detected + custom + PII review + Deep Scan + GLiNER findings)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings }
+        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings + gliNERFindings }
         let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings + deepScanFindings
+        return baseEntities + customEntities + piiReviewFindings + deepScanFindings + gliNERFindings
     }
 
     /// Only active entities (not excluded)
@@ -625,11 +630,14 @@ class RedactPhaseState: ObservableObject {
         customEntities.removeAll()
         piiReviewFindings.removeAll()
         deepScanFindings.removeAll()
+        gliNERFindings.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
         isRunningDeepScan = false
         deepScanError = nil
+        isRunningGLiNERScan = false
+        gliNERScanError = nil
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -1417,6 +1425,108 @@ class RedactPhaseState: ObservableObject {
         let existingDeepTexts = Set(deepScanFindings.map { $0.originalText.lowercased() })
         let uniqueNewEntities = newEntities.filter { !existingDeepTexts.contains($0.originalText.lowercased()) }
         deepScanFindings.append(contentsOf: uniqueNewEntities)
+    }
+
+    // MARK: - GLiNER PII Scan
+
+    /// Run GLiNER model for PII detection (requires model download first)
+    func runGLiNERScan() async {
+        guard let result = result else {
+            gliNERScanError = "Please analyze text first"
+            return
+        }
+
+        guard GLiNERService.shared.isAvailable else {
+            errorMessage = "GLiNER is not available on this system."
+            return
+        }
+
+        isRunningGLiNERScan = true
+        gliNERScanError = nil
+
+        // Show appropriate status message
+        if !GLiNERService.shared.isModelLoaded {
+            if GLiNERService.shared.isModelCached {
+                successMessage = "Loading GLiNER model..."
+            } else {
+                successMessage = "Downloading GLiNER model (first time only)..."
+                do {
+                    try await GLiNERService.shared.downloadModel()
+                } catch {
+                    await MainActor.run {
+                        isRunningGLiNERScan = false
+                        gliNERScanError = error.localizedDescription
+                        errorMessage = "GLiNER download failed: \(error.localizedDescription)"
+                    }
+                    return
+                }
+            }
+        } else {
+            successMessage = "Running GLiNER PII scan..."
+        }
+
+        do {
+            let findings = try await GLiNERService.shared.runPIIScan(
+                text: result.originalText,
+                existingEntities: allEntities
+            )
+
+            await MainActor.run {
+                processGLiNERFindings(findings, originalText: result.originalText)
+                isRunningGLiNERScan = false
+
+                if gliNERFindings.isEmpty {
+                    successMessage = "GLiNER scan complete - no additional PII found"
+                } else {
+                    successMessage = "GLiNER found \(gliNERFindings.count) additional item(s)"
+                }
+                autoHideSuccess()
+                redactedTextNeedsUpdate = true
+            }
+        } catch {
+            await MainActor.run {
+                isRunningGLiNERScan = false
+                gliNERScanError = error.localizedDescription
+                errorMessage = "GLiNER scan failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func processGLiNERFindings(_ findings: [PIIFinding], originalText: String) {
+        var newEntities: [Entity] = []
+
+        for finding in findings {
+            // Skip if text already exists in current entities
+            let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
+            if alreadyExists { continue }
+
+            // Skip if already added in this batch
+            if newEntities.contains(where: { $0.originalText.lowercased() == finding.text.lowercased() }) {
+                continue
+            }
+
+            // Find all occurrences
+            let positions = findAllOccurrences(of: finding.text, in: originalText)
+            guard !positions.isEmpty else { continue }
+
+            // Get replacement code from engine (this also registers it for restore)
+            let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
+
+            let entity = Entity(
+                originalText: finding.text,
+                replacementCode: code,
+                type: finding.suggestedType,
+                positions: positions,
+                confidence: finding.confidence
+            )
+
+            newEntities.append(entity)
+        }
+
+        // Merge with existing GLiNER findings, avoiding duplicates
+        let existingTexts = Set(gliNERFindings.map { $0.originalText.lowercased() })
+        let uniqueNewEntities = newEntities.filter { !existingTexts.contains($0.originalText.lowercased()) }
+        gliNERFindings.append(contentsOf: uniqueNewEntities)
     }
 
     // MARK: - Copy Actions
