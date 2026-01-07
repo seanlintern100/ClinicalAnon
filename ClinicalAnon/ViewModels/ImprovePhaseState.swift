@@ -275,6 +275,9 @@ class ImprovePhaseState: ObservableObject {
                         let reviewContent = String(aiOutput[range.upperBound...])
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                         print("🔍 [REVIEW] Review content: \(reviewContent.count) chars")
+                        // Add document marker first, then review content
+                        // (review must be second message to render as markdown, not status badge)
+                        chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
                         chatHistory.append((role: "assistant", content: reviewContent))
                     } else {
                         print("🔍 [REVIEW] NOT found in standard mode output")
@@ -480,6 +483,8 @@ class ImprovePhaseState: ObservableObject {
                     let reviewContent = String(result[range.upperBound...])
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     print("🔍 [REVIEW] Content length: \(reviewContent.count) chars")
+                    // Add document marker first, then review content
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
                     chatHistory.append((role: "assistant", content: reviewContent))
                 } else {
                     print("🔍 [REVIEW] NOT found in memory mode result")
@@ -626,6 +631,8 @@ class ImprovePhaseState: ObservableObject {
                         changedLineIndices = computeChangedLines(from: previousDocument, to: documentContent)
                         let reviewContent = String(aiOutput[range.upperBound...])
                             .trimmingCharacters(in: .whitespacesAndNewlines)
+                        // Add document marker first, then review content
+                        chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
                         chatHistory.append((role: "assistant", content: reviewContent))
                     } else {
                         currentDocument = aiOutput
@@ -741,6 +748,8 @@ class ImprovePhaseState: ObservableObject {
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                         let reviewContent = String(aiOutput[range.upperBound...])
                             .trimmingCharacters(in: .whitespacesAndNewlines)
+                        // Add document marker first, then review content
+                        chatHistory.append((role: "assistant", content: "[[DOCUMENT_GENERATED]]"))
                         chatHistory.append((role: "assistant", content: reviewContent))
                     } else {
                         currentDocument = aiOutput
@@ -878,6 +887,8 @@ class ImprovePhaseState: ObservableObject {
                     let reviewContent = String(result[range.upperBound...])
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     print("🔍 [REVIEW] Review content: \(reviewContent.count) chars")
+                    // Add document marker first, then review content
+                    chatHistory.append((role: "assistant", content: "[[DOCUMENT_UPDATED]]"))
                     chatHistory.append((role: "assistant", content: reviewContent))
                 } else {
                     print("🔍 [REVIEW] NOT found in memory refinement result")
