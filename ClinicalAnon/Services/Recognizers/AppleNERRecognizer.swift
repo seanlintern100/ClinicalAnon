@@ -179,22 +179,32 @@ class AppleNERRecognizer: EntityRecognizer {
     /// Find a name-word preceding the entity
     /// Must be: in list, capitalized, NOT at sentence start
     private func findPrecedingNameWord(before startIndex: Int, in text: String) -> String? {
-        guard startIndex > 2 else { return nil }
+        // Use NSString for consistent indexing with position calculations
+        let nsText = text as NSString
+        guard startIndex > 2, startIndex <= nsText.length else { return nil }
 
-        let idx = text.index(text.startIndex, offsetBy: startIndex)
-        let beforeIdx = text.index(before: idx)
-        guard text[beforeIdx] == " " else { return nil }
+        // Check that character before entity is a space
+        let charBeforeEntity = nsText.substring(with: NSRange(location: startIndex - 1, length: 1))
+        guard charBeforeEntity == " " else { return nil }
 
-        // Find the start of the preceding word
-        var wordStart = beforeIdx
-        while wordStart > text.startIndex {
-            let prevIdx = text.index(before: wordStart)
-            if text[prevIdx].isLetter { wordStart = prevIdx }
-            else { break }
+        // Find the start of the preceding word by scanning backwards
+        var wordStart = startIndex - 2  // Position before the space
+        while wordStart >= 0 {
+            let char = nsText.substring(with: NSRange(location: wordStart, length: 1))
+            let scalar = char.unicodeScalars.first
+            if let scalar = scalar, CharacterSet.letters.contains(scalar) {
+                wordStart -= 1
+            } else {
+                wordStart += 1  // Move back to first letter
+                break
+            }
         }
+        if wordStart < 0 { wordStart = 0 }
 
-        guard wordStart < beforeIdx else { return nil }
-        let word = String(text[wordStart..<beforeIdx])
+        // Extract the word
+        let wordLength = (startIndex - 1) - wordStart
+        guard wordLength > 0 else { return nil }
+        let word = nsText.substring(with: NSRange(location: wordStart, length: wordLength))
 
         // Must be in name-word list
         guard nameWords.contains(word.lowercased()) else { return nil }
@@ -203,9 +213,8 @@ class AppleNERRecognizer: EntityRecognizer {
         guard word.first?.isUppercase == true else { return nil }
 
         // Must NOT be at sentence start (check what's before the word)
-        if wordStart > text.startIndex {
-            let charBeforeWord = text.index(before: wordStart)
-            let prevChar = text[charBeforeWord]
+        if wordStart > 0 {
+            let prevChar = nsText.substring(with: NSRange(location: wordStart - 1, length: 1))
             // If preceded by period, newline, or bullet, it's sentence start - skip
             if prevChar == "." || prevChar == "\n" || prevChar == "•" || prevChar == "-" {
                 return nil

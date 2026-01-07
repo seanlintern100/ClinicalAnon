@@ -855,6 +855,12 @@ class AIAssistantService: ObservableObject {
             - Leave the report author as [Author Name] for the user to fill in
             - Names found in source documents are authors OF those documents, not the output
             """
+        case .sessionTranscript:
+            sourceContext = """
+            SOURCE CONTEXT: The user has provided a transcript from a recorded therapy session.
+            This is a verbatim or near-verbatim record of dialogue between therapist and client.
+            Extract and synthesize the clinical content into professional notes.
+            """
         case .other:
             sourceContext = """
             SOURCE CONTEXT: The user has provided reference materials.
@@ -887,6 +893,8 @@ class AIAssistantService: ObservableObject {
                 typeLabel = "User's completed notes"
             case .otherReports:
                 typeLabel = "Report by another person"
+            case .sessionTranscript:
+                typeLabel = "Session transcript"
             case .other:
                 typeLabel = doc.textInputTypeDescription.isEmpty ? "Reference material" : doc.textInputTypeDescription
             }
