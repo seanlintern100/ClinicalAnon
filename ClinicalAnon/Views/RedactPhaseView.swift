@@ -384,29 +384,6 @@ struct RedactPhaseView: View {
                 .disabled(viewModel.isRunningDeepScan)
                 .help("Run Apple NER with lower confidence (0.75) to catch additional names")
 
-                // GLiNER Scan button (Python-based PII detection)
-                if GLiNERService.shared.isAvailable {
-                    Button(action: {
-                        Task { await viewModel.runGLiNERScan() }
-                    }) {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            if viewModel.isRunningGLiNERScan {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                    .frame(width: 14, height: 14)
-                            } else {
-                                Image(systemName: "person.text.rectangle")
-                            }
-                            Text("GLiNER")
-                        }
-                        .font(DesignSystem.Typography.body)
-                        .frame(minWidth: 100)
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .disabled(viewModel.isRunningGLiNERScan)
-                    .help("Scan for PII using GLiNER model")
-                }
-
                 // Add More Docs button - shows classification modal first
                 Button(action: { showAddMoreDocsModal = true }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
@@ -546,19 +523,6 @@ private struct RedactEntitySidebar: View {
                             )
                         }
 
-                        // Show GLiNER section if there are GLiNER findings
-                        if !viewModel.gliNERFindings.isEmpty {
-                            EntityTypeSection(
-                                title: "GLiNER Findings",
-                                icon: "person.text.rectangle",
-                                color: .teal,
-                                entities: viewModel.gliNERFindings,
-                                viewModel: viewModel,
-                                isAISection: false,
-                                isDeepScanSection: false
-                            )
-                        }
-
                         // Group entities by type
                         ForEach(groupedEntityTypes, id: \.self) { entityType in
                             let entities = entitiesForType(entityType)
@@ -611,13 +575,12 @@ private struct RedactEntitySidebar: View {
         [.personClient, .personProvider, .personOther, .date, .location, .organization, .contact, .identifier, .numericAll]
     }
 
-    /// Get entities for a specific type (excluding AI/deep scan/GLiNER findings shown in separate sections)
+    /// Get entities for a specific type (excluding AI/deep scan findings shown in separate sections)
     private func entitiesForType(_ type: EntityType) -> [Entity] {
         let aiIds = Set(viewModel.piiReviewFindings.map { $0.id })
         let deepIds = Set(viewModel.deepScanFindings.map { $0.id })
-        let gliNERIds = Set(viewModel.gliNERFindings.map { $0.id })
         return viewModel.allEntities.filter {
-            $0.type == type && !aiIds.contains($0.id) && !deepIds.contains($0.id) && !gliNERIds.contains($0.id)
+            $0.type == type && !aiIds.contains($0.id) && !deepIds.contains($0.id)
         }
     }
 }

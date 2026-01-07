@@ -11,43 +11,44 @@ import SwiftUI
 struct LocalLLMSettingsView: View {
 
     @StateObject private var llmService = LocalLLMService.shared
-    @AppStorage("localLLMEnabled") private var isEnabled: Bool = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
-            // Header
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text("Local PII Review")
-                    .font(DesignSystem.Typography.heading)
+        ScrollView {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
+                // Header
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Local LLM Scan")
+                        .font(DesignSystem.Typography.heading)
 
-                Text("Use a local AI model to scan redacted text for missed personal information. Models run entirely on your device.")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
+                    Text("Use a local AI model to scan redacted text for missed personal information. Models run entirely on your device.")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
 
-            Divider()
-
-            // Status Section
-            statusSection
-
-            Divider()
-
-            // Model Selection
-            if llmService.isAvailable {
-                modelSelectionSection
                 Divider()
-            }
 
-            // Download/Load Section
-            if llmService.isAvailable {
-                modelLoadSection
-            } else {
-                notSupportedSection
-            }
+                // Status Section
+                statusSection
 
-            Spacer()
+                Divider()
+
+                // Model Selection
+                if llmService.isAvailable {
+                    modelSelectionSection
+                    Divider()
+                }
+
+                // Download/Load Section
+                if llmService.isAvailable {
+                    modelLoadSection
+                } else {
+                    notSupportedSection
+                }
+
+                Spacer()
+            }
+            .padding(DesignSystem.Spacing.large)
         }
-        .padding(DesignSystem.Spacing.large)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -73,11 +74,6 @@ struct LocalLLMSettingsView: View {
                 }
             }
 
-            // Enable toggle
-            Toggle("Enable local PII review", isOn: $isEnabled)
-                .font(DesignSystem.Typography.body)
-                .disabled(!llmService.isAvailable)
-
             // Error message
             if let error = llmService.lastError {
                 Text(error)
@@ -92,6 +88,8 @@ struct LocalLLMSettingsView: View {
             return .red
         } else if llmService.isModelLoaded {
             return .green
+        } else if llmService.isModelCached {
+            return .blue
         } else {
             return .yellow
         }
@@ -104,8 +102,10 @@ struct LocalLLMSettingsView: View {
             return "Model Loaded"
         } else if llmService.isDownloading {
             return "Downloading..."
+        } else if llmService.isModelCached {
+            return "Downloaded (Not Loaded)"
         } else {
-            return "Model Not Loaded"
+            return "Not Downloaded"
         }
     }
 
@@ -221,15 +221,61 @@ struct LocalLLMSettingsView: View {
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(DesignSystem.CornerRadius.medium)
 
+            } else if llmService.isModelCached {
+                // Model downloaded but not loaded
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .foregroundColor(.blue)
+                                Text("Model Downloaded")
+                                    .font(DesignSystem.Typography.body)
+                                    .foregroundColor(.blue)
+                            }
+
+                            if let modelInfo = llmService.selectedModelInfo {
+                                Text("\(modelInfo.name) is ready to load")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+
+                        Spacer()
+                    }
+
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        Button(action: loadModel) {
+                            HStack {
+                                Image(systemName: "play.circle")
+                                Text("Load Model")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button(action: { llmService.deleteModel() }) {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Delete")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .foregroundColor(.red)
+                    }
+                }
+                .padding(DesignSystem.Spacing.medium)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(DesignSystem.CornerRadius.medium)
+
             } else {
-                // Model not loaded
+                // Model not downloaded
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
                     if let modelInfo = llmService.selectedModelInfo {
                         Text("Selected: \(modelInfo.name)")
                             .font(DesignSystem.Typography.body)
                             .foregroundColor(DesignSystem.Colors.textPrimary)
 
-                        Text("The model will be downloaded automatically when you first use PII Review, or you can download it now.")
+                        Text("The model will be downloaded automatically when you first use LLM Scan, or you can download it now.")
                             .font(DesignSystem.Typography.caption)
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                     }

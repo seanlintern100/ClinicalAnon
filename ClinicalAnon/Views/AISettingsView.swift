@@ -34,8 +34,13 @@ struct SettingsContainerView: View {
                 .tabItem {
                     Label("Exclusions", systemImage: "eye.slash")
                 }
+
+            InclusionSettingsView()
+                .tabItem {
+                    Label("Inclusions", systemImage: "text.badge.plus")
+                }
         }
-        .frame(width: 550, height: 450)
+        .frame(width: 600, height: 480)
     }
 }
 

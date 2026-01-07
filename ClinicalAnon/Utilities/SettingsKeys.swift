@@ -55,4 +55,5 @@ enum SettingsKeys {
     // MARK: - User Preferences
 
     static let userExclusions = "userExcludedWords"
+    static let userInclusions = "userIncludedWords"
 }

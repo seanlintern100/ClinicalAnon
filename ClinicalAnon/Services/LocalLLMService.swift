@@ -241,6 +241,24 @@ class LocalLLMService: ObservableObject {
         print("LocalLLMService: Model unloaded")
     }
 
+    /// Delete the cached model files from disk
+    func deleteModel() {
+        // First unload from memory
+        unloadModel()
+
+        // Delete cached files
+        let path = cachedModelPath
+        do {
+            if FileManager.default.fileExists(atPath: path.path) {
+                try FileManager.default.removeItem(at: path)
+                print("LocalLLMService: Model deleted from \(path.path)")
+            }
+        } catch {
+            print("LocalLLMService: Failed to delete model: \(error)")
+            lastError = "Failed to delete model: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Chunking Configuration
 
     /// Maximum text length before chunking is applied

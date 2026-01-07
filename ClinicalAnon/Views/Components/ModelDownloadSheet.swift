@@ -60,7 +60,6 @@ struct ModelDownloadSheet: View {
 // MARK: - Downloadable Model Info
 
 /// Information about a downloadable AI model
-/// Note: GLiNER is now bundled with the app and doesn't require download
 enum DownloadableModel: String, CaseIterable {
     case llama = "llama"
     case xlmRoberta = "xlmRoberta"
@@ -86,8 +85,8 @@ enum DownloadableModel: String, CaseIterable {
 
 #Preview {
     ModelDownloadSheet(
-        modelName: "GLiNER PII",
-        modelSize: "450 MB",
+        modelName: "XLM-RoBERTa NER",
+        modelSize: "1.1 GB",
         isDownloading: false,
         progress: 0,
         onConfirm: {},
@@ -97,8 +96,8 @@ enum DownloadableModel: String, CaseIterable {
 
 #Preview("Downloading") {
     ModelDownloadSheet(
-        modelName: "GLiNER PII",
-        modelSize: "450 MB",
+        modelName: "XLM-RoBERTa NER",
+        modelSize: "1.1 GB",
         isDownloading: true,
         progress: 0.45,
         onConfirm: {},

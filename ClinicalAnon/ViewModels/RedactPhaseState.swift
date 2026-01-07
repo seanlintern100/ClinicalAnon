@@ -134,11 +134,6 @@ class RedactPhaseState: ObservableObject {
     @Published var showDeepScanCompleteMessage: Bool = false
     @Published var deepScanFindingsCount: Int = 0
 
-    // GLiNER PII Scan
-    @Published var gliNERFindings: [Entity] = []
-    @Published var isRunningGLiNERScan: Bool = false
-    @Published var gliNERScanError: String?
-
     // Private backing store for excluded IDs (pending changes)
     private var _excludedIds: Set<UUID> = []
     @Published var hasPendingChanges: Bool = false
@@ -445,11 +440,11 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review + Deep Scan + GLiNER findings)
+    /// All entities (detected + custom + PII review + Deep Scan)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings + gliNERFindings }
+        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings }
         let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings + deepScanFindings + gliNERFindings
+        return baseEntities + customEntities + piiReviewFindings + deepScanFindings
     }
 
     /// Only active entities (not excluded)
@@ -630,14 +625,11 @@ class RedactPhaseState: ObservableObject {
         customEntities.removeAll()
         piiReviewFindings.removeAll()
         deepScanFindings.removeAll()
-        gliNERFindings.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
         isRunningDeepScan = false
         deepScanError = nil
-        isRunningGLiNERScan = false
-        gliNERScanError = nil
         engine.clearSession()
         errorMessage = nil
         successMessage = nil
@@ -1427,88 +1419,6 @@ class RedactPhaseState: ObservableObject {
         deepScanFindings.append(contentsOf: uniqueNewEntities)
     }
 
-    // MARK: - GLiNER PII Scan
-
-    /// Run GLiNER model for PII detection (bundled with app)
-    func runGLiNERScan() async {
-        guard let result = result else {
-            gliNERScanError = "Please analyze text first"
-            return
-        }
-
-        guard GLiNERService.shared.isAvailable else {
-            errorMessage = "GLiNER bundle not found. Please reinstall the application."
-            return
-        }
-
-        isRunningGLiNERScan = true
-        gliNERScanError = nil
-        successMessage = "Running GLiNER PII scan (first run may take a minute to load - worth the wait!)..."
-
-        do {
-            let findings = try await GLiNERService.shared.runPIIScan(
-                text: result.originalText,
-                existingEntities: allEntities
-            )
-
-            await MainActor.run {
-                processGLiNERFindings(findings, originalText: result.originalText)
-                isRunningGLiNERScan = false
-
-                if gliNERFindings.isEmpty {
-                    successMessage = "GLiNER scan complete - no additional PII found"
-                } else {
-                    successMessage = "GLiNER found \(gliNERFindings.count) additional item(s)"
-                }
-                autoHideSuccess()
-                redactedTextNeedsUpdate = true
-            }
-        } catch {
-            await MainActor.run {
-                isRunningGLiNERScan = false
-                gliNERScanError = error.localizedDescription
-                errorMessage = "GLiNER scan failed: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    private func processGLiNERFindings(_ findings: [PIIFinding], originalText: String) {
-        var newEntities: [Entity] = []
-
-        for finding in findings {
-            // Skip if text already exists in current entities
-            let alreadyExists = allEntities.contains { $0.originalText.lowercased() == finding.text.lowercased() }
-            if alreadyExists { continue }
-
-            // Skip if already added in this batch
-            if newEntities.contains(where: { $0.originalText.lowercased() == finding.text.lowercased() }) {
-                continue
-            }
-
-            // Find all occurrences
-            let positions = findAllOccurrences(of: finding.text, in: originalText)
-            guard !positions.isEmpty else { continue }
-
-            // Get replacement code from engine (this also registers it for restore)
-            let code = engine.entityMapping.getReplacementCode(for: finding.text, type: finding.suggestedType)
-
-            let entity = Entity(
-                originalText: finding.text,
-                replacementCode: code,
-                type: finding.suggestedType,
-                positions: positions,
-                confidence: finding.confidence
-            )
-
-            newEntities.append(entity)
-        }
-
-        // Merge with existing GLiNER findings, avoiding duplicates
-        let existingTexts = Set(gliNERFindings.map { $0.originalText.lowercased() })
-        let uniqueNewEntities = newEntities.filter { !existingTexts.contains($0.originalText.lowercased()) }
-        gliNERFindings.append(contentsOf: uniqueNewEntities)
-    }
-
     // MARK: - Copy Actions
 
     func copyInputText() {
@@ -1845,7 +1755,7 @@ class RedactPhaseState: ObservableObject {
         Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             // Don't hide if a long-running scan is in progress
-            if !isRunningGLiNERScan && !isRunningDeepScan {
+            if !isRunningDeepScan {
                 successMessage = nil
             }
         }

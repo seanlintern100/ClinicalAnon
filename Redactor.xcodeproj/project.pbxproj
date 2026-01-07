@@ -27,7 +27,6 @@
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */; };
 		XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = XLMR0001000000000000000002 /* XLMRobertaNERService.swift */; };
-		GLINR001000000000000000001 /* GLiNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = GLINR001000000000000000002 /* GLiNERService.swift */; };
 		XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */; };
 		XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0003000000000000000002 /* sentencepiece.bpe.model */; };
 		XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0004000000000000000002 /* xlmr_vocab.json */; };
@@ -65,6 +64,9 @@
 		C7A88A1CE629870F858269F7 /* NZAddressRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39842730A81E3E5F5BF42B6C /* NZAddressRecognizer.swift */; };
 		D1E2F3A4B5C6D7E8F9A0B1C2 /* LocalLLMSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */; };
 		D2F92021CA7DC7A9ADDBD9C4 /* UserExclusionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */; };
+		USRINC0010000000000000001 /* UserInclusionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0010000000000000002 /* UserInclusionManager.swift */; };
+		USRINC0020000000000000001 /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0020000000000000002 /* UserInclusionRecognizer.swift */; };
+		USRINC0030000000000000001 /* InclusionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0030000000000000002 /* InclusionSettingsView.swift */; };
 		D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */; };
 		E2F3A4B5C6D7E8F9A0B1C2D3 /* RedactPhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A4B5C6D7E8F9A0B1C2D3E4 /* RedactPhaseState.swift */; };
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* ImprovePhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5B6C7D8E9F0A1B2C3D4E5 /* ImprovePhaseState.swift */; };
@@ -85,7 +87,6 @@
 		TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXTCNTCRD00100000000000002 /* TextContentCard.swift */; };
 		MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */; };
 		ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = ONNX0002000000000000000001 /* CONNXRuntime */; };
-		GLINER0001000000000000001 /* GLiNERBundle in Resources */ = {isa = PBXBuildFile; fileRef = GLINER0001000000000000002 /* GLiNERBundle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -140,6 +141,9 @@
 		A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityRecognizer.swift; sourceTree = "<group>"; };
 		AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaoriNameRecognizer.swift; sourceTree = "<group>"; };
 		AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserExclusionManager.swift; sourceTree = "<group>"; };
+		USRINC0010000000000000002 /* UserInclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionManager.swift; sourceTree = "<group>"; };
+		USRINC0020000000000000002 /* UserInclusionRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionRecognizer.swift; sourceTree = "<group>"; };
+		USRINC0030000000000000002 /* InclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InclusionSettingsView.swift; sourceTree = "<group>"; };
 		AD4A3288CEF816ED9D3925CC /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
 		B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
@@ -170,7 +174,6 @@
 		SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtensions.swift; sourceTree = "<group>"; };
 		XLMR0001000000000000000002 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
-		GLINR001000000000000000002 /* GLiNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLiNERService.swift; sourceTree = "<group>"; };
 		XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
 		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sentencepiece.bpe.model"; sourceTree = "<group>"; };
 		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
@@ -178,7 +181,6 @@
 		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
 		TXTCNTCRD00100000000000002 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
 		MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
-		GLINER0001000000000000002 /* GLiNERBundle */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GLiNERBundle; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -200,6 +202,7 @@
 				44D0C9224315FD3A09A4F7B6 /* AISettingsView.swift */,
 				E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */,
 				A899922CA47101C73867E8EB /* ExclusionSettingsView.swift */,
+				USRINC0030000000000000002 /* InclusionSettingsView.swift */,
 				51BF6876F36D56149F2DB144 /* ImprovePhaseView.swift */,
 				C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */,
 				DA72D874BD6FB4834486B29F /* MainContentView.swift */,
@@ -320,7 +323,6 @@
 				304B514DF56B1A7F70285358 /* Info.plist */,
 				75E756C851010DB88E0108F7 /* Fonts */,
 				AB0B1B86621F3357358F1C51 /* BERT */,
-				GLINER0001000000000000002 /* GLiNERBundle */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -345,7 +347,6 @@
 				5F2551C5C15BE3034D62CB24 /* DocumentTypeManager.swift */,
 				D283D54D8952DB9D71D72D79 /* EntityDetector.swift */,
 				A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */,
-				GLINR001000000000000000002 /* GLiNERService.swift */,
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */,
 				MEMSTOR001000000000000002 /* MemoryStorage.swift */,
 				B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */,
@@ -356,6 +357,7 @@
 				F110215B1181B8B98076418E /* TextReplacer.swift */,
 				DATENORM001000000000000002 /* DateNormalizer.swift */,
 				AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */,
+				USRINC0010000000000000002 /* UserInclusionManager.swift */,
 				374312736FC628C9B01D43D2 /* AWS */,
 				D90BD4EEC63338BFD6F5017D /* Recognizers */,
 				XLMR0001000000000000000002 /* XLMRobertaNERService.swift */,
@@ -376,6 +378,7 @@
 				5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */,
 				8438D6480E77924BABFCA894 /* RelationshipNameExtractor.swift */,
 				1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */,
+				USRINC0020000000000000002 /* UserInclusionRecognizer.swift */,
 			);
 			path = Recognizers;
 			sourceTree = "<group>";
@@ -500,7 +503,6 @@
 				XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */,
 				XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */,
 				XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */,
-				GLINER0001000000000000001 /* GLiNERBundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -561,6 +563,9 @@
 				4A45EFB5809D2D54CED0088B /* TextReidentifier.swift in Sources */,
 				F016C58CAD8F7A8D664FA3E4 /* TextReplacer.swift in Sources */,
 				D2F92021CA7DC7A9ADDBD9C4 /* UserExclusionManager.swift in Sources */,
+				USRINC0010000000000000001 /* UserInclusionManager.swift in Sources */,
+				USRINC0020000000000000001 /* UserInclusionRecognizer.swift in Sources */,
+				USRINC0030000000000000001 /* InclusionSettingsView.swift in Sources */,
 				AF86309F4111C19C6A170E03 /* WorkflowPhase.swift in Sources */,
 				C026D24088042251AFAEFCEF /* WorkflowViewModel.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F3 /* LocalLLMService.swift in Sources */,
@@ -570,7 +575,6 @@
 				E4F5A6B7C8D9E0F1A2B3C4D5 /* RestorePhaseState.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* HighlightCacheManager.swift in Sources */,
 				XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */,
-				GLINR001000000000000000001 /* GLiNERService.swift in Sources */,
 				SRCDOC000100000000000001 /* SourceDocument.swift in Sources */,
 				MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */,
 				DATENORM001000000000000001 /* DateNormalizer.swift in Sources */,
