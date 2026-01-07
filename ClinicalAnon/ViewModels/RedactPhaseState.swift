@@ -1443,7 +1443,7 @@ class RedactPhaseState: ObservableObject {
 
         isRunningGLiNERScan = true
         gliNERScanError = nil
-        successMessage = "Running GLiNER PII scan..."
+        successMessage = "Running GLiNER PII scan (first run may take a minute to load - worth the wait!)..."
 
         do {
             let findings = try await GLiNERService.shared.runPIIScan(
