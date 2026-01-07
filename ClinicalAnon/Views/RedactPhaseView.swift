@@ -19,7 +19,6 @@ struct RedactPhaseView: View {
     @ObservedObject var viewModel: WorkflowViewModel
     @State private var showClassificationModal = false
     @State private var showAddMoreDocsModal = false
-    @State private var showGLiNERDownloadSheet = false
 
     // MARK: - Body
 
@@ -385,18 +384,13 @@ struct RedactPhaseView: View {
                 .disabled(viewModel.isRunningDeepScan)
                 .help("Run Apple NER with lower confidence (0.75) to catch additional names")
 
-                // GLiNER Scan button (ONNX-based PII detection)
+                // GLiNER Scan button (Python-based PII detection)
                 if GLiNERService.shared.isAvailable {
                     Button(action: {
-                        // Check if model needs downloading first
-                        if !GLiNERService.shared.isModelCached {
-                            showGLiNERDownloadSheet = true
-                        } else {
-                            Task { await viewModel.runGLiNERScan() }
-                        }
+                        Task { await viewModel.runGLiNERScan() }
                     }) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
-                            if viewModel.isRunningGLiNERScan || GLiNERService.shared.isDownloading {
+                            if viewModel.isRunningGLiNERScan {
                                 ProgressView()
                                     .scaleEffect(0.7)
                                     .frame(width: 14, height: 14)
@@ -409,18 +403,8 @@ struct RedactPhaseView: View {
                         .frame(minWidth: 100)
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    .disabled(viewModel.isRunningGLiNERScan || GLiNERService.shared.isDownloading)
-                    .help("Scan for PII using GLiNER model (downloads model on first use)")
-                    .sheet(isPresented: $showGLiNERDownloadSheet) {
-                        GLiNERDownloadSheet(
-                            isPresented: $showGLiNERDownloadSheet,
-                            onDownloadComplete: {
-                                Task {
-                                    await viewModel.runGLiNERScan()
-                                }
-                            }
-                        )
-                    }
+                    .disabled(viewModel.isRunningGLiNERScan)
+                    .help("Scan for PII using GLiNER model")
                 }
 
                 // Add More Docs button - shows classification modal first

@@ -57,96 +57,18 @@ struct ModelDownloadSheet: View {
     }
 }
 
-// MARK: - GLiNER Download Sheet (Observable)
-
-/// GLiNER-specific download sheet that observes GLiNERService state
-struct GLiNERDownloadSheet: View {
-    @ObservedObject private var glinerService = GLiNERService.shared
-    @Binding var isPresented: Bool
-    let onDownloadComplete: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "arrow.down.circle")
-                .font(.system(size: 48))
-                .foregroundColor(.accentColor)
-
-            Text("Download \(DownloadableModel.gliner.displayName)?")
-                .font(.headline)
-
-            Text("Size: ~\(DownloadableModel.gliner.estimatedSize)")
-                .foregroundColor(.secondary)
-
-            Text("This is a one-time download. The model will be cached locally for future use.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            if glinerService.isDownloading {
-                VStack(spacing: 8) {
-                    ProgressView(value: glinerService.downloadProgress)
-                        .progressViewStyle(.linear)
-                    Text("Downloading... \(Int(glinerService.downloadProgress * 100))%")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            } else if let error = glinerService.lastError {
-                VStack(spacing: 8) {
-                    Text("Download failed")
-                        .foregroundColor(.red)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    HStack(spacing: 16) {
-                        Button("Cancel") { isPresented = false }
-                            .keyboardShortcut(.escape)
-                        Button("Retry") { startDownload() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-            } else {
-                HStack(spacing: 16) {
-                    Button("Cancel") { isPresented = false }
-                        .keyboardShortcut(.escape)
-                    Button("Download") { startDownload() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.return)
-                }
-            }
-        }
-        .padding(24)
-        .frame(width: 320)
-    }
-
-    private func startDownload() {
-        Task {
-            do {
-                try await glinerService.downloadModel()
-                await MainActor.run {
-                    isPresented = false
-                    onDownloadComplete()
-                }
-            } catch {
-                print("GLiNER download failed: \(error)")
-            }
-        }
-    }
-}
-
 // MARK: - Downloadable Model Info
 
 /// Information about a downloadable AI model
+/// Note: GLiNER is now bundled with the app and doesn't require download
 enum DownloadableModel: String, CaseIterable {
     case llama = "llama"
-    case gliner = "gliner"
     case xlmRoberta = "xlmRoberta"
 
     var displayName: String {
         switch self {
         case .llama:
             return "Llama 3.2 (3B)"
-        case .gliner:
-            return "GLiNER PII"
         case .xlmRoberta:
             return "XLM-RoBERTa NER"
         }
@@ -156,8 +78,6 @@ enum DownloadableModel: String, CaseIterable {
         switch self {
         case .llama:
             return "2 GB"
-        case .gliner:
-            return "730 MB"
         case .xlmRoberta:
             return "1.1 GB"
         }

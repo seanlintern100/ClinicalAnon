@@ -11,7 +11,7 @@ import Foundation
 // MARK: - GLiNER Service
 
 /// Provides PII detection using the GLiNER model via bundled Python subprocess
-/// The Python bundle (runtime + model) is downloaded on first use and cached locally
+/// The Python bundle (runtime + model) is included in the app bundle
 @MainActor
 class GLiNERService: ObservableObject {
 
@@ -21,21 +21,12 @@ class GLiNERService: ObservableObject {
 
     // MARK: - Published Properties
 
-    @Published private(set) var isAvailable = true  // Always available (downloads on demand)
+    @Published private(set) var isAvailable = false  // Set to true when bundle is verified
     @Published private(set) var isModelLoaded = false
     @Published private(set) var isProcessing = false
-    @Published private(set) var isDownloading = false
-    @Published private(set) var downloadProgress: Double = 0
     @Published private(set) var lastError: String?
 
     // MARK: - Constants
-
-    /// URL to download the GLiNER Python bundle (tar.gz)
-    /// TODO: Replace with actual hosted URL
-    private let bundleDownloadURL = "https://github.com/YOUR_REPO/releases/download/v1.0/gliner_bundle.tar.gz"
-
-    /// Expected bundle size for progress calculation (~730MB compressed)
-    private let expectedBundleSize: Int64 = 730_000_000
 
     /// Default PII entity labels to search for
     private let entityLabels = [
@@ -58,112 +49,56 @@ class GLiNERService: ObservableObject {
     /// Confidence threshold for entity detection
     private let confidenceThreshold: Double = 0.5
 
-    // MARK: - Cache Paths
+    // MARK: - Bundle Paths
 
-    private var cacheDirectory: URL {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return cacheDir.appendingPathComponent("GLiNER")
-    }
-
-    /// Path to the bundled Python bundle directory
+    /// Path to the GLiNERBundle directory in app resources
     private var bundlePath: URL {
-        return cacheDirectory.appendingPathComponent("gliner_bundle")
+        Bundle.main.resourceURL!.appendingPathComponent("GLiNERBundle")
     }
 
     /// Path to the Python interpreter in the bundle
     private var pythonPath: URL {
-        return bundlePath.appendingPathComponent("gliner-env/bin/python3")
+        bundlePath.appendingPathComponent("gliner-env/bin/python3")
     }
 
     /// Path to the gliner_scan.py script
     private var scriptPath: URL {
-        return bundlePath.appendingPathComponent("gliner_scan.py")
+        bundlePath.appendingPathComponent("gliner_scan.py")
     }
 
-    /// Check if the bundle is cached and valid
-    var isModelCached: Bool {
-        return FileManager.default.fileExists(atPath: pythonPath.path) &&
-               FileManager.default.fileExists(atPath: scriptPath.path)
+    /// Check if the bundle exists in app resources
+    var isBundleValid: Bool {
+        FileManager.default.fileExists(atPath: pythonPath.path) &&
+        FileManager.default.fileExists(atPath: scriptPath.path)
     }
 
     // MARK: - Initialization
 
     private init() {
-        print("GLiNERService: Initialized (Bundled Python mode)")
+        print("GLiNERService: Initialized (App-bundled Python mode)")
+        // Verify bundle exists on init
+        if isBundleValid {
+            isAvailable = true
+            isModelLoaded = true
+            print("GLiNERService: Bundle verified at \(bundlePath.path)")
+        } else {
+            print("GLiNERService: WARNING - Bundle not found at \(bundlePath.path)")
+            lastError = "GLiNER bundle not found in app resources"
+        }
     }
 
     // MARK: - Public Methods
 
-    /// Download and extract the GLiNER Python bundle
-    func downloadModel() async throws {
-        guard !isDownloading else { return }
-
-        isDownloading = true
-        downloadProgress = 0
-        lastError = nil
-
-        print("GLiNERService: Starting bundle download...")
-
-        do {
-            // Create cache directory if needed
-            try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-
-            // Download bundle archive
-            let archivePath = cacheDirectory.appendingPathComponent("gliner_bundle.tar.gz")
-            try await downloadBundle(to: archivePath)
-
-            // Extract bundle
-            print("GLiNERService: Extracting bundle...")
-            downloadProgress = 0.95
-
-            // Remove existing bundle if present
-            if FileManager.default.fileExists(atPath: bundlePath.path) {
-                try FileManager.default.removeItem(at: bundlePath)
-            }
-
-            // Create bundle directory
-            try FileManager.default.createDirectory(at: bundlePath, withIntermediateDirectories: true)
-
-            // Extract using tar
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-            task.arguments = ["-xzf", archivePath.path, "-C", bundlePath.path]
-            try task.run()
-            task.waitUntilExit()
-
-            guard task.terminationStatus == 0 else {
-                throw AppError.localLLMModelLoadFailed("Failed to extract bundle")
-            }
-
-            // Clean up archive
-            try? FileManager.default.removeItem(at: archivePath)
-
-            // Make Python executable
-            try FileManager.default.setAttributes(
-                [.posixPermissions: 0o755],
-                ofItemAtPath: pythonPath.path
-            )
-
-            isDownloading = false
-            isModelLoaded = true
-            downloadProgress = 1.0
-            print("GLiNERService: Bundle download and extraction complete")
-
-        } catch {
-            isDownloading = false
-            print("GLiNERService: Download failed: \(error)")
-            lastError = error.localizedDescription
-            throw AppError.localLLMModelLoadFailed(error.localizedDescription)
-        }
-    }
-
-    /// Load the model (just verify bundle exists)
+    /// Verify the bundle is available (no download needed - bundled with app)
     func loadModel() async throws {
-        if isModelCached {
+        if isBundleValid {
+            isAvailable = true
             isModelLoaded = true
-            print("GLiNERService: Bundle already cached")
+            print("GLiNERService: Bundle ready")
         } else {
-            try await downloadModel()
+            let error = "GLiNER bundle not found. Please reinstall the application."
+            lastError = error
+            throw AppError.localLLMModelLoadFailed(error)
         }
     }
 
@@ -174,8 +109,8 @@ class GLiNERService: ObservableObject {
 
     /// Run PII scan on text
     func runPIIScan(text: String, existingEntities: [Entity]) async throws -> [PIIFinding] {
-        guard isModelCached else {
-            try await downloadModel()
+        guard isBundleValid else {
+            throw AppError.localLLMModelLoadFailed("GLiNER bundle not available")
         }
 
         isProcessing = true
@@ -251,44 +186,6 @@ class GLiNERService: ObservableObject {
     }
 
     // MARK: - Private Methods
-
-    /// Download the bundle archive from URL
-    private func downloadBundle(to destination: URL) async throws {
-        guard let url = URL(string: bundleDownloadURL) else {
-            throw AppError.invalidResponse
-        }
-
-        print("GLiNERService: Fetching \(bundleDownloadURL)")
-
-        let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("GLiNERService: HTTP \(statusCode)")
-            throw AppError.invalidResponse
-        }
-
-        let totalSize = httpResponse.expectedContentLength > 0 ? httpResponse.expectedContentLength : expectedBundleSize
-
-        var data = Data()
-        data.reserveCapacity(Int(totalSize))
-
-        for try await byte in asyncBytes {
-            data.append(byte)
-
-            // Update progress periodically (0-90% for download, 90-100% for extraction)
-            if data.count % 1_000_000 == 0 {
-                let progress = Double(data.count) / Double(totalSize) * 0.9
-                await MainActor.run {
-                    self.downloadProgress = min(progress, 0.9)
-                }
-            }
-        }
-
-        print("GLiNERService: Downloaded \(data.count) bytes")
-        try data.write(to: destination)
-    }
 
     /// Run the Python script as subprocess
     private func runPythonScan(text: String) async throws -> [GLiNEREntity] {

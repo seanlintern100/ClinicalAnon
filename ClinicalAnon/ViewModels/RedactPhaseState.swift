@@ -1429,7 +1429,7 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - GLiNER PII Scan
 
-    /// Run GLiNER model for PII detection (requires model download first)
+    /// Run GLiNER model for PII detection (bundled with app)
     func runGLiNERScan() async {
         guard let result = result else {
             gliNERScanError = "Please analyze text first"
@@ -1437,33 +1437,13 @@ class RedactPhaseState: ObservableObject {
         }
 
         guard GLiNERService.shared.isAvailable else {
-            errorMessage = "GLiNER is not available on this system."
+            errorMessage = "GLiNER bundle not found. Please reinstall the application."
             return
         }
 
         isRunningGLiNERScan = true
         gliNERScanError = nil
-
-        // Show appropriate status message
-        if !GLiNERService.shared.isModelLoaded {
-            if GLiNERService.shared.isModelCached {
-                successMessage = "Loading GLiNER model..."
-            } else {
-                successMessage = "Downloading GLiNER model (first time only)..."
-                do {
-                    try await GLiNERService.shared.downloadModel()
-                } catch {
-                    await MainActor.run {
-                        isRunningGLiNERScan = false
-                        gliNERScanError = error.localizedDescription
-                        errorMessage = "GLiNER download failed: \(error.localizedDescription)"
-                    }
-                    return
-                }
-            }
-        } else {
-            successMessage = "Running GLiNER PII scan..."
-        }
+        successMessage = "Running GLiNER PII scan..."
 
         do {
             let findings = try await GLiNERService.shared.runPIIScan(
