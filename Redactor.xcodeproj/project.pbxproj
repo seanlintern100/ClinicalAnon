@@ -3,11 +3,10 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		SRCDOC000100000000000001 /* SourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRCDOC000100000000000002 /* SourceDocument.swift */; };
 		047A4256A36B91FEE8806193 /* SourceSans3-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */; };
 		0688AF41B2C3D4E5F6A7B8C9 /* AllNumbersRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */; };
 		0699BF52C3D4E5F6A7B8C9D1 /* EmailRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */; };
@@ -17,8 +16,6 @@
 		0A1B2C3D4E5F6A7B8C9D0E1F /* TitleNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */; };
 		0E085DEAC7C367FC64D14900 /* EntityMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */; };
 		1018969E6E6D810477650A46 /* SwiftNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9741FCB21B765FA21672D641 /* SwiftNERService.swift */; };
-		NERUTIL001000000000000001 /* NERUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = NERUTIL001000000000000002 /* NERUtilities.swift */; };
-		CHUNK0001000000000000001 /* ChunkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHUNK0002000000000000001 /* ChunkManager.swift */; };
 		15D511386E0C9D4F4CFEC7FC /* AppleNERRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */; };
 		16183A6417260B823C8E2805 /* EntityType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01915D69A51DDDEA81FD955A /* EntityType.swift */; };
 		16A223DFEA3934D5B3460721 /* MarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */; };
@@ -26,10 +23,6 @@
 		217744CD6A72F04212DC21A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8096B7BFDB5397D700CDA6FD /* Assets.xcassets */; };
 		23714A7B62571A38F2E6397C /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F1B468F8E9926702E98A0 /* AppError.swift */; };
 		25C620B3E7D0134F5484D900 /* EntityListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */; };
-		XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = XLMR0001000000000000000002 /* XLMRobertaNERService.swift */; };
-		XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */; };
-		XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0003000000000000000002 /* sentencepiece.bpe.model */; };
-		XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0004000000000000000002 /* xlmr_vocab.json */; };
 		2E7992E72BCED0DFC78EE74A /* AnonymizationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */; };
 		2FA4EBE090F118C6234E6905 /* MaoriNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */; };
 		4035D0CC83F920E213197D5E /* AnonymizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9268CA7D087FE81AD9AEC08 /* AnonymizationView.swift */; };
@@ -40,6 +33,8 @@
 		534A7B988D2B0102C9515806 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD4A3288CEF816ED9D3925CC /* ActionBar.swift */; };
 		588D406FDB7E90C52FA32AA2 /* Lora-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */; };
 		636D5D617C9B4FD998FA76A1 /* ExclusionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A899922CA47101C73867E8EB /* ExclusionSettingsView.swift */; };
+		690E6B402F0F18CB001CB156 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* MLXLLM */; };
+		690E6B412F0F18CB001CB156 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = E1F2A3B4C5D6E7F8A9B0C1D3 /* MLXLMCommon */; };
 		70A057F1F85F780C3CE4AFC1 /* Lora-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B80BE3BA06214218C806D68C /* Lora-Bold.ttf */; };
 		73FA8AEC588FF517EBDB8D0B /* RedactPhaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C5EA7B63579D21176D5D9DB /* RedactPhaseView.swift */; };
 		77070C1F6D2F5E7C93827F34 /* DateRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0930F3E57AF670171CFA140C /* DateRecognizer.swift */; };
@@ -62,12 +57,11 @@
 		C026D24088042251AFAEFCEF /* WorkflowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5652BE3366DB6BB9613DBF9C /* WorkflowViewModel.swift */; };
 		C459430DD92E2C888FA69914 /* SourceSans3-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */; };
 		C7A88A1CE629870F858269F7 /* NZAddressRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39842730A81E3E5F5BF42B6C /* NZAddressRecognizer.swift */; };
+		CHUNK0001000000000000001 /* ChunkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHUNK0002000000000000001 /* ChunkManager.swift */; };
 		D1E2F3A4B5C6D7E8F9A0B1C2 /* LocalLLMSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */; };
 		D2F92021CA7DC7A9ADDBD9C4 /* UserExclusionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */; };
-		USRINC0010000000000000001 /* UserInclusionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0010000000000000002 /* UserInclusionManager.swift */; };
-		USRINC0020000000000000001 /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0020000000000000002 /* UserInclusionRecognizer.swift */; };
-		USRINC0030000000000000001 /* InclusionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0030000000000000002 /* InclusionSettingsView.swift */; };
 		D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */; };
+		DATENORM001000000000000001 /* DateNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DATENORM001000000000000002 /* DateNormalizer.swift */; };
 		E2F3A4B5C6D7E8F9A0B1C2D3 /* RedactPhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A4B5C6D7E8F9A0B1C2D3E4 /* RedactPhaseState.swift */; };
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* ImprovePhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5B6C7D8E9F0A1B2C3D4E5 /* ImprovePhaseState.swift */; };
 		E4F5A6B7C8D9E0F1A2B3C4D5 /* RestorePhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A6B7C8D9E0F1A2B3C4D5E6 /* RestorePhaseState.swift */; };
@@ -80,18 +74,26 @@
 		FD5A5AA7FF1DD4EB05258D63 /* AIAssistantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E8D95843A42C138E6B0D5CA /* AIAssistantService.swift */; };
 		FF5E346E1B05C0B073598613 /* DocumentTypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2551C5C15BE3034D62CB24 /* DocumentTypeManager.swift */; };
 		FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */; };
-		MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = MEMSTOR001000000000000002 /* MemoryStorage.swift */; };
-		SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */; };
-		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
-		DATENORM001000000000000001 /* DateNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DATENORM001000000000000002 /* DateNormalizer.swift */; };
-		TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXTCNTCRD00100000000000002 /* TextContentCard.swift */; };
-		MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */; };
-		ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = ONNX0002000000000000000001 /* CONNXRuntime */; };
-		HLPCNT001000000000000001 /* HelpContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPCNT001000000000000002 /* HelpContent.swift */; };
-		MKDRNDR001000000000000001 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MKDRNDR001000000000000002 /* MarkdownRenderer.swift */; };
-		HLPMDL001000000000000001 /* HelpModalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPMDL001000000000000002 /* HelpModalView.swift */; };
 		HLPBTN001000000000000001 /* HelpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPBTN001000000000000002 /* HelpButton.swift */; };
+		HLPCNT001000000000000001 /* HelpContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPCNT001000000000000002 /* HelpContent.swift */; };
+		HLPMDL001000000000000001 /* HelpModalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPMDL001000000000000002 /* HelpModalView.swift */; };
 		HLPWND001000000000000001 /* HelpWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPWND001000000000000002 /* HelpWindowController.swift */; };
+		MDLDLSHT001000000000000001 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */; };
+		MEMSTOR001000000000000001 /* MemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = MEMSTOR001000000000000002 /* MemoryStorage.swift */; };
+		MKDRNDR001000000000000001 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = MKDRNDR001000000000000002 /* MarkdownRenderer.swift */; };
+		NERUTIL001000000000000001 /* NERUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = NERUTIL001000000000000002 /* NERUtilities.swift */; };
+		ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = ONNX0002000000000000000001 /* CONNXRuntime */; };
+		SETT1NGS0KEY5F1LE00000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */; };
+		SRCDOC000100000000000001 /* SourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRCDOC000100000000000002 /* SourceDocument.swift */; };
+		STR1NG0EXT5F1LE0000000001 /* StringExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */; };
+		TXTCNTCRD00100000000000001 /* TextContentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXTCNTCRD00100000000000002 /* TextContentCard.swift */; };
+		USRINC0010000000000000001 /* UserInclusionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0010000000000000002 /* UserInclusionManager.swift */; };
+		USRINC0020000000000000001 /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0020000000000000002 /* UserInclusionRecognizer.swift */; };
+		USRINC0030000000000000001 /* InclusionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRINC0030000000000000002 /* InclusionSettingsView.swift */; };
+		XLMR0001000000000000000001 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = XLMR0001000000000000000002 /* XLMRobertaNERService.swift */; };
+		XLMR0002000000000000000001 /* XLMRobertaNER.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */; };
+		XLMR0003000000000000000001 /* sentencepiece.bpe.model in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0003000000000000000002 /* sentencepiece.bpe.model */; };
+		XLMR0004000000000000000001 /* xlmr_vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = XLMR0004000000000000000002 /* xlmr_vocab.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,11 +107,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		SRCDOC000100000000000002 /* SourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDocument.swift; sourceTree = "<group>"; };
 		01915D69A51DDDEA81FD955A /* EntityType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityType.swift; sourceTree = "<group>"; };
 		06463A5E2CDA5C7A80638837 /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
 		0930F3E57AF670171CFA140C /* DateRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateRecognizer.swift; sourceTree = "<group>"; };
-		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
+		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
+		1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleNameRecognizer.swift; sourceTree = "<group>"; };
 		212E6C017812F7CA53B24F18 /* Redactor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Redactor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		22DB2B5F3E1335B11F8AA173 /* AWSCredentialsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSCredentialsManager.swift; sourceTree = "<group>"; };
 		304B514DF56B1A7F70285358 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -129,42 +131,38 @@
 		8096B7BFDB5397D700CDA6FD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationEngine.swift; sourceTree = "<group>"; };
 		8438D6480E77924BABFCA894 /* RelationshipNameExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipNameExtractor.swift; sourceTree = "<group>"; };
-		1A2B3C4D5E6F7A8B9C0D1E2F /* TitleNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleNameRecognizer.swift; sourceTree = "<group>"; };
 		846F1B468F8E9926702E98A0 /* AppError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppError.swift; sourceTree = "<group>"; };
 		86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightedTextView.swift; sourceTree = "<group>"; };
 		87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalAnonApp.swift; sourceTree = "<group>"; };
 		8E8D95843A42C138E6B0D5CA /* AIAssistantService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantService.swift; sourceTree = "<group>"; };
 		9741FCB21B765FA21672D641 /* SwiftNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftNERService.swift; sourceTree = "<group>"; };
-		NERUTIL001000000000000002 /* NERUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NERUtilities.swift; sourceTree = "<group>"; };
-		CHUNK0002000000000000001 /* ChunkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkManager.swift; sourceTree = "<group>"; };
-		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
+		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AllNumbersRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllNumbersRecognizer.swift; sourceTree = "<group>"; };
 		A1E99991AD176BB9F3A8DE67 /* TextReidentifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReidentifier.swift; sourceTree = "<group>"; };
 		A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMapping.swift; sourceTree = "<group>"; };
-		A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Regular.ttf"; sourceTree = "<group>"; };
+		A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Lora-Regular.ttf"; sourceTree = "<group>"; };
 		A899922CA47101C73867E8EB /* ExclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionSettingsView.swift; sourceTree = "<group>"; };
 		A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityRecognizer.swift; sourceTree = "<group>"; };
 		AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaoriNameRecognizer.swift; sourceTree = "<group>"; };
 		AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserExclusionManager.swift; sourceTree = "<group>"; };
-		USRINC0010000000000000002 /* UserInclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionManager.swift; sourceTree = "<group>"; };
-		USRINC0020000000000000002 /* UserInclusionRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionRecognizer.swift; sourceTree = "<group>"; };
-		USRINC0030000000000000002 /* InclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InclusionSettingsView.swift; sourceTree = "<group>"; };
 		AD4A3288CEF816ED9D3925CC /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
 		B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A7B8C9D0E1F3A4 /* EmailRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailRecognizer.swift; sourceTree = "<group>"; };
-		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
+		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
 		B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		C0ACE7440A212F9067F57972 /* BedrockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockService.swift; sourceTree = "<group>"; };
 		C0FAD264CF63B5F813E89B8B /* Entity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entity.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B6C7D8E9F0A1B2 /* LocalLLMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMSettingsView.swift; sourceTree = "<group>"; };
 		C3534E60BD3D1C35A8609DF3 /* AnonymizationResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymizationResult.swift; sourceTree = "<group>"; };
 		CB76E2AB26A9CD470CBB98CA /* DocumentType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentType.swift; sourceTree = "<group>"; };
+		CHUNK0002000000000000001 /* ChunkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkManager.swift; sourceTree = "<group>"; };
 		D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditorView.swift; sourceTree = "<group>"; };
 		D283D54D8952DB9D71D72D79 /* EntityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityDetector.swift; sourceTree = "<group>"; };
-		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
-		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
+		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
+		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
 		DA72D874BD6FB4834486B29F /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
+		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
 		DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleNERRecognizer.swift; sourceTree = "<group>"; };
 		E39AA02B94C43190B3535E10 /* WorkflowPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowPhase.swift; sourceTree = "<group>"; };
 		E8EE4A37A7BD54B6C0B78ECE /* NZMedicalIDRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NZMedicalIDRecognizer.swift; sourceTree = "<group>"; };
@@ -176,21 +174,25 @@
 		F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 		F5A6B7C8D9E0F1A2B3C4D5E6 /* RestorePhaseState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestorePhaseState.swift; sourceTree = "<group>"; };
 		F6A7B8C9D0E1F2A3B4C5D6E7 /* HighlightCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightCacheManager.swift; sourceTree = "<group>"; };
+		HLPBTN001000000000000002 /* HelpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpButton.swift; sourceTree = "<group>"; };
+		HLPCNT001000000000000002 /* HelpContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpContent.swift; sourceTree = "<group>"; };
+		HLPMDL001000000000000002 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
+		HLPWND001000000000000002 /* HelpWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; };
+		MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
+		MEMSTOR001000000000000002 /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
+		MKDRNDR001000000000000002 /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
+		NERUTIL001000000000000002 /* NERUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NERUtilities.swift; sourceTree = "<group>"; };
 		SETT1NGS0KEY5F1LE00000002 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
+		SRCDOC000100000000000002 /* SourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDocument.swift; sourceTree = "<group>"; };
 		STR1NG0EXT5F1LE0000000002 /* StringExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtensions.swift; sourceTree = "<group>"; };
+		TXTCNTCRD00100000000000002 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
+		USRINC0010000000000000002 /* UserInclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionManager.swift; sourceTree = "<group>"; };
+		USRINC0020000000000000002 /* UserInclusionRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionRecognizer.swift; sourceTree = "<group>"; };
+		USRINC0030000000000000002 /* InclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InclusionSettingsView.swift; sourceTree = "<group>"; };
 		XLMR0001000000000000000002 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
 		XLMR0002000000000000000002 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
-		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sentencepiece.bpe.model"; sourceTree = "<group>"; };
-		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "xlmr_vocab.json"; sourceTree = "<group>"; };
-		MEMSTOR001000000000000002 /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
-		DATENORM001000000000000002 /* DateNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateNormalizer.swift; sourceTree = "<group>"; };
-		TXTCNTCRD00100000000000002 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
-		MDLDLSHT001000000000000002 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
-		HLPCNT001000000000000002 /* HelpContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpContent.swift; sourceTree = "<group>"; };
-		MKDRNDR001000000000000002 /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
-		HLPMDL001000000000000002 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
-		HLPBTN001000000000000002 /* HelpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpButton.swift; sourceTree = "<group>"; };
-		HLPWND001000000000000002 /* HelpWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; };
+		XLMR0003000000000000000002 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = sentencepiece.bpe.model; sourceTree = "<group>"; };
+		XLMR0004000000000000000002 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = xlmr_vocab.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -198,6 +200,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				690E6B412F0F18CB001CB156 /* MLXLMCommon in Frameworks */,
+				690E6B402F0F18CB001CB156 /* MLXLLM in Frameworks */,
 				9305F0A93AE56D10A9BEB497 /* AWSBedrockRuntime in Frameworks */,
 				ONNX0003000000000000000001 /* CONNXRuntime in Frameworks */,
 			);
@@ -348,7 +352,6 @@
 				XLMR0003000000000000000002 /* sentencepiece.bpe.model */,
 				XLMR0004000000000000000002 /* xlmr_vocab.json */,
 			);
-			name = BERT;
 			path = BERT;
 			sourceTree = "<group>";
 		};
@@ -470,11 +473,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-					216C1E3088CD37BB5EA2F552 = {
-						ProvisioningStyle = Automatic;
-					};
-				};
 			};
 			buildConfigurationList = 9DF6121DB50DF55FE5B71793 /* Build configuration list for PBXProject "Redactor" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -491,7 +489,6 @@
 				A1B2C3D4E5F6A7B8C9D0E1F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				ONNX0001000000000000000001 /* XCRemoteSwiftPackageReference "swift-onnxruntime" */,
 			);
-			preferredProjectObjectVersion = 54;
 			productRefGroup = 6B04B03B5ED1D07A8284B4AA /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -626,12 +623,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = Redactor.entitlements;
-				ENABLE_HARDENED_RUNTIME = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ClinicalAnon/Preview Content\"";
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 5N8GXZGSZ5;
+				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
@@ -644,6 +645,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.Redactor;
 				PRODUCT_NAME = Redactor;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.9;
@@ -796,12 +798,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = Redactor.entitlements;
-				ENABLE_HARDENED_RUNTIME = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ClinicalAnon/Preview Content\"";
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 5N8GXZGSZ5;
+				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
@@ -814,6 +820,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.Redactor;
 				PRODUCT_NAME = Redactor;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.9;

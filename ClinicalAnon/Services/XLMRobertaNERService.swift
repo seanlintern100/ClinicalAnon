@@ -273,6 +273,10 @@ class XLMRobertaNERService: ObservableObject {
         let identifiers = detectIdentifiers(in: normalizedText)
         rawEntities.append(contentsOf: identifiers)
 
+        // Post-processing: Detect potential names with double-capital typos (e.g., "CHris", "JOhn")
+        let typoedNames = detectDoubleCapitalNames(in: normalizedText)
+        rawEntities.append(contentsOf: typoedNames)
+
         let elapsed = Date().timeIntervalSince(startTime)
         print("XLMRobertaNERService: Inference completed in \(String(format: "%.3f", elapsed))s, found \(rawEntities.count) entities")
 
@@ -898,6 +902,54 @@ class XLMRobertaNERService: ObservableObject {
         }
 
         return identifiers
+    }
+
+    // MARK: - Double-Capital Name Detection
+
+    /// Detect potential names with double-capital typos (e.g., "CHris", "JOhn", "MIchael")
+    /// Pattern: Two uppercase letters followed by one or more lowercase letters
+    private func detectDoubleCapitalNames(in text: String) -> [XLMREntity] {
+        var names: [XLMREntity] = []
+        let nsText = text as NSString
+
+        // Pattern: Word boundary, 2 uppercase letters, then lowercase letters (min 2), word boundary
+        // Matches: CHris, JOhn, MIchael, SArah, etc.
+        let pattern = #"\b[A-Z]{2}[a-z]{2,}\b"#
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return names
+        }
+
+        let range = NSRange(location: 0, length: nsText.length)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        for match in matches {
+            let matchText = nsText.substring(with: match.range)
+
+            // Skip common abbreviations and acronyms that might match
+            let upperPrefix = String(matchText.prefix(2))
+            let skipPrefixes = ["IT", "ID", "OK", "TV", "PC", "UK", "US", "EU", "AI", "HR", "PR", "QA"]
+            if skipPrefixes.contains(upperPrefix) { continue }
+
+            // Skip if it's a clinical term
+            if NERUtilities.isClinicalTerm(matchText) { continue }
+
+            let start = match.range.location
+            let end = match.range.location + match.range.length
+
+            names.append(XLMREntity(
+                text: matchText,
+                type: .personOther,
+                label: "PER-TYPO",
+                start: start,
+                end: end,
+                confidence: 0.75  // Lower confidence since it's pattern-based
+            ))
+
+            print("XLMRobertaNERService: Detected double-capital name '\(matchText)'")
+        }
+
+        return names
     }
 }
 

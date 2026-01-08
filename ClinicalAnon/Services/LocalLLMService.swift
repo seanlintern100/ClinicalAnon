@@ -81,6 +81,9 @@ class LocalLLMService: ObservableObject {
     @Published var isProcessing: Bool = false
     @Published var lastError: String?
 
+    /// Callback for download progress updates (used by UI to track downloads)
+    var onDownloadProgress: ((Double, String) -> Void)?
+
     // MARK: - Private Properties
 
     private var modelContext: ModelContext?
@@ -121,22 +124,27 @@ class LocalLLMService: ObservableObject {
     }
 
     /// Check if the selected model is cached on disk (without loading it)
-    /// Uses the Hub library's path calculation to find the correct cache location
+    /// Checks for actual model weight files, not just an empty directory
     var isModelCached: Bool {
         let modelPath = cachedModelPath
-        let exists = FileManager.default.fileExists(atPath: modelPath.path)
-        print("LocalLLMService: Cache check - path: \(modelPath.path), exists: \(exists)")
-        return exists
+        let hasWeights = hasModelWeights(at: modelPath)
+        print("LocalLLMService: Cache check - path: \(modelPath.path), hasWeights: \(hasWeights)")
+        return hasWeights
     }
 
     /// Get the path where the model would be cached
-    /// Uses the same configuration as MLXLMCommon (caches directory, not documents)
+    /// MLX caches models at ~/Library/Caches/models/{modelId}
     var cachedModelPath: URL {
-        // MLXLMCommon uses cachesDirectory as downloadBase, not the default documentDirectory
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        let hub = HubApi(downloadBase: cacheDir)
-        let repo = Hub.Repo(id: selectedModelId)
-        return hub.localRepoLocation(repo)
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return cacheDir.appendingPathComponent("models").appendingPathComponent(selectedModelId)
+    }
+
+    /// Check if the model has actual weight files (not just an empty directory)
+    private func hasModelWeights(at path: URL) -> Bool {
+        // Check for .safetensors files which indicate actual model weights
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(atPath: path.path) else { return false }
+        return contents.contains { $0.hasSuffix(".safetensors") || $0 == "config.json" }
     }
 
     /// Pre-load model in background (only if cached, won't trigger download)
@@ -195,11 +203,16 @@ class LocalLLMService: ObservableObject {
             ) { [weak self] progress in
                 Task { @MainActor [weak self] in
                     self?.downloadProgress = progress.fractionCompleted
+                    let status: String
                     if progress.fractionCompleted < 1.0 {
-                        self?.downloadStatus = "Downloading: \(Int(progress.fractionCompleted * 100))%"
+                        status = "Downloading model... \(Int(progress.fractionCompleted * 100))%"
                     } else {
-                        self?.downloadStatus = "Loading model..."
+                        status = "Loading model..."
                     }
+                    self?.downloadStatus = status
+
+                    // Notify external callback (for UI tracking)
+                    self?.onDownloadProgress?(progress.fractionCompleted, status)
                 }
             }
 

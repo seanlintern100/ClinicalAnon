@@ -19,6 +19,7 @@ struct RedactPhaseView: View {
     @ObservedObject var viewModel: WorkflowViewModel
     @State private var showClassificationModal = false
     @State private var showAddMoreDocsModal = false
+    @State private var showLLMDownloadSheet = false
 
     // MARK: - Body
 
@@ -89,6 +90,20 @@ struct RedactPhaseView: View {
             Button("OK") { }
         } message: {
             Text("Found \(viewModel.redactState.deepScanFindingsCount) additional term(s). These are shown but not active — tick any you want to redact, then click Apply Changes.")
+        }
+        .sheet(isPresented: $showLLMDownloadSheet) {
+            DeepScanDownloadSheet(
+                modelSize: LocalLLMService.shared.selectedModelInfo?.size ?? "2 GB",
+                onConfirm: {
+                    Task {
+                        await viewModel.runLocalPIIReviewWithDownload()
+                        showLLMDownloadSheet = false
+                    }
+                },
+                onCancel: {
+                    showLLMDownloadSheet = false
+                }
+            )
         }
     }
 
@@ -346,7 +361,16 @@ struct RedactPhaseView: View {
 
                 // LLM Scan button (if local LLM available)
                 if LocalLLMService.shared.isAvailable {
-                    Button(action: { Task { await viewModel.runLocalPIIReview() } }) {
+                    Button(action: {
+                        // Check if model needs to be downloaded first
+                        if LocalLLMService.shared.isModelCached {
+                            // Model is cached - run directly
+                            Task { await viewModel.runLocalPIIReview() }
+                        } else {
+                            // Model not cached - show download confirmation sheet
+                            showLLMDownloadSheet = true
+                        }
+                    }) {
                         HStack(spacing: DesignSystem.Spacing.xs) {
                             if viewModel.isReviewingPII {
                                 ProgressView()

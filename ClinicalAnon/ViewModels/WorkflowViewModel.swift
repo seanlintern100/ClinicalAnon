@@ -758,6 +758,39 @@ class WorkflowViewModel: ObservableObject {
         }
     }
 
+    /// Run LLM review with download tracking (called when model needs to be downloaded first)
+    func runLocalPIIReviewWithDownload() async {
+        // Start download tracking
+        DownloadStateManager.shared.startDownload()
+
+        // Set up progress callback
+        LocalLLMService.shared.onDownloadProgress = { progress, status in
+            Task { @MainActor in
+                DownloadStateManager.shared.updateProgress(progress, status: status)
+            }
+        }
+
+        // Run the actual review (will download if needed)
+        await redactState.runLocalPIIReview()
+
+        // End download tracking
+        DownloadStateManager.shared.endDownload()
+        LocalLLMService.shared.onDownloadProgress = nil
+
+        // Rebuild caches if we have results
+        if let result = redactState.result {
+            cacheManager.rebuildAllCaches(
+                originalText: result.originalText,
+                allEntities: redactState.allEntities,
+                activeEntities: redactState.activeEntities,
+                excludedIds: redactState.excludedEntityIds,
+                redactedText: redactState.displayedRedactedText,
+                replacementPositions: redactState.replacementPositions,
+                restoredText: nil
+            )
+        }
+    }
+
     func runDeepScan() async {
         await redactState.runDeepScan()
         if let result = redactState.result {

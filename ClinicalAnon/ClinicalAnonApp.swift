@@ -8,6 +8,36 @@
 
 import SwiftUI
 
+// MARK: - App Delegate for Quit Protection
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Check if a model download is in progress
+        if DownloadStateManager.shared.isDownloading {
+            // Show warning alert
+            let alert = NSAlert()
+            alert.messageText = "Download in Progress"
+            alert.informativeText = "A model is currently downloading. Quitting now will cancel the download and you'll need to restart it next time.\n\nAre you sure you want to quit?"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Continue Download")
+            alert.addButton(withTitle: "Quit Anyway")
+
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // User chose to continue download
+                return .terminateCancel
+            } else {
+                // User chose to quit anyway - clean up
+                DownloadStateManager.shared.endDownload()
+                return .terminateNow
+            }
+        }
+
+        return .terminateNow
+    }
+}
+
 // MARK: - Main App
 
 @main
@@ -15,6 +45,7 @@ struct ClinicalAnonApp: App {
 
     // MARK: - Properties
 
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel = WorkflowViewModel()
 
