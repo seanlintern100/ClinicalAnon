@@ -424,7 +424,7 @@ struct ImprovePhaseView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.white)
+        .background(DesignSystem.Colors.surface)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
         .padding(24)
@@ -600,7 +600,7 @@ struct ImprovePhaseView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.white)
+        .background(DesignSystem.Colors.surface)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
         .padding(24)

@@ -31,7 +31,7 @@ struct TextContentCard<Content: View>: View {
         if isSourcePanel && isProcessed {
             return DesignSystem.Colors.cardWarm
         }
-        return .white
+        return DesignSystem.Colors.surface
     }
 
     // MARK: - Body
