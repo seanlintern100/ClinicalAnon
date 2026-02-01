@@ -56,4 +56,12 @@ enum SettingsKeys {
 
     static let userExclusions = "userExcludedWords"
     static let userInclusions = "userIncludedWords"
+
+    // MARK: - Transcription Settings
+
+    static let whisperModelSize = "whisperModelSize"
+
+    // MARK: - Audio Input Settings
+
+    static let selectedInputDeviceID = "selectedInputDeviceID"
 }

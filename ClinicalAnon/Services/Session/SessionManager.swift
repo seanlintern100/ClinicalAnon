@@ -377,6 +377,28 @@ class SessionManager: ObservableObject {
     var isCapturing: Bool {
         audioCaptureService.isCapturing
     }
+
+    // MARK: - Audio Device Selection
+
+    /// Available input devices
+    var availableInputDevices: [AudioDevice] {
+        audioCaptureService.availableInputDevices
+    }
+
+    /// Currently selected input device (nil = system default)
+    var selectedInputDevice: AudioDevice? {
+        audioCaptureService.selectedInputDevice
+    }
+
+    /// Refresh the list of available input devices
+    func refreshInputDevices() {
+        audioCaptureService.refreshInputDevices()
+    }
+
+    /// Select an input device (nil = system default)
+    func selectInputDevice(_ device: AudioDevice?) {
+        audioCaptureService.selectInputDevice(device)
+    }
 }
 
 // MARK: - Notifications

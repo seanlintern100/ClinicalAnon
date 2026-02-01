@@ -87,11 +87,50 @@ struct SessionDetailView: View {
 
     private var audioLevelMeters: some View {
         HStack(spacing: DesignSystem.Spacing.small) {
-            // Microphone level
+            // Microphone selector + level
             VStack(spacing: 2) {
-                Image(systemName: "mic.fill")
+                Menu {
+                    Button {
+                        sessionManager.selectInputDevice(nil)
+                    } label: {
+                        HStack {
+                            Text("System Default")
+                            if sessionManager.selectedInputDevice == nil {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+
+                    if !sessionManager.availableInputDevices.isEmpty {
+                        Divider()
+
+                        ForEach(sessionManager.availableInputDevices) { device in
+                            Button {
+                                sessionManager.selectInputDevice(device)
+                            } label: {
+                                HStack {
+                                    Text(device.name)
+                                    if sessionManager.selectedInputDevice?.id == device.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 2) {
+                        Image(systemName: "mic.fill")
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8))
+                    }
                     .font(.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+                .menuStyle(.borderlessButton)
+                .onAppear {
+                    sessionManager.refreshInputDevices()
+                }
+
                 AudioLevelMeter(level: sessionManager.microphoneLevel)
             }
 

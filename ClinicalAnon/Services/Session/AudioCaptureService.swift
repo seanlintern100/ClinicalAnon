@@ -8,8 +8,27 @@
 
 import Foundation
 import AVFoundation
+import AudioToolbox
+import CoreAudio
 import ScreenCaptureKit
 import Combine
+
+// MARK: - Audio Device
+
+/// Represents an audio input device
+struct AudioDevice: Identifiable, Hashable {
+    let id: AudioDeviceID
+    let name: String
+    var isDefault: Bool = false
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: AudioDevice, rhs: AudioDevice) -> Bool {
+        lhs.id == rhs.id
+    }
+}
 
 // MARK: - Audio Capture Error
 
@@ -56,8 +75,11 @@ class AudioCaptureService: NSObject, ObservableObject {
     /// Overlap between chunks for better transcription continuity (30 seconds)
     private let overlapDuration: TimeInterval = 30
 
-    /// Sample rate for audio (WhisperKit expects 16kHz)
+    /// Sample rate for microphone audio (WhisperKit expects 16kHz)
     private let sampleRate: Double = 16000
+
+    /// Sample rate for system audio (ScreenCaptureKit standard)
+    private let systemSampleRate: Int = 44100
 
     /// Number of audio channels (mono)
     private let channels: AVAudioChannelCount = 1
@@ -73,6 +95,11 @@ class AudioCaptureService: NSObject, ObservableObject {
     @Published private(set) var microphoneLevel: Float = 0
     @Published private(set) var systemLevel: Float = 0
     @Published private(set) var currentChunkIndex: Int = 0
+
+    // MARK: - Audio Device Selection
+
+    @Published var availableInputDevices: [AudioDevice] = []
+    @Published var selectedInputDevice: AudioDevice?
 
     // MARK: - Audio Capture
 
@@ -90,6 +117,7 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Audio Buffers
 
     private var systemBufferQueue = DispatchQueue(label: "com.redactor.sys-buffer", qos: .userInitiated)
+    private var systemAudioFrameCount: Int = 0
 
     // MARK: - Session Reference
 
@@ -98,6 +126,174 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Chunk Rotation
 
     private var chunkRotationTimer: Timer?
+
+    // MARK: - Audio Device Enumeration
+
+    /// Get list of available audio input devices
+    static func getAudioInputDevices() -> [AudioDevice] {
+        var propertySize: UInt32 = 0
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // Get size of device list
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize
+        )
+        guard status == noErr else {
+            print("AudioCaptureService: Failed to get device list size, status: \(status)")
+            return []
+        }
+
+        let deviceCount = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+        // Get device IDs
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &deviceIDs
+        )
+        guard status == noErr else {
+            print("AudioCaptureService: Failed to get device list, status: \(status)")
+            return []
+        }
+
+        // Get default input device
+        var defaultInputDevice: AudioDeviceID = 0
+        var defaultSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var defaultAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &defaultAddress,
+            0,
+            nil,
+            &defaultSize,
+            &defaultInputDevice
+        )
+
+        // Filter to input devices and get names
+        return deviceIDs.compactMap { deviceID -> AudioDevice? in
+            // Check if device has input channels
+            var inputChannelsAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreamConfiguration,
+                mScope: kAudioObjectPropertyScopeInput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var bufferListSize: UInt32 = 0
+            status = AudioObjectGetPropertyDataSize(deviceID, &inputChannelsAddress, 0, nil, &bufferListSize)
+            guard status == noErr, bufferListSize > 0 else { return nil }
+
+            let bufferListPtr = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
+            defer { bufferListPtr.deallocate() }
+
+            status = AudioObjectGetPropertyData(deviceID, &inputChannelsAddress, 0, nil, &bufferListSize, bufferListPtr)
+            guard status == noErr else { return nil }
+
+            // Check if there are input channels
+            let bufferList = bufferListPtr.pointee
+            var hasInputChannels = false
+            for i in 0..<Int(bufferList.mNumberBuffers) {
+                let buffer = withUnsafePointer(to: bufferList.mBuffers) { ptr in
+                    ptr.withMemoryRebound(to: AudioBuffer.self, capacity: Int(bufferList.mNumberBuffers)) { bufferPtr in
+                        bufferPtr[i]
+                    }
+                }
+                if buffer.mNumberChannels > 0 {
+                    hasInputChannels = true
+                    break
+                }
+            }
+            guard hasInputChannels else { return nil }
+
+            // Get device name
+            var nameAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceNameCFString,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var name: CFString?
+            var nameSize = UInt32(MemoryLayout<CFString?>.size)
+            status = AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, &name)
+            guard status == noErr, let deviceName = name as String? else { return nil }
+
+            return AudioDevice(
+                id: deviceID,
+                name: deviceName,
+                isDefault: deviceID == defaultInputDevice
+            )
+        }
+    }
+
+    /// Refresh the list of available input devices
+    func refreshInputDevices() {
+        availableInputDevices = Self.getAudioInputDevices()
+
+        // Restore selected device from UserDefaults if set
+        if selectedInputDevice == nil {
+            let savedDeviceID = UserDefaults.standard.integer(forKey: SettingsKeys.selectedInputDeviceID)
+            if savedDeviceID != 0 {
+                selectedInputDevice = availableInputDevices.first { $0.id == AudioDeviceID(savedDeviceID) }
+            }
+        }
+
+        // If selected device is no longer available, reset to nil (system default)
+        if let selected = selectedInputDevice,
+           !availableInputDevices.contains(where: { $0.id == selected.id }) {
+            selectedInputDevice = nil
+        }
+    }
+
+    /// Select an input device (nil = system default)
+    func selectInputDevice(_ device: AudioDevice?) {
+        selectedInputDevice = device
+        if let device = device {
+            UserDefaults.standard.set(Int(device.id), forKey: SettingsKeys.selectedInputDeviceID)
+        } else {
+            UserDefaults.standard.removeObject(forKey: SettingsKeys.selectedInputDeviceID)
+        }
+    }
+
+    // MARK: - Audio Device Assignment
+
+    /// Assign specific input device to audio engine's input node
+    private func assignAudioInput(inputNode: AVAudioInputNode, deviceID: AudioDeviceID) {
+        guard let audioUnit = inputNode.audioUnit else {
+            print("AudioCaptureService: No audio unit available for device assignment")
+            return
+        }
+
+        var deviceID = deviceID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &deviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+
+        if status == noErr {
+            print("AudioCaptureService: Successfully assigned input device ID: \(deviceID)")
+        } else {
+            print("AudioCaptureService: Failed to set input device, status: \(status)")
+        }
+    }
 
     // MARK: - Public Methods
 
@@ -126,10 +322,16 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Start microphone capture FIRST (uses AVAudioRecorder)
         try setupMicrophoneCapture()
 
-        // System audio capture disabled - ScreenCaptureKit has issues
-        // TODO: Re-enable with proper voice processing / echo cancellation
-        // For now, mic captures everything (including speaker audio in room)
-        print("AudioCaptureService: System audio capture disabled (will implement with voice processing)")
+        // Start system audio capture for remote participants
+        // With voice processing enabled on mic, this gives us clean separation
+        do {
+            try await setupSystemAudioCapture()
+            try startNewChunk()
+            print("AudioCaptureService: System audio capture started")
+        } catch {
+            print("AudioCaptureService: System audio capture failed (optional): \(error)")
+            // Continue without system audio - mic is more important
+        }
 
         // Start chunk rotation timer
         startChunkRotationTimer()
@@ -260,8 +462,8 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Ensure audio directory exists
         try FileManager.default.createDirectory(at: audioDir, withIntermediateDirectories: true)
 
-        // Use M4A format
-        currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).m4a")
+        // Use WAV format (more reliable with AVAudioEngine voice processing)
+        currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).wav")
 
         // Remove existing file if present
         if let url = currentMicURL, FileManager.default.fileExists(atPath: url.path) {
@@ -274,18 +476,48 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         let inputNode = engine.inputNode
 
-        // Enable voice processing for echo cancellation
+        // Assign specific input device if selected (not using system default)
+        if let device = selectedInputDevice {
+            print("AudioCaptureService: Using selected input device: \(device.name) (ID: \(device.id))")
+            assignAudioInput(inputNode: inputNode, deviceID: device.id)
+        } else {
+            print("AudioCaptureService: Using system default input device")
+        }
+
+        // Enable voice processing for echo cancellation - try to enable, fall back gracefully
         do {
             try inputNode.setVoiceProcessingEnabled(true)
             print("AudioCaptureService: Voice processing enabled (echo cancellation active)")
+
+            // Disable automatic ducking of system audio
+            // Voice processing normally reduces system volume to help with echo cancellation
+            // But we want to keep system audio at full volume since we're recording it separately
+            if let audioUnit = inputNode.audioUnit {
+                var duckingEnabled: UInt32 = 0  // 0 = disabled, 1 = enabled
+                let propertySize = UInt32(MemoryLayout<UInt32>.size)
+                // kAUVoiceIOProperty_DuckNonVoiceAudio = 2013
+                let status = AudioUnitSetProperty(
+                    audioUnit,
+                    AudioUnitPropertyID(2013),
+                    kAudioUnitScope_Global,
+                    0,
+                    &duckingEnabled,
+                    propertySize
+                )
+                if status == noErr {
+                    print("AudioCaptureService: Disabled automatic audio ducking")
+                } else {
+                    print("AudioCaptureService: Could not disable audio ducking, status: \(status)")
+                }
+            }
         } catch {
-            print("AudioCaptureService: Failed to enable voice processing: \(error)")
-            // Continue without voice processing
+            print("AudioCaptureService: Voice processing unavailable for this device configuration: \(error)")
+            // Continue without voice processing - recording will still work
         }
 
-        // Get the format from the input node
+        // Get the format from the input node AFTER enabling voice processing
         let inputFormat = inputNode.outputFormat(forBus: 0)
-        print("AudioCaptureService: Input format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
+        print("AudioCaptureService: Input format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels, \(inputFormat.commonFormat.rawValue)")
 
         guard inputFormat.sampleRate > 0 else {
             print("AudioCaptureService: Invalid input format")
@@ -297,20 +529,9 @@ class AudioCaptureService: NSObject, ObservableObject {
             throw AudioCaptureError.engineSetupFailed
         }
 
-        // Create audio file with AAC format
-        let outputSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: inputFormat.sampleRate,
-            AVNumberOfChannelsKey: inputFormat.channelCount,
-            AVEncoderBitRateKey: 128000
-        ]
-
-        audioFile = try AVAudioFile(
-            forWriting: micURL,
-            settings: outputSettings,
-            commonFormat: inputFormat.commonFormat,
-            interleaved: inputFormat.isInterleaved
-        )
+        // Create audio file in same format as input (WAV/PCM)
+        // This avoids format conversion issues
+        audioFile = try AVAudioFile(forWriting: micURL, settings: inputFormat.settings)
 
         print("AudioCaptureService: Created audio file at: \(micURL.path)")
 
@@ -368,14 +589,31 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - System Audio Setup
 
     private func setupSystemAudioCapture() async throws {
+        print("AudioCaptureService: Setting up system audio capture...")
+
+        // Check screen recording permission first
+        // Note: ScreenCaptureKit will prompt for permission on first use
+        print("AudioCaptureService: Requesting screen content access...")
+
         // Get available content to capture
-        let content = try await SCShareableContent.current
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            print("AudioCaptureService: Got shareable content - \(content.displays.count) displays, \(content.applications.count) apps")
+        } catch {
+            print("AudioCaptureService: Failed to get shareable content: \(error)")
+            print("AudioCaptureService: Make sure Screen Recording permission is granted in System Settings > Privacy & Security")
+            throw AudioCaptureError.screenRecordingPermissionDenied
+        }
 
         guard let display = content.displays.first else {
+            print("AudioCaptureService: No display available")
             throw AudioCaptureError.noDisplayAvailable
         }
 
-        // Create filter to exclude our own app
+        print("AudioCaptureService: Found display: \(display.width)x\(display.height)")
+
+        // Create filter to capture all audio except our own app
         let excludedApps = content.applications.filter { app in
             app.bundleIdentifier == Bundle.main.bundleIdentifier
         }
@@ -386,30 +624,39 @@ class AudioCaptureService: NSObject, ObservableObject {
             exceptingWindows: []
         )
 
-        // Configure for audio only (minimize video capture)
+        // Configure for audio capture
         let config = SCStreamConfiguration()
         config.capturesAudio = true
         config.excludesCurrentProcessAudio = true
-        config.sampleRate = Int(sampleRate)
-        config.channelCount = Int(channels)
+        config.sampleRate = 44100  // Standard sample rate
+        config.channelCount = 1    // Mono
 
-        // Minimal video capture (required but we don't use it)
+        // Minimal video capture (required by ScreenCaptureKit but we don't use it)
         config.width = 2
         config.height = 2
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)  // 1 fps minimum
+        config.showsCursor = false
+        config.pixelFormat = kCVPixelFormatType_32BGRA
 
         streamConfiguration = config
 
-        // Create and start stream
-        systemAudioStream = SCStream(filter: filter, configuration: config, delegate: nil)
+        // Create stream
+        let stream = SCStream(filter: filter, configuration: config, delegate: self)
+        systemAudioStream = stream
 
-        try systemAudioStream?.addStreamOutput(
+        // Add audio output handler
+        try stream.addStreamOutput(
             self,
             type: .audio,
             sampleHandlerQueue: systemBufferQueue
         )
 
-        try await systemAudioStream?.startCapture()
+        print("AudioCaptureService: Starting system audio stream...")
+        print("AudioCaptureService: Stream config - capturesAudio: \(config.capturesAudio), excludesCurrentProcessAudio: \(config.excludesCurrentProcessAudio)")
+        print("AudioCaptureService: Stream config - sampleRate: \(config.sampleRate), channelCount: \(config.channelCount)")
+        try await stream.startCapture()
+        print("AudioCaptureService: System audio stream started successfully - waiting for audio frames...")
+        systemAudioFrameCount = 0
     }
 
     // MARK: - Chunk Management
@@ -432,8 +679,10 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         // Create system audio writer (if system audio capture is active)
         let sysURL = audioDir.appendingPathComponent("sys_\(String(format: "%03d", currentChunkIndex)).m4a")
-        systemWriter = try createAssetWriter(url: sysURL)
+        systemWriter = try createAssetWriter(url: sysURL, sampleRate: systemSampleRate)
         systemWriterInput = systemWriter?.inputs.first
+        systemAudioFrameCount = 0
+        print("AudioCaptureService: System audio writer ready for chunk \(currentChunkIndex)")
     }
 
     private func finishCurrentChunk() {
@@ -449,8 +698,8 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Get session directory
         let sessionDir = SessionStorageService.sessionDirectory(for: session)
 
-        // Handle microphone chunk (recorded by AVAudioRecorder as M4A)
-        let micURL = sessionDir.appendingPathComponent("audio/mic_\(String(format: "%03d", chunkIndex)).m4a")
+        // Handle microphone chunk (recorded by AVAudioEngine as WAV)
+        let micURL = sessionDir.appendingPathComponent("audio/mic_\(String(format: "%03d", chunkIndex)).wav")
         if FileManager.default.fileExists(atPath: micURL.path) {
             let micSize = (try? FileManager.default.attributesOfItem(atPath: micURL.path)[.size] as? Int64) ?? 0
 
@@ -459,7 +708,7 @@ class AudioCaptureService: NSObject, ObservableObject {
                 chunkIndex: chunkIndex,
                 startTime: sessionOffset,
                 endTime: sessionOffset + chunkDuration,
-                filePath: "audio/mic_\(String(format: "%03d", chunkIndex)).m4a",
+                filePath: "audio/mic_\(String(format: "%03d", chunkIndex)).wav",
                 fileSize: micSize,
                 isProcessed: false
             )
@@ -471,7 +720,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         if let writer = systemWriter, let input = systemWriterInput {
             input.markAsFinished()
             writer.finishWriting { [weak self] in
-                guard let self = self else { return }
+                guard self != nil else { return }
 
                 let sysURL = sessionDir.appendingPathComponent("audio/sys_\(String(format: "%03d", chunkIndex)).m4a")
                 let sysSize = (try? FileManager.default.attributesOfItem(atPath: sysURL.path)[.size] as? Int64) ?? 0
@@ -533,21 +782,16 @@ class AudioCaptureService: NSObject, ObservableObject {
             guard let session = currentSession else { return }
             let sessionDir = SessionStorageService.sessionDirectory(for: session)
             let audioDir = sessionDir.appendingPathComponent("audio", isDirectory: true)
-            currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).m4a")
+            currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).wav")
 
             guard let micURL = currentMicURL else { return }
 
             let inputFormat = engine.inputNode.outputFormat(forBus: 0)
-            let outputSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: inputFormat.sampleRate,
-                AVNumberOfChannelsKey: inputFormat.channelCount,
-                AVEncoderBitRateKey: 128000
-            ]
 
+            // Use same format as input (WAV/PCM) to avoid conversion issues
             audioFile = try AVAudioFile(
                 forWriting: micURL,
-                settings: outputSettings,
+                settings: inputFormat.settings,
                 commonFormat: inputFormat.commonFormat,
                 interleaved: inputFormat.isInterleaved
             )
@@ -564,7 +808,7 @@ class AudioCaptureService: NSObject, ObservableObject {
 
     // MARK: - Asset Writer Creation
 
-    private func createAssetWriter(url: URL) throws -> AVAssetWriter {
+    private func createAssetWriter(url: URL, sampleRate: Int = 44100) throws -> AVAssetWriter {
         // Remove existing file if present
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
@@ -585,6 +829,8 @@ class AudioCaptureService: NSObject, ObservableObject {
         writer.add(input)
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
+
+        print("AudioCaptureService: Created AVAssetWriter at \(url.lastPathComponent) with sample rate \(sampleRate)")
 
         return writer
     }
@@ -608,46 +854,97 @@ class AudioCaptureService: NSObject, ObservableObject {
     }
 }
 
+/// MARK: - SCStreamDelegate
+
+extension AudioCaptureService: SCStreamDelegate {
+    nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
+        print("AudioCaptureService: System audio stream stopped with error: \(error)")
+    }
+}
+
 // MARK: - SCStreamOutput
 
 extension AudioCaptureService: SCStreamOutput {
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        // Skip video frames - we only want audio
         guard type == .audio else { return }
 
-        // Calculate audio level
-        if let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) {
-            var length: Int = 0
-            var dataPointer: UnsafeMutablePointer<Int8>?
-            CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+        // Log first few frames for debugging
+        let numSamples = CMSampleBufferGetNumSamples(sampleBuffer)
 
-            if let data = dataPointer, length > 0 {
-                let floatCount = length / MemoryLayout<Float>.size
-                let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
-                var sum: Float = 0
-                for i in 0..<floatCount {
-                    sum += abs(floatPointer[i])
-                }
-                let average = sum / Float(max(floatCount, 1))
-                Task { @MainActor in
-                    self.systemLevel = average
-                }
-            }
+        // Create a copy of the sample buffer that will persist beyond this callback
+        // This is necessary because the original buffer is only valid during the callback
+        var copiedBuffer: CMSampleBuffer?
+        let copyStatus = CMSampleBufferCreateCopy(allocator: kCFAllocatorDefault, sampleBuffer: sampleBuffer, sampleBufferOut: &copiedBuffer)
+
+        guard copyStatus == noErr, let bufferCopy = copiedBuffer else {
+            print("AudioCaptureService: Failed to copy sample buffer, status: \(copyStatus)")
+            return
         }
 
-        // Write to system audio file on MainActor
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+
+            // Track frame count
+            self.systemAudioFrameCount += 1
+
+            // Log periodically
+            if self.systemAudioFrameCount <= 5 || self.systemAudioFrameCount % 100 == 0 {
+                print("AudioCaptureService: System audio frame \(self.systemAudioFrameCount) received, \(numSamples) samples")
+            }
+
+            // Calculate audio level from the sample buffer
+            if let blockBuffer = CMSampleBufferGetDataBuffer(bufferCopy) {
+                var length: Int = 0
+                var dataPointer: UnsafeMutablePointer<Int8>?
+                CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+
+                if let data = dataPointer, length > 0 {
+                    let floatCount = length / MemoryLayout<Float>.size
+                    if floatCount > 0 {
+                        let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
+                        var sum: Float = 0
+                        for i in 0..<min(floatCount, 1024) {
+                            sum += abs(floatPointer[i])
+                        }
+                        let average = sum / Float(min(floatCount, 1024))
+                        self.systemLevel = average * 10
+                    }
+                }
+            }
+
+            // Write to system audio file
             guard let writer = self.systemWriter,
-                  let input = self.systemWriterInput,
-                  writer.status == .writing,
-                  input.isReadyForMoreMediaData else {
+                  let input = self.systemWriterInput else {
+                if self.systemAudioFrameCount <= 5 {
+                    print("AudioCaptureService: System audio - no writer available")
+                }
                 return
             }
-            input.append(sampleBuffer)
+
+            guard writer.status == .writing else {
+                if self.systemAudioFrameCount <= 5 {
+                    print("AudioCaptureService: System audio - writer status is \(writer.status.rawValue), not writing")
+                }
+                return
+            }
+
+            guard input.isReadyForMoreMediaData else {
+                if self.systemAudioFrameCount <= 5 {
+                    print("AudioCaptureService: System audio - input not ready for more data")
+                }
+                return
+            }
+
+            let success = input.append(bufferCopy)
+            if !success && self.systemAudioFrameCount <= 5 {
+                print("AudioCaptureService: System audio - failed to append sample buffer")
+            }
         }
     }
 }
 
-// MARK: - AVAudioPCMBuffer Extension
+/// MARK: - AVAudioPCMBuffer Extension
 
 extension AVAudioPCMBuffer {
     /// Convert AVAudioPCMBuffer to CMSampleBuffer for AVAssetWriter
