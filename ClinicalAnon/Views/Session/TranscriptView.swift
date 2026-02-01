@@ -1,0 +1,283 @@
+//
+//  TranscriptView.swift
+//  ClinicalAnon
+//
+//  Purpose: Scrolling transcript display with speaker labels
+//  Organization: 3 Big Things
+//
+
+import SwiftUI
+
+// MARK: - Transcript View
+
+/// Displays the transcript with speaker labels and auto-scrolling
+struct TranscriptView: View {
+
+    // MARK: - Properties
+
+    @ObservedObject var session: LiveSession
+    @State private var scrollProxy: ScrollViewProxy?
+
+    // MARK: - Body
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    if session.transcriptSegments.isEmpty {
+                        emptyStateView
+                    } else {
+                        ForEach(sortedContent, id: \.id) { item in
+                            switch item {
+                            case .segment(let segment):
+                                TranscriptSegmentRow(segment: segment)
+                                    .id(segment.id)
+
+                            case .gap(let gap):
+                                TranscriptionGapRow(gap: gap)
+                                    .id(gap.id)
+                            }
+                        }
+
+                        // Scroll anchor
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
+                    }
+                }
+                .padding(DesignSystem.Spacing.large)
+            }
+            .onAppear {
+                scrollProxy = proxy
+            }
+            .onChange(of: session.transcriptSegments.count) { _ in
+                withAnimation {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    // MARK: - Sorted Content
+
+    /// Combined and sorted segments and gaps
+    private var sortedContent: [TranscriptItem] {
+        var items: [TranscriptItem] = []
+
+        // Add segments
+        for segment in session.transcriptSegments {
+            items.append(.segment(segment))
+        }
+
+        // Add gaps
+        for gap in session.transcriptionGaps {
+            items.append(.gap(gap))
+        }
+
+        // Sort by start time
+        return items.sorted { item1, item2 in
+            item1.startTime < item2.startTime
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            Spacer()
+
+            if session.state == .recording {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .padding()
+
+                Text("Listening...")
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                Text("Transcript will appear after the first audio chunk is processed.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                Image(systemName: "text.bubble")
+                    .font(.system(size: 48))
+                    .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
+
+                Text("No Transcript")
+                    .font(DesignSystem.Typography.headline)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                Text("Start recording to generate a transcript.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+    }
+}
+
+// MARK: - Transcript Item
+
+/// Wrapper for transcript content (segment or gap)
+enum TranscriptItem: Identifiable {
+    case segment(TranscriptSegment)
+    case gap(TranscriptionGap)
+
+    var id: UUID {
+        switch self {
+        case .segment(let s): return s.id
+        case .gap(let g): return g.id
+        }
+    }
+
+    var startTime: TimeInterval {
+        switch self {
+        case .segment(let s): return s.startTime
+        case .gap(let g): return g.startTime
+        }
+    }
+}
+
+// MARK: - Transcript Segment Row
+
+/// Individual segment row with speaker label
+struct TranscriptSegmentRow: View {
+
+    let segment: TranscriptSegment
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+            // Timestamp
+            Text(segment.formattedStartTime)
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .frame(width: 50, alignment: .trailing)
+
+            // Speaker label
+            speakerLabel
+
+            // Text content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(segment.text)
+                    .font(DesignSystem.Typography.body)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    .textSelection(.enabled)
+
+                if segment.isLowConfidence {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text("Low confidence")
+                            .font(DesignSystem.Typography.small)
+                    }
+                    .foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var speakerLabel: some View {
+        Text(segment.speaker.label)
+            .font(DesignSystem.Typography.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(speakerColor)
+            )
+    }
+
+    private var speakerColor: Color {
+        switch segment.speaker {
+        case .clinician: return .blue
+        case .other: return .green
+        }
+    }
+}
+
+// MARK: - Transcription Gap Row
+
+/// Row showing a gap in transcription
+struct TranscriptionGapRow: View {
+
+    let gap: TranscriptionGap
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DesignSystem.Spacing.small) {
+            // Timestamp
+            Text(gap.formattedDuration)
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .frame(width: 50, alignment: .trailing)
+
+            // Gap indicator
+            HStack(spacing: 8) {
+                Image(systemName: gap.reason.iconName)
+                    .font(.body)
+
+                Text(gap.shortDisplay)
+                    .font(DesignSystem.Typography.body)
+
+                if gap.isRecoverable {
+                    Button("Retry") {
+                        retryTranscription()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .foregroundStyle(gapColor)
+            .padding(.horizontal, DesignSystem.Spacing.small)
+            .padding(.vertical, DesignSystem.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                    .fill(gapColor.opacity(0.1))
+            )
+
+            Spacer()
+        }
+    }
+
+    private var gapColor: Color {
+        switch gap.reason {
+        case .paused: return .orange
+        case .transcriptionFailed: return .red
+        case .audioCorrupted: return .red
+        case .noSpeech: return DesignSystem.Colors.textSecondary
+        }
+    }
+
+    private func retryTranscription() {
+        // Post notification to retry transcription
+        if let chunkIndex = gap.chunkIndex {
+            NotificationCenter.default.post(
+                name: .retryTranscription,
+                object: chunkIndex
+            )
+        }
+    }
+}
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let retryTranscription = Notification.Name("retryTranscription")
+}
+
+// MARK: - Preview
+
+#if DEBUG
+struct TranscriptView_Previews: PreviewProvider {
+    static var previews: some View {
+        TranscriptView(session: LiveSession.sample)
+    }
+}
+#endif

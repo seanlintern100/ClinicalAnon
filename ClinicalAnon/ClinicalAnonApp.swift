@@ -62,6 +62,9 @@ struct ClinicalAnonApp: App {
                     // Pre-load models in background (only if already cached)
                     await LocalLLMService.shared.preloadIfCached()
                     await XLMRobertaNERService.shared.preloadIfCached()
+
+                    // Restore any crashed sessions
+                    await SessionManager.shared.restoreSessionsOnLaunch()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     // Clear memory storage on app termination (security hardening)
