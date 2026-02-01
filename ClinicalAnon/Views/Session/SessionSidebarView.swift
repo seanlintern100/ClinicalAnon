@@ -43,7 +43,7 @@ struct SessionSidebarView: View {
     private var headerView: some View {
         HStack {
             Text("Sessions")
-                .font(DesignSystem.Typography.headline)
+                .font(DesignSystem.Typography.subheading)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
             Spacer()
@@ -51,7 +51,7 @@ struct SessionSidebarView: View {
             Button(action: startNewSession) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(DesignSystem.Colors.accent)
+                    .foregroundStyle(DesignSystem.Colors.primaryTeal)
             }
             .buttonStyle(.plain)
             .disabled(sessionManager.activeSession != nil)
@@ -72,7 +72,7 @@ struct SessionSidebarView: View {
                 .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
 
             Text("No Sessions")
-                .font(DesignSystem.Typography.headline)
+                .font(DesignSystem.Typography.subheading)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
 
             Text("Start a new session to begin recording.")
@@ -217,7 +217,7 @@ struct SessionRowView: View {
         .padding(.vertical, DesignSystem.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                .fill(isSelected ? DesignSystem.Colors.accent.opacity(0.15) : Color.clear)
+                .fill(isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.15) : Color.clear)
         )
         .contentShape(Rectangle())
     }

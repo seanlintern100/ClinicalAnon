@@ -92,7 +92,7 @@ struct TranscriptView: View {
                     .padding()
 
                 Text("Listening...")
-                    .font(DesignSystem.Typography.headline)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
 
                 Text("Transcript will appear after the first audio chunk is processed.")
@@ -105,7 +105,7 @@ struct TranscriptView: View {
                     .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
 
                 Text("No Transcript")
-                    .font(DesignSystem.Typography.headline)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
 
                 Text("Start recording to generate a transcript.")
@@ -173,7 +173,7 @@ struct TranscriptSegmentRow: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption2)
                         Text("Low confidence")
-                            .font(DesignSystem.Typography.small)
+                            .font(DesignSystem.Typography.caption)
                     }
                     .foregroundStyle(.orange)
                 }

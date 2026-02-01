@@ -11,7 +11,13 @@ packages:
     exactVersion: "1.0.40"
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
-    from: "0.9.0"
+    exactVersion: "0.15.0"
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    exactVersion: "2.29.3"
+  swift-transformers:
+    url: https://github.com/huggingface/swift-transformers
+    from: "1.1.6"
 
 settings:
   MARKETING_VERSION: 1.0
@@ -31,6 +37,12 @@ targets:
       - package: AWSSDKSwift
         product: AWSBedrockRuntime
       - package: WhisperKit
+      - package: mlx-swift-lm
+        product: MLXLLM
+      - package: mlx-swift-lm
+        product: MLXLMCommon
+      - package: swift-transformers
+        product: Hub
     resources:
       - path: ClinicalAnon/Resources/Fonts
       - path: ClinicalAnon/Resources/Assets.xcassets
@@ -60,6 +72,7 @@ targets:
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         NSSupportsAutomaticTermination: true
         NSSupportsSuddenTermination: true
+        NSMicrophoneUsageDescription: "Redactor needs microphone access to record your voice during clinical sessions."
     settings:
       base:
         PRODUCT_NAME: Redactor

@@ -26,6 +26,8 @@
 	<string>14.0</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2025 3 Big Things. All rights reserved.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Redactor needs microphone access to record your voice during clinical sessions.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>
@@ -41,7 +43,5 @@
 		<string>Fonts/SourceSans3-SemiBold.ttf</string>
 		<string>Fonts/SourceSans3-Bold.ttf</string>
 	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Redactor needs microphone access to record your voice during clinical sessions.</string>
 </dict>
 </plist>

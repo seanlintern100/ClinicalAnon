@@ -150,8 +150,7 @@ class TranscriptionService: ObservableObject {
         do {
             // Initialize WhisperKit with the specified model
             whisperKit = try await WhisperKit(
-                model: "openai_whisper-\(size.rawValue)",
-                computeOptions: WhisperKit.defaultComputeOptions
+                model: "openai_whisper-\(size.rawValue)"
             )
 
             isModelLoaded = true
@@ -341,21 +340,20 @@ class TranscriptionService: ObservableObject {
 
             for result in results {
                 // WhisperKit returns segments with timing info
-                if let whisperSegments = result.segments {
-                    for segment in whisperSegments {
-                        let transcriptSegment = TranscriptSegment(
-                            speaker: speaker,
-                            text: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
-                            startTime: TimeInterval(segment.start),
-                            endTime: TimeInterval(segment.end),
-                            chunkIndex: chunkIndex,
-                            confidence: Double(segment.avgLogprob)
-                        )
+                let whisperSegments = result.segments
+                for segment in whisperSegments {
+                    let transcriptSegment = TranscriptSegment(
+                        speaker: speaker,
+                        text: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                        startTime: TimeInterval(segment.start),
+                        endTime: TimeInterval(segment.end),
+                        chunkIndex: chunkIndex,
+                        confidence: Double(segment.avgLogprob)
+                    )
 
-                        // Only add segments with actual content
-                        if !transcriptSegment.text.isEmpty {
-                            segments.append(transcriptSegment)
-                        }
+                    // Only add segments with actual content
+                    if !transcriptSegment.text.isEmpty {
+                        segments.append(transcriptSegment)
                     }
                 }
             }

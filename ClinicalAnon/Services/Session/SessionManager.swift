@@ -32,6 +32,11 @@ class SessionManager: ObservableObject {
     private let transcriptionService = TranscriptionService.shared
     private let storageService = SessionStorageService.shared
 
+    // MARK: - Duration Timer
+
+    private var durationTimer: Timer?
+    private var sessionStartDate: Date?
+
     // MARK: - Subscriptions
 
     private var cancellables = Set<AnyCancellable>()
@@ -97,15 +102,55 @@ class SessionManager: ObservableObject {
         // Start audio capture
         try await audioCaptureService.startCapture(for: session)
 
+        // Start duration timer
+        startDurationTimer(for: session)
+
         // Auto-save session
         try await storageService.saveSession(session)
 
         return session
     }
 
+    // MARK: - Duration Timer
+
+    private func startDurationTimer(for session: LiveSession) {
+        // Only set start date on initial start, not on resume
+        if sessionStartDate == nil {
+            sessionStartDate = Date()
+        }
+        durationTimer?.invalidate()
+        durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, session.state == .recording else { return }
+                if let startDate = self.sessionStartDate {
+                    // Calculate total pause time
+                    let totalPauseTime = session.pauseGaps.reduce(0.0) { total, gap in
+                        if let end = gap.end {
+                            return total + end.timeIntervalSince(gap.start)
+                        }
+                        return total
+                    }
+                    session.recordingDuration = Date().timeIntervalSince(startDate) - totalPauseTime
+                }
+            }
+        }
+    }
+
+    private func stopDurationTimer() {
+        durationTimer?.invalidate()
+        durationTimer = nil
+    }
+
+    private func resetDurationTimer() {
+        stopDurationTimer()
+        sessionStartDate = nil
+    }
+
     /// Pause the active session
     func pauseSession(_ session: LiveSession) {
         guard session.state == .recording else { return }
+
+        stopDurationTimer()
 
         session.state = .paused
         session.pausedAt = Date()
@@ -147,6 +192,9 @@ class SessionManager: ObservableObject {
 
         try await audioCaptureService.resumeCapture()
 
+        // Restart duration timer
+        startDurationTimer(for: session)
+
         // Auto-save
         Task {
             try? await storageService.saveSession(session)
@@ -156,6 +204,8 @@ class SessionManager: ObservableObject {
     /// Stop recording and mark session complete
     func stopSession(_ session: LiveSession) async {
         guard session.state == .recording || session.state == .paused else { return }
+
+        resetDurationTimer()
 
         // Stop audio capture
         audioCaptureService.stopCapture()

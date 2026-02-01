@@ -134,7 +134,7 @@ struct MainContentView: View {
             // Phase indicator or Session mode indicator centered
             if sessionManager.isSessionModeActive {
                 Text("Live Session")
-                    .font(DesignSystem.Typography.headline)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
             } else {
                 PhaseIndicator(viewModel: viewModel)

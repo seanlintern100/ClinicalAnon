@@ -40,7 +40,7 @@ struct SessionDetailView: View {
             // Session info
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.displayName)
-                    .font(DesignSystem.Typography.headline)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
 
                 HStack(spacing: DesignSystem.Spacing.small) {
@@ -212,42 +212,6 @@ struct AudioLevelMeter: View {
         } else {
             return .green
         }
-    }
-}
-
-// MARK: - Button Styles
-
-struct PrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(DesignSystem.Typography.body)
-            .foregroundStyle(.white)
-            .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.vertical, DesignSystem.Spacing.small)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                    .fill(DesignSystem.Colors.accent)
-                    .opacity(configuration.isPressed ? 0.8 : 1.0)
-            )
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(DesignSystem.Typography.body)
-            .foregroundStyle(DesignSystem.Colors.textPrimary)
-            .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.vertical, DesignSystem.Spacing.small)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                    .fill(DesignSystem.Colors.surface)
-                    .opacity(configuration.isPressed ? 0.8 : 1.0)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                    .stroke(DesignSystem.Colors.textSecondary.opacity(0.3), lineWidth: 1)
-            )
     }
 }
 

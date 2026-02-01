@@ -52,7 +52,7 @@ struct SessionNamePromptView: View {
         VStack(spacing: DesignSystem.Spacing.small) {
             Image(systemName: "pencil.circle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(DesignSystem.Colors.accent)
+                .foregroundStyle(DesignSystem.Colors.primaryTeal)
 
             Text("Name This Session")
                 .font(DesignSystem.Typography.title)
