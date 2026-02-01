@@ -64,4 +64,5 @@ enum SettingsKeys {
     // MARK: - Audio Input Settings
 
     static let selectedInputDeviceID = "selectedInputDeviceID"
+    static let voiceProcessingEnabled = "voiceProcessingEnabled"
 }

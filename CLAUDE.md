@@ -21,3 +21,23 @@ Redactor is a macOS app for anonymizing clinical documentation. It detects and r
 ## Feature Branches
 
 - `feature/gliner` - Preserved GLiNER code (removed from main, can be re-enabled by merging)
+
+## Live Session Audio Capture
+
+**IMPORTANT: Echo cancellation is REQUIRED for live sessions.**
+
+When recording video calls (Zoom/Teams), the remote participant's voice plays through speakers and gets picked up by the microphone. Without echo cancellation, the remote voice is recorded TWICE:
+1. Via system audio capture (clean, direct)
+2. Via microphone (echo from speakers)
+
+This ruins transcription with doubled/overlapping speech.
+
+### Implementation
+
+The app uses `VoiceProcessingAudioCapture.swift` which leverages Apple's `VoiceProcessingIO` AudioUnit directly (not AVAudioEngine's voice processing mode, which creates aggregate devices on macOS).
+
+Key files:
+- `AudioCaptureService.swift` - Main capture orchestration
+- `VoiceProcessingAudioCapture.swift` - VoiceProcessingIO AudioUnit wrapper for echo cancellation
+
+User setting: Settings > Transcription > Echo Cancellation (default: ON)

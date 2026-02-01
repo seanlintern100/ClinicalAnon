@@ -104,6 +104,7 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Audio Capture
 
     private var microphoneEngine: AVAudioEngine?
+    private var voiceProcessingCapture: VoiceProcessingAudioCapture?
     private var systemAudioStream: SCStream?
     private var streamConfiguration: SCStreamConfiguration?
     private var levelTimer: Timer?
@@ -352,7 +353,11 @@ class AudioCaptureService: NSObject, ObservableObject {
         levelTimer?.invalidate()
         levelTimer = nil
 
-        // Pause the audio engine
+        // Stop VoiceProcessingIO capture if active
+        voiceProcessingCapture?.stop()
+        voiceProcessingCapture = nil
+
+        // Pause AVAudioEngine if active
         microphoneEngine?.pause()
 
         // Close current audio file
@@ -387,7 +392,14 @@ class AudioCaptureService: NSObject, ObservableObject {
         levelTimer?.invalidate()
         levelTimer = nil
 
-        // Stop and cleanup microphone engine
+        // Stop VoiceProcessingIO capture if active
+        if let vpCapture = voiceProcessingCapture {
+            vpCapture.stop()
+            print("AudioCaptureService: Stopped VoiceProcessingIO capture")
+        }
+        voiceProcessingCapture = nil
+
+        // Stop AVAudioEngine if active
         if let engine = microphoneEngine {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
@@ -449,7 +461,7 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Microphone Setup with Voice Processing
 
     private func setupMicrophoneCapture() throws {
-        print("AudioCaptureService: Setting up microphone capture with AVAudioEngine + Voice Processing...")
+        print("AudioCaptureService: Setting up microphone capture...")
 
         guard let session = currentSession else {
             throw AudioCaptureError.engineSetupFailed
@@ -462,11 +474,70 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Ensure audio directory exists
         try FileManager.default.createDirectory(at: audioDir, withIntermediateDirectories: true)
 
-        // Use WAV format (more reliable with AVAudioEngine voice processing)
+        // Use WAV format
         currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).wav")
 
+        guard let micURL = currentMicURL else {
+            throw AudioCaptureError.engineSetupFailed
+        }
+
+        // Check if echo cancellation is enabled in settings (defaults to ON)
+        let echoEnabled = UserDefaults.standard.object(forKey: SettingsKeys.voiceProcessingEnabled) as? Bool ?? true
+
+        if echoEnabled {
+            // Try VoiceProcessingIO (proper echo cancellation)
+            // This uses Apple's VoiceProcessingIO AudioUnit directly which doesn't have
+            // the aggregate device issues that AVAudioEngine's voice processing mode has
+            do {
+                try setupVoiceProcessingCapture(url: micURL)
+                print("AudioCaptureService: Using VoiceProcessingIO for echo cancellation")
+                return
+            } catch {
+                print("AudioCaptureService: VoiceProcessingIO failed: \(error)")
+                print("AudioCaptureService: Falling back to AVAudioEngine...")
+            }
+        } else {
+            print("AudioCaptureService: Echo cancellation disabled by user setting")
+        }
+
+        // Fallback: Use AVAudioEngine without voice processing
+        try setupAVAudioEngineCapture(url: micURL)
+    }
+
+    /// Set up microphone capture using VoiceProcessingIO AudioUnit (with echo cancellation)
+    private func setupVoiceProcessingCapture(url: URL) throws {
+        let deviceID = selectedInputDevice?.id
+
+        if let device = selectedInputDevice {
+            print("AudioCaptureService: Using input device: \(device.name) (ID: \(device.id))")
+        } else {
+            print("AudioCaptureService: Using system default input device")
+        }
+
+        let capture = VoiceProcessingAudioCapture(sampleRate: 48000, inputDeviceID: deviceID)
+
+        // Set up level callback
+        capture.audioLevelCallback = { [weak self] level in
+            Task { @MainActor in
+                self?.microphoneLevel = level
+            }
+        }
+
+        try capture.start(writingTo: url)
+
+        voiceProcessingCapture = capture
+
+        if capture.echoSuppressionEnabled {
+            print("AudioCaptureService: Echo cancellation ACTIVE - remote audio will be filtered from mic")
+        } else {
+            print("AudioCaptureService: Echo cancellation not available")
+        }
+    }
+
+    /// Fallback: Set up microphone capture using AVAudioEngine (without voice processing)
+    private func setupAVAudioEngineCapture(url: URL) throws {
         // Remove existing file if present
-        if let url = currentMicURL, FileManager.default.fileExists(atPath: url.path) {
+        if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
 
@@ -476,7 +547,7 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         let inputNode = engine.inputNode
 
-        // Assign specific input device if selected (not using system default)
+        // Assign specific input device if selected
         if let device = selectedInputDevice {
             print("AudioCaptureService: Using selected input device: \(device.name) (ID: \(device.id))")
             assignAudioInput(inputNode: inputNode, deviceID: device.id)
@@ -484,55 +555,7 @@ class AudioCaptureService: NSObject, ObservableObject {
             print("AudioCaptureService: Using system default input device")
         }
 
-        // Check input format BEFORE enabling voice processing
-        let preFormat = inputNode.inputFormat(forBus: 0)
-        print("AudioCaptureService: Hardware format: \(preFormat.sampleRate) Hz, \(preFormat.channelCount) channels")
-
-        var voiceProcessingEnabled = false
-
-        // Only attempt voice processing if hardware format looks reasonable
-        if preFormat.channelCount <= 2 && preFormat.sampleRate > 0 {
-            do {
-                try inputNode.setVoiceProcessingEnabled(true)
-
-                // Check the OUTPUT format after enabling - voice processing can create aggregates
-                let postFormat = inputNode.outputFormat(forBus: 0)
-                print("AudioCaptureService: Post-VP format: \(postFormat.sampleRate) Hz, \(postFormat.channelCount) channels")
-
-                if postFormat.channelCount > 2 {
-                    // Voice processing created an aggregate device - disable it
-                    print("AudioCaptureService: Voice processing created aggregate (\(postFormat.channelCount) channels) - disabling")
-                    try inputNode.setVoiceProcessingEnabled(false)
-                    voiceProcessingEnabled = false
-                } else {
-                    voiceProcessingEnabled = true
-                    print("AudioCaptureService: Voice processing enabled (echo cancellation active)")
-
-                    // Disable automatic ducking of system audio
-                    if let audioUnit = inputNode.audioUnit {
-                        var duckingEnabled: UInt32 = 0
-                        let propertySize = UInt32(MemoryLayout<UInt32>.size)
-                        let status = AudioUnitSetProperty(
-                            audioUnit,
-                            AudioUnitPropertyID(2013),  // kAUVoiceIOProperty_DuckNonVoiceAudio
-                            kAudioUnitScope_Global,
-                            0,
-                            &duckingEnabled,
-                            propertySize
-                        )
-                        if status == noErr {
-                            print("AudioCaptureService: Disabled automatic audio ducking")
-                        }
-                    }
-                }
-            } catch {
-                print("AudioCaptureService: Voice processing unavailable: \(error)")
-            }
-        } else {
-            print("AudioCaptureService: Skipping voice processing - hardware format not suitable")
-        }
-
-        // Get final format for recording
+        // Get input format
         let inputFormat = inputNode.outputFormat(forBus: 0)
         print("AudioCaptureService: Recording format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
 
@@ -541,18 +564,11 @@ class AudioCaptureService: NSObject, ObservableObject {
             throw AudioCaptureError.engineSetupFailed
         }
 
-        // Create the audio file for writing
-        guard let micURL = currentMicURL else {
-            throw AudioCaptureError.engineSetupFailed
-        }
+        // Create audio file
+        audioFile = try AVAudioFile(forWriting: url, settings: inputFormat.settings)
+        print("AudioCaptureService: Created audio file at: \(url.path)")
 
-        // Create audio file in same format as input (WAV/PCM)
-        // This avoids format conversion issues
-        audioFile = try AVAudioFile(forWriting: micURL, settings: inputFormat.settings)
-
-        print("AudioCaptureService: Created audio file at: \(micURL.path)")
-
-        // Install tap on input node to capture audio
+        // Install tap on input node
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
             self?.handleMicrophoneBuffer(buffer)
         }
@@ -561,10 +577,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         engine.prepare()
         try engine.start()
 
-        print("AudioCaptureService: AVAudioEngine started \(voiceProcessingEnabled ? "with" : "without") voice processing")
-
-        // Start level metering timer
-        startLevelMeteringTimer()
+        print("AudioCaptureService: AVAudioEngine started (NO echo cancellation - remote voice may be doubled)")
     }
 
     private var currentMicURL: URL?
@@ -777,12 +790,20 @@ class AudioCaptureService: NSObject, ObservableObject {
     }
 
     private func rotateChunk() {
-        guard isCapturing, let engine = microphoneEngine else { return }
+        guard isCapturing else { return }
+
+        // Need either VoiceProcessingIO or AVAudioEngine active
+        guard voiceProcessingCapture != nil || microphoneEngine != nil else { return }
 
         print("AudioCaptureService: Rotating to chunk \(currentChunkIndex + 1)")
 
-        // Remove tap and close current audio file
-        engine.inputNode.removeTap(onBus: 0)
+        // Stop current capture
+        voiceProcessingCapture?.stop()
+        voiceProcessingCapture = nil
+
+        if let engine = microphoneEngine {
+            engine.inputNode.removeTap(onBus: 0)
+        }
         audioFile = nil
 
         // Finish current chunk (records references)
@@ -795,7 +816,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         do {
             try startNewChunk()
 
-            // Reinstall tap and create new audio file
+            // Create new mic file URL
             guard let session = currentSession else { return }
             let sessionDir = SessionStorageService.sessionDirectory(for: session)
             let audioDir = sessionDir.appendingPathComponent("audio", isDirectory: true)
@@ -803,21 +824,32 @@ class AudioCaptureService: NSObject, ObservableObject {
 
             guard let micURL = currentMicURL else { return }
 
-            let inputFormat = engine.inputNode.outputFormat(forBus: 0)
-
-            // Use same format as input (WAV/PCM) to avoid conversion issues
-            audioFile = try AVAudioFile(
-                forWriting: micURL,
-                settings: inputFormat.settings,
-                commonFormat: inputFormat.commonFormat,
-                interleaved: inputFormat.isInterleaved
-            )
-
-            engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
-                self?.handleMicrophoneBuffer(buffer)
+            // Try VoiceProcessingIO first
+            do {
+                try setupVoiceProcessingCapture(url: micURL)
+                print("AudioCaptureService: Started new chunk \(currentChunkIndex) with VoiceProcessingIO")
+                return
+            } catch {
+                print("AudioCaptureService: VoiceProcessingIO failed for new chunk: \(error)")
             }
 
-            print("AudioCaptureService: Started new chunk \(currentChunkIndex)")
+            // Fallback to AVAudioEngine
+            if let engine = microphoneEngine {
+                let inputFormat = engine.inputNode.outputFormat(forBus: 0)
+
+                audioFile = try AVAudioFile(
+                    forWriting: micURL,
+                    settings: inputFormat.settings,
+                    commonFormat: inputFormat.commonFormat,
+                    interleaved: inputFormat.isInterleaved
+                )
+
+                engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
+                    self?.handleMicrophoneBuffer(buffer)
+                }
+
+                print("AudioCaptureService: Started new chunk \(currentChunkIndex) with AVAudioEngine")
+            }
         } catch {
             print("AudioCaptureService: Failed to start new chunk: \(error)")
         }

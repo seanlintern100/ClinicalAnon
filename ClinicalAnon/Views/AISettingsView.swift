@@ -39,8 +39,13 @@ struct SettingsContainerView: View {
                 .tabItem {
                     Label("Inclusions", systemImage: "text.badge.plus")
                 }
+
+            TranscriptionSettingsView()
+                .tabItem {
+                    Label("Transcription", systemImage: "waveform")
+                }
         }
-        .frame(width: 600, height: 480)
+        .frame(width: 600, height: 520)
     }
 }
 

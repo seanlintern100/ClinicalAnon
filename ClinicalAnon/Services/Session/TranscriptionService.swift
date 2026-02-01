@@ -41,21 +41,37 @@ enum TranscriptionError: Error, LocalizedError {
 // MARK: - Model Size
 
 /// Available Whisper model sizes
-enum WhisperModelSize: String, CaseIterable {
+enum WhisperModelSize: String, CaseIterable, Identifiable {
     case tiny = "tiny"
     case base = "base"
     case small = "small"
     case medium = "medium"
     case large = "large-v3"
 
+    var id: String { rawValue }
+
     var displayName: String {
         switch self {
-        case .tiny: return "Tiny (~75MB)"
-        case .base: return "Base (~150MB)"
-        case .small: return "Small (~500MB)"
-        case .medium: return "Medium (~1.5GB)"
-        case .large: return "Large (~3GB)"
+        case .tiny: return "Tiny"
+        case .base: return "Base"
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
         }
+    }
+
+    var sizeDescription: String {
+        switch self {
+        case .tiny: return "~75 MB"
+        case .base: return "~150 MB"
+        case .small: return "Bundled"
+        case .medium: return "~1.5 GB"
+        case .large: return "~3 GB"
+        }
+    }
+
+    var isBundled: Bool {
+        self == .small
     }
 
     var approximateSize: Int64 {
@@ -105,6 +121,29 @@ class TranscriptionService: ObservableObject {
     @Published private(set) var loadedModelSize: WhisperModelSize?
     @Published var error: TranscriptionError?
 
+    // MARK: - Download State
+
+    @Published var isDownloading: Bool = false
+    @Published var downloadProgress: Double = 0
+    @Published var downloadStatus: String = ""
+
+    // MARK: - Model Selection
+
+    var selectedModelSize: WhisperModelSize {
+        get {
+            let saved = UserDefaults.standard.string(forKey: SettingsKeys.whisperModelSize)
+            return WhisperModelSize(rawValue: saved ?? "") ?? .medium
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: SettingsKeys.whisperModelSize)
+            // Unload current model when selection changes (will reload on next use)
+            if isModelLoaded && loadedModelSize != newValue {
+                unloadModel()
+            }
+            objectWillChange.send()
+        }
+    }
+
     // MARK: - WhisperKit Instance
 
     private var whisperKit: WhisperKit?
@@ -146,8 +185,9 @@ class TranscriptionService: ObservableObject {
 
     // MARK: - Model Management
 
-    /// Load the Whisper model
-    func loadModel(size: WhisperModelSize = .small) async throws {
+    /// Load the Whisper model (uses selected model size by default)
+    func loadModel(size: WhisperModelSize? = nil) async throws {
+        let modelSize = size ?? selectedModelSize
         guard !isLoading else { return }
 
         isLoading = true
@@ -156,11 +196,11 @@ class TranscriptionService: ObservableObject {
         do {
             // Initialize WhisperKit with the specified model
             whisperKit = try await WhisperKit(
-                model: "openai_whisper-\(size.rawValue)"
+                model: "openai_whisper-\(modelSize.rawValue)"
             )
 
             isModelLoaded = true
-            loadedModelSize = size
+            loadedModelSize = modelSize
         } catch {
             self.error = .modelLoadFailed(error.localizedDescription)
             throw TranscriptionError.modelLoadFailed(error.localizedDescription)
@@ -176,9 +216,13 @@ class TranscriptionService: ObservableObject {
         loadedModelSize = nil
     }
 
-    /// Check if model is available (downloaded)
-    func isModelAvailable(size: WhisperModelSize) -> Bool {
-        // WhisperKit downloads models on first use
+    /// Check if model is available (downloaded/cached)
+    func isModelCached(size: WhisperModelSize) -> Bool {
+        // Bundled model is always available
+        if size.isBundled {
+            return true
+        }
+
         // Check if model files exist in the cache
         let modelName = "openai_whisper-\(size.rawValue)"
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -186,6 +230,72 @@ class TranscriptionService: ObservableObject {
         }
         let modelPath = documentsPath.appendingPathComponent("huggingface/models/argmaxinc/whisperkit-coreml/\(modelName)")
         return FileManager.default.fileExists(atPath: modelPath.path)
+    }
+
+    /// Legacy method name for compatibility
+    func isModelAvailable(size: WhisperModelSize) -> Bool {
+        return isModelCached(size: size)
+    }
+
+    /// Download and load a model
+    func downloadModel(size: WhisperModelSize) async throws {
+        guard !isDownloading && !isLoading else { return }
+
+        isDownloading = true
+        downloadProgress = -1  // Negative indicates indeterminate
+        downloadStatus = "Downloading \(size.displayName) model... This may take several minutes."
+
+        // Register with DownloadStateManager for quit protection
+        DownloadStateManager.shared.startDownload()
+
+        defer {
+            isDownloading = false
+            downloadProgress = 0
+            downloadStatus = ""
+            DownloadStateManager.shared.endDownload()
+        }
+
+        do {
+            DownloadStateManager.shared.updateProgress(0.5, status: downloadStatus)
+
+            // WhisperKit handles download automatically via initialization
+            whisperKit = try await WhisperKit(
+                model: "openai_whisper-\(size.rawValue)"
+            )
+
+            downloadProgress = 1.0
+            downloadStatus = "Complete"
+            DownloadStateManager.shared.updateProgress(1.0, status: "Complete")
+
+            isModelLoaded = true
+            loadedModelSize = size
+            selectedModelSize = size
+        } catch {
+            self.error = .modelLoadFailed(error.localizedDescription)
+            throw TranscriptionError.modelLoadFailed(error.localizedDescription)
+        }
+    }
+
+    /// Delete a downloaded model
+    func deleteModel(size: WhisperModelSize) throws {
+        // Don't allow deleting bundled model
+        guard !size.isBundled else { return }
+
+        // Unload if this is the currently loaded model
+        if loadedModelSize == size {
+            unloadModel()
+        }
+
+        // Delete model files from cache
+        let modelName = "openai_whisper-\(size.rawValue)"
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let modelPath = documentsPath.appendingPathComponent("huggingface/models/argmaxinc/whisperkit-coreml/\(modelName)")
+
+        if FileManager.default.fileExists(atPath: modelPath.path) {
+            try FileManager.default.removeItem(at: modelPath)
+        }
     }
 
     // MARK: - Queue Management
@@ -223,9 +333,10 @@ class TranscriptionService: ObservableObject {
         currentTask = Task {
             // Load model if not already loaded
             if !isModelLoaded {
-                print("TranscriptionService: Loading Whisper model for transcription...")
+                let modelSize = selectedModelSize
+                print("TranscriptionService: Loading Whisper model (\(modelSize.displayName)) for transcription...")
                 do {
-                    try await loadModel()
+                    try await loadModel(size: modelSize)
                     print("TranscriptionService: Model loaded successfully")
                 } catch {
                     print("TranscriptionService: Failed to load model: \(error)")
@@ -331,15 +442,26 @@ class TranscriptionService: ObservableObject {
             stage: .processing
         )
 
-        // Process system audio (other participants)
+        // Process system audio (other participants) - only if file exists and has content
         if FileManager.default.fileExists(atPath: systemAudioPath.path) {
-            let sysSegments = try await transcribeFile(
-                whisper: whisper,
-                audioPath: systemAudioPath,
-                speaker: .other,
-                chunkIndex: chunkIndex
-            )
-            allSegments.append(contentsOf: sysSegments)
+            // Check file size - skip if empty
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: systemAudioPath.path)[.size] as? Int64) ?? 0
+            if fileSize > 1000 {  // Skip files smaller than 1KB (likely empty/headers only)
+                do {
+                    let sysSegments = try await transcribeFile(
+                        whisper: whisper,
+                        audioPath: systemAudioPath,
+                        speaker: .other,
+                        chunkIndex: chunkIndex
+                    )
+                    allSegments.append(contentsOf: sysSegments)
+                } catch {
+                    print("TranscriptionService: System audio transcription failed (non-fatal): \(error)")
+                    // Continue without system audio - mic transcript is still valid
+                }
+            } else {
+                print("TranscriptionService: System audio file is empty, skipping")
+            }
         }
 
         // Sort by start time

@@ -134,7 +134,7 @@ class LiveSession: ObservableObject, Identifiable {
 
     @Published var recordingDuration: TimeInterval
     @Published var pausedAt: Date?
-    var pauseGaps: [PauseGap] = []
+    @Published var pauseGaps: [PauseGap] = []
 
     // MARK: - Transcript
 
@@ -149,7 +149,7 @@ class LiveSession: ObservableObject, Identifiable {
 
     // MARK: - Audio References
 
-    var audioChunkPaths: [AudioChunkReference] = []
+    @Published var audioChunkPaths: [AudioChunkReference] = []
 
     // MARK: - Initialization
 
