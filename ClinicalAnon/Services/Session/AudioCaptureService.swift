@@ -485,52 +485,56 @@ class AudioCaptureService: NSObject, ObservableObject {
         }
 
         // Check input format BEFORE enabling voice processing
-        // Voice processing fails on aggregate devices (multi-channel) or mismatched sample rates
         let preFormat = inputNode.inputFormat(forBus: 0)
         print("AudioCaptureService: Hardware format: \(preFormat.sampleRate) Hz, \(preFormat.channelCount) channels")
 
-        let shouldEnableVoiceProcessing = preFormat.channelCount <= 2 && preFormat.sampleRate > 0
         var voiceProcessingEnabled = false
 
-        if shouldEnableVoiceProcessing {
-            // Enable voice processing for echo cancellation - try to enable, fall back gracefully
+        // Only attempt voice processing if hardware format looks reasonable
+        if preFormat.channelCount <= 2 && preFormat.sampleRate > 0 {
             do {
                 try inputNode.setVoiceProcessingEnabled(true)
-                voiceProcessingEnabled = true
-                print("AudioCaptureService: Voice processing enabled (echo cancellation active)")
 
-                // Disable automatic ducking of system audio
-                // Voice processing normally reduces system volume to help with echo cancellation
-                // But we want to keep system audio at full volume since we're recording it separately
-                if let audioUnit = inputNode.audioUnit {
-                    var duckingEnabled: UInt32 = 0  // 0 = disabled, 1 = enabled
-                    let propertySize = UInt32(MemoryLayout<UInt32>.size)
-                    // kAUVoiceIOProperty_DuckNonVoiceAudio = 2013
-                    let status = AudioUnitSetProperty(
-                        audioUnit,
-                        AudioUnitPropertyID(2013),
-                        kAudioUnitScope_Global,
-                        0,
-                        &duckingEnabled,
-                        propertySize
-                    )
-                    if status == noErr {
-                        print("AudioCaptureService: Disabled automatic audio ducking")
-                    } else {
-                        print("AudioCaptureService: Could not disable audio ducking, status: \(status)")
+                // Check the OUTPUT format after enabling - voice processing can create aggregates
+                let postFormat = inputNode.outputFormat(forBus: 0)
+                print("AudioCaptureService: Post-VP format: \(postFormat.sampleRate) Hz, \(postFormat.channelCount) channels")
+
+                if postFormat.channelCount > 2 {
+                    // Voice processing created an aggregate device - disable it
+                    print("AudioCaptureService: Voice processing created aggregate (\(postFormat.channelCount) channels) - disabling")
+                    try inputNode.setVoiceProcessingEnabled(false)
+                    voiceProcessingEnabled = false
+                } else {
+                    voiceProcessingEnabled = true
+                    print("AudioCaptureService: Voice processing enabled (echo cancellation active)")
+
+                    // Disable automatic ducking of system audio
+                    if let audioUnit = inputNode.audioUnit {
+                        var duckingEnabled: UInt32 = 0
+                        let propertySize = UInt32(MemoryLayout<UInt32>.size)
+                        let status = AudioUnitSetProperty(
+                            audioUnit,
+                            AudioUnitPropertyID(2013),  // kAUVoiceIOProperty_DuckNonVoiceAudio
+                            kAudioUnitScope_Global,
+                            0,
+                            &duckingEnabled,
+                            propertySize
+                        )
+                        if status == noErr {
+                            print("AudioCaptureService: Disabled automatic audio ducking")
+                        }
                     }
                 }
             } catch {
                 print("AudioCaptureService: Voice processing unavailable: \(error)")
-                // Continue without voice processing - recording will still work
             }
         } else {
-            print("AudioCaptureService: Skipping voice processing - aggregate device detected (\(preFormat.channelCount) channels)")
+            print("AudioCaptureService: Skipping voice processing - hardware format not suitable")
         }
 
-        // Get the format from the input node (may differ after voice processing)
+        // Get final format for recording
         let inputFormat = inputNode.outputFormat(forBus: 0)
-        print("AudioCaptureService: Input format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels, \(inputFormat.commonFormat.rawValue)")
+        print("AudioCaptureService: Recording format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
 
         guard inputFormat.sampleRate > 0 else {
             print("AudioCaptureService: Invalid input format")
