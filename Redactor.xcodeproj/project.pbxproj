@@ -63,6 +63,8 @@
 		913A43814EBACCC657047706 /* TextEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */; };
 		9305F0A93AE56D10A9BEB497 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */; };
 		976A38CC706CDF708430B7A8 /* SessionSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */; };
+		SW1C000000000000000001 /* SessionWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = SW1C000000000000000002 /* SessionWindowController.swift */; };
+		SW1C000000000000000003 /* SessionWindowContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SW1C000000000000000004 /* SessionWindowContentView.swift */; };
 		98A6CBABBE704F1553573D47 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = EA2659098EDE9C772C763EAE /* MLXLLM */; };
 		9B7B2BA26EF227BFA7EDE1AD /* NZPhoneRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */; };
 		9D5745C3198DCB84F7ECA1BD /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7542F1D14F61F0CDFFA2ADAC /* UserInclusionRecognizer.swift */; };
@@ -77,9 +79,7 @@
 		AF86309F4111C19C6A170E03 /* WorkflowPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39AA02B94C43190B3535E10 /* WorkflowPhase.swift */; };
 		B95A47DED2D5B9E43B0A0095 /* LiveSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBADD3AD29E31A56881A0363 /* LiveSession.swift */; };
 		BDCE129B32BFAB043737182F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */; };
-		BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */; };
-		VPAC1234567890ABCDEF1234 /* VoiceProcessingAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPAC0987654321FEDCBA9876 /* VoiceProcessingAudioCapture.swift */; };
-		BED740E805A7B17E543319AE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */; };
+		BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */; };		BED740E805A7B17E543319AE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */; };
 		BF4D6AEBD3BDFB0A97A048BC /* EmailRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910964A6B0573085F191AC49 /* EmailRecognizer.swift */; };
 		C026D24088042251AFAEFCEF /* WorkflowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5652BE3366DB6BB9613DBF9C /* WorkflowViewModel.swift */; };
 		C215AD0F5B89967304A3D3D8 /* TitleNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21809F1390306CC2272B1C1E /* TitleNameRecognizer.swift */; };
@@ -112,6 +112,9 @@
 		FF5E346E1B05C0B073598613 /* DocumentTypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2551C5C15BE3034D62CB24 /* DocumentTypeManager.swift */; };
 		FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */; };
 		FFC1E63462B5CD11B608D80F /* HelpWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04593A8C8D3B19D5F44EAB58 /* HelpWindowController.swift */; };
+		AEC0000000000000000007 /* AECBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = AEC0000000000000000002 /* AECBridge.mm */; };
+		AEC0000000000000000008 /* AECProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC0000000000000000003 /* AECProcessor.swift */; };
+		AEC0000000000000000009 /* RingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC0000000000000000004 /* RingBuffer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -150,9 +153,7 @@
 		44D0C9224315FD3A09A4F7B6 /* AISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsView.swift; sourceTree = "<group>"; };
 		4695C3542262D3AAEE29F4DA /* HelpContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpContent.swift; sourceTree = "<group>"; };
 		46AE881138CF237547E4B849 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
-		4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureService.swift; sourceTree = "<group>"; };
-		VPAC0987654321FEDCBA9876 /* VoiceProcessingAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProcessingAudioCapture.swift; sourceTree = "<group>"; };
-		4DED49AAC0FEE30F7AD680E0 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureService.swift; sourceTree = "<group>"; };		4DED49AAC0FEE30F7AD680E0 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		4F7B43C6A99E8D91F07BFFD4 /* RedactorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RedactorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		51BF6876F36D56149F2DB144 /* ImprovePhaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImprovePhaseView.swift; sourceTree = "<group>"; };
@@ -181,6 +182,8 @@
 		8E8D95843A42C138E6B0D5CA /* AIAssistantService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantService.swift; sourceTree = "<group>"; };
 		910964A6B0573085F191AC49 /* EmailRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailRecognizer.swift; sourceTree = "<group>"; };
 		93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarView.swift; sourceTree = "<group>"; };
+		SW1C000000000000000002 /* SessionWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionWindowController.swift; sourceTree = "<group>"; };
+		SW1C000000000000000004 /* SessionWindowContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionWindowContentView.swift; sourceTree = "<group>"; };
 		9741FCB21B765FA21672D641 /* SwiftNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftNERService.swift; sourceTree = "<group>"; };
 		9896430EEB30A1EC8D7F8606 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
 		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
@@ -228,6 +231,11 @@
 		F6C687FE880EAE820CCA3F73 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
 		F7C2E982A2AE591B79349F46 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
 		FEE09AC0EE82FA4C87F8ECF9 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
+		AEC0000000000000000001 /* AECBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AECBridge.h; sourceTree = "<group>"; };
+		AEC0000000000000000002 /* AECBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AECBridge.mm; sourceTree = "<group>"; };
+		AEC0000000000000000003 /* AECProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AECProcessor.swift; sourceTree = "<group>"; };
+		AEC0000000000000000004 /* RingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingBuffer.swift; sourceTree = "<group>"; };
+		AEC0000000000000000005 /* ClinicalAnon-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ClinicalAnon-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -315,6 +323,7 @@
 		4081D2BA49ECA18E07E24033 /* ClinicalAnon */ = {
 			isa = PBXGroup;
 			children = (
+				AEC0000000000000000005 /* ClinicalAnon-Bridging-Header.h */,
 				87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */,
 				66DE2D0F8BC65C98DAD87417 /* Models */,
 				41804DF526EA1635A7B40032 /* Preview Content */,
@@ -341,10 +350,19 @@
 				4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */,
 				61BEC03B51DE72463B083E60 /* SessionManager.swift */,
 				A4DFCD98D30C64C8BD4FD174 /* SessionStorageService.swift */,
-				BA30D891D8461DC2A1007544 /* TranscriptionService.swift */,
-				VPAC0987654321FEDCBA9876 /* VoiceProcessingAudioCapture.swift */,
-			);
+				BA30D891D8461DC2A1007544 /* TranscriptionService.swift */,			);
 			path = Session;
+			sourceTree = "<group>";
+		};
+		AEC0000000000000000006 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				AEC0000000000000000001 /* AECBridge.h */,
+				AEC0000000000000000002 /* AECBridge.mm */,
+				AEC0000000000000000003 /* AECProcessor.swift */,
+				AEC0000000000000000004 /* RingBuffer.swift */,
+			);
+			path = Audio;
 			sourceTree = "<group>";
 		};
 		66DE2D0F8BC65C98DAD87417 /* Models */ = {
@@ -415,6 +433,7 @@
 		AE88B234EE8EDF8826B3D08E /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AEC0000000000000000006 /* Audio */,
 				8E8D95843A42C138E6B0D5CA /* AIAssistantService.swift */,
 				826E95D7CE3D486FA64F992D /* AnonymizationEngine.swift */,
 				E960A560DB54190BC4920A56 /* ChunkManager.swift */,
@@ -446,6 +465,8 @@
 				CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */,
 				1C66CCCF0F3FF03B9B352299 /* SessionNamePromptView.swift */,
 				93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */,
+				SW1C000000000000000002 /* SessionWindowController.swift */,
+				SW1C000000000000000004 /* SessionWindowContentView.swift */,
 				A48ADDFC7C981175E66A10B5 /* TranscriptView.swift */,
 			);
 			path = Session;
@@ -604,6 +625,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AEC0000000000000000007 /* AECBridge.mm in Sources */,
+				AEC0000000000000000008 /* AECProcessor.swift in Sources */,
+				AEC0000000000000000009 /* RingBuffer.swift in Sources */,
 				FD5A5AA7FF1DD4EB05258D63 /* AIAssistantService.swift in Sources */,
 				9094D00F5F346077DEADC784 /* AISettingsView.swift in Sources */,
 				9E144935796D58A6F68EAF3D /* AWSCredentialsManager.swift in Sources */,
@@ -614,9 +638,7 @@
 				4035D0CC83F920E213197D5E /* AnonymizationView.swift in Sources */,
 				23714A7B62571A38F2E6397C /* AppError.swift in Sources */,
 				15D511386E0C9D4F4CFEC7FC /* AppleNERRecognizer.swift in Sources */,
-				BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */,
-				VPAC1234567890ABCDEF1234 /* VoiceProcessingAudioCapture.swift in Sources */,
-				D5687F6A235C1813B408AE75 /* AudioChunkReference.swift in Sources */,
+				BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */,				D5687F6A235C1813B408AE75 /* AudioChunkReference.swift in Sources */,
 				EE661D3CAFFEE4608596F379 /* BedrockService.swift in Sources */,
 				F15D43DC0006FDDCF11BFDA1 /* ChatMessage.swift in Sources */,
 				0F4C000DB167EFF3E6C2B77E /* ChunkManager.swift in Sources */,
@@ -668,6 +690,8 @@
 				A7C455478E6634394659C3DD /* SessionManager.swift in Sources */,
 				52DC14EE86F9B67814B0E441 /* SessionNamePromptView.swift in Sources */,
 				976A38CC706CDF708430B7A8 /* SessionSidebarView.swift in Sources */,
+				SW1C000000000000000001 /* SessionWindowController.swift in Sources */,
+				SW1C000000000000000003 /* SessionWindowContentView.swift in Sources */,
 				FBB1CC49780B60C8CD801BFB /* SessionStorageService.swift in Sources */,
 				222135B623CED15797D5494B /* SettingsKeys.swift in Sources */,
 				A23043CCB5904C0989A6D716 /* SourceDocument.swift in Sources */,
@@ -738,6 +762,7 @@
 				PRODUCT_NAME = Redactor;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "ClinicalAnon/ClinicalAnon-Bridging-Header.h";
 				SWIFT_VERSION = 5.9;
 			};
 			name = Release;
@@ -909,6 +934,7 @@
 				PRODUCT_NAME = Redactor;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "ClinicalAnon/ClinicalAnon-Bridging-Header.h";
 				SWIFT_VERSION = 5.9;
 			};
 			name = Debug;

@@ -41,21 +41,27 @@ struct SessionSidebarView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack {
-            Text("Sessions")
-                .font(DesignSystem.Typography.subheading)
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-            Spacer()
-
+        VStack(spacing: DesignSystem.Spacing.small) {
+            // New Recording button (prominent, teal)
             Button(action: startNewSession) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(DesignSystem.Colors.primaryTeal)
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("New Recording")
+                }
+                .font(DesignSystem.Typography.caption)
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(sessionManager.activeSession != nil)
-            .help(sessionManager.activeSession != nil ? "Stop current session before starting a new one" : "Start new session")
+            .help(sessionManager.activeSession != nil ? "Stop current session before starting a new one" : "Start a new recording session")
+
+            // Sessions title
+            HStack {
+                Text("Sessions")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                Spacer()
+            }
         }
         .padding(.horizontal, DesignSystem.Spacing.medium)
         .padding(.vertical, DesignSystem.Spacing.small)

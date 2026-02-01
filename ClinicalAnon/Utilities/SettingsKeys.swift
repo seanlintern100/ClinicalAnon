@@ -65,4 +65,10 @@ enum SettingsKeys {
 
     static let selectedInputDeviceID = "selectedInputDeviceID"
     static let voiceProcessingEnabled = "voiceProcessingEnabled"
+    static let allowExternalMicWithVoiceProcessing = "allowExternalMicWithVoiceProcessing"
+
+    // MARK: - Echo Cancellation Settings
+
+    /// Stream delay for AEC in milliseconds (default 50ms)
+    static let aecStreamDelayMs = "aecStreamDelayMs"
 }

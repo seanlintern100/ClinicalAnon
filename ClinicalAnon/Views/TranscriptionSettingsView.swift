@@ -73,7 +73,7 @@ struct TranscriptionSettingsView: View {
             } header: {
                 Text("Audio Capture")
             } footer: {
-                Text("When enabled, audio playing through your speakers (remote participant voice) will be filtered from your microphone, preventing doubled audio in transcription.")
+                Text("Uses software echo cancellation to filter audio playing through your speakers from your microphone, preventing doubled audio in transcription. Works with all microphones including external USB mics.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

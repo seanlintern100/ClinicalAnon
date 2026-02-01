@@ -150,7 +150,7 @@ class TranscriptionService: ObservableObject {
 
     // MARK: - Processing Queue
 
-    private var processingQueue: [(sessionId: UUID, chunkIndex: Int, micPath: URL, sysPath: URL)] = []
+    private var processingQueue: [(sessionId: UUID, chunkIndex: Int, chunkStartTime: TimeInterval, micPath: URL, sysPath: URL)] = []
     private var isProcessingQueue = false
 
     // MARK: - Cancellation
@@ -171,9 +171,9 @@ class TranscriptionService: ObservableObject {
                 print("TranscriptionService: Invalid notification object")
                 return
             }
-            print("TranscriptionService: Queuing chunk \(info.chunkIndex) for session \(info.sessionId)")
+            print("TranscriptionService: Queuing chunk \(info.chunkIndex) for session \(info.sessionId) (startTime: \(info.chunkStartTime)s)")
             Task { @MainActor in
-                self?.queueChunkForProcessing(sessionId: info.sessionId, chunkIndex: info.chunkIndex)
+                self?.queueChunkForProcessing(sessionId: info.sessionId, chunkIndex: info.chunkIndex, chunkStartTime: info.chunkStartTime)
             }
         }
         print("TranscriptionService: Initialized and listening for audio chunks")
@@ -301,7 +301,7 @@ class TranscriptionService: ObservableObject {
     // MARK: - Queue Management
 
     /// Queue a chunk for transcription processing
-    private func queueChunkForProcessing(sessionId: UUID, chunkIndex: Int) {
+    private func queueChunkForProcessing(sessionId: UUID, chunkIndex: Int, chunkStartTime: TimeInterval) {
         // Get session and audio paths
         let sessionDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Redactor/Sessions/\(sessionId.uuidString)")
@@ -318,7 +318,7 @@ class TranscriptionService: ObservableObject {
         }
 
         // Add to queue
-        processingQueue.append((sessionId: sessionId, chunkIndex: chunkIndex, micPath: micPath, sysPath: sysPath))
+        processingQueue.append((sessionId: sessionId, chunkIndex: chunkIndex, chunkStartTime: chunkStartTime, micPath: micPath, sysPath: sysPath))
 
         // Start processing if not already running
         processNextInQueue()
@@ -351,10 +351,11 @@ class TranscriptionService: ObservableObject {
                 let item = processingQueue.removeFirst()
 
                 do {
-                    print("TranscriptionService: Processing chunk \(item.chunkIndex) for session \(item.sessionId)")
+                    print("TranscriptionService: Processing chunk \(item.chunkIndex) for session \(item.sessionId) (startTime: \(item.chunkStartTime)s)")
                     let segments = try await transcribeChunk(
                         sessionId: item.sessionId,
                         chunkIndex: item.chunkIndex,
+                        chunkStartTime: item.chunkStartTime,
                         microphonePath: item.micPath,
                         systemAudioPath: item.sysPath
                     )
@@ -397,6 +398,7 @@ class TranscriptionService: ObservableObject {
     func transcribeChunk(
         sessionId: UUID,
         chunkIndex: Int,
+        chunkStartTime: TimeInterval = 0,
         microphonePath: URL,
         systemAudioPath: URL
     ) async throws -> [TranscriptSegment] {
@@ -430,7 +432,8 @@ class TranscriptionService: ObservableObject {
                 whisper: whisper,
                 audioPath: microphonePath,
                 speaker: .clinician,
-                chunkIndex: chunkIndex
+                chunkIndex: chunkIndex,
+                chunkStartTime: chunkStartTime
             )
             allSegments.append(contentsOf: micSegments)
         }
@@ -452,7 +455,8 @@ class TranscriptionService: ObservableObject {
                         whisper: whisper,
                         audioPath: systemAudioPath,
                         speaker: .other,
-                        chunkIndex: chunkIndex
+                        chunkIndex: chunkIndex,
+                        chunkStartTime: chunkStartTime
                     )
                     allSegments.append(contentsOf: sysSegments)
                 } catch {
@@ -482,7 +486,8 @@ class TranscriptionService: ObservableObject {
         whisper: WhisperKit,
         audioPath: URL,
         speaker: Speaker,
-        chunkIndex: Int
+        chunkIndex: Int,
+        chunkStartTime: TimeInterval = 0
     ) async throws -> [TranscriptSegment] {
         guard FileManager.default.fileExists(atPath: audioPath.path) else {
             throw TranscriptionError.audioFileNotFound(audioPath.path)
@@ -527,11 +532,12 @@ class TranscriptionService: ObservableObject {
                     // Skip empty or whitespace-only segments
                     guard !cleanText.isEmpty else { continue }
 
+                    // Add chunk start time offset to get absolute session timestamp
                     let transcriptSegment = TranscriptSegment(
                         speaker: speaker,
                         text: cleanText,
-                        startTime: TimeInterval(segment.start),
-                        endTime: TimeInterval(segment.end),
+                        startTime: chunkStartTime + TimeInterval(segment.start),
+                        endTime: chunkStartTime + TimeInterval(segment.end),
                         chunkIndex: chunkIndex,
                         confidence: Double(segment.avgLogprob)
                     )
@@ -563,9 +569,13 @@ class TranscriptionService: ObservableObject {
             sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).m4a")
         }
 
+        // Estimate chunk start time (chunk duration is 180 seconds)
+        let chunkStartTime = TimeInterval(chunkIndex) * 180.0
+
         return try await transcribeChunk(
             sessionId: session.id,
             chunkIndex: chunkIndex,
+            chunkStartTime: chunkStartTime,
             microphonePath: micPath,
             systemAudioPath: sysPath
         )

@@ -78,8 +78,8 @@ class AudioCaptureService: NSObject, ObservableObject {
     /// Sample rate for microphone audio (WhisperKit expects 16kHz)
     private let sampleRate: Double = 16000
 
-    /// Sample rate for system audio (ScreenCaptureKit standard)
-    private let systemSampleRate: Int = 44100
+    /// Sample rate for system audio (match AEC at 48kHz for echo cancellation)
+    private let systemSampleRate: Int = 48000
 
     /// Number of audio channels (mono)
     private let channels: AVAudioChannelCount = 1
@@ -104,10 +104,13 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Audio Capture
 
     private var microphoneEngine: AVAudioEngine?
-    private var voiceProcessingCapture: VoiceProcessingAudioCapture?
     private var systemAudioStream: SCStream?
     private var streamConfiguration: SCStreamConfiguration?
     private var levelTimer: Timer?
+
+    // MARK: - Software Echo Cancellation
+
+    private var aecProcessor: AECProcessor?
 
     // MARK: - File Writers (for system audio)
 
@@ -353,10 +356,6 @@ class AudioCaptureService: NSObject, ObservableObject {
         levelTimer?.invalidate()
         levelTimer = nil
 
-        // Stop VoiceProcessingIO capture if active
-        voiceProcessingCapture?.stop()
-        voiceProcessingCapture = nil
-
         // Pause AVAudioEngine if active
         microphoneEngine?.pause()
 
@@ -392,13 +391,6 @@ class AudioCaptureService: NSObject, ObservableObject {
         levelTimer?.invalidate()
         levelTimer = nil
 
-        // Stop VoiceProcessingIO capture if active
-        if let vpCapture = voiceProcessingCapture {
-            vpCapture.stop()
-            print("AudioCaptureService: Stopped VoiceProcessingIO capture")
-        }
-        voiceProcessingCapture = nil
-
         // Stop AVAudioEngine if active
         if let engine = microphoneEngine {
             engine.inputNode.removeTap(onBus: 0)
@@ -406,6 +398,10 @@ class AudioCaptureService: NSObject, ObservableObject {
             print("AudioCaptureService: Stopped AVAudioEngine")
         }
         microphoneEngine = nil
+
+        // Reset AEC processor
+        aecProcessor?.reset()
+        aecProcessor = nil
 
         // Close audio file
         if let url = currentMicURL {
@@ -458,7 +454,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Microphone Setup with Voice Processing
+    // MARK: - Microphone Setup with Software Echo Cancellation
 
     private func setupMicrophoneCapture() throws {
         print("AudioCaptureService: Setting up microphone capture...")
@@ -485,56 +481,28 @@ class AudioCaptureService: NSObject, ObservableObject {
         let echoEnabled = UserDefaults.standard.object(forKey: SettingsKeys.voiceProcessingEnabled) as? Bool ?? true
 
         if echoEnabled {
-            // Try VoiceProcessingIO (proper echo cancellation)
-            // This uses Apple's VoiceProcessingIO AudioUnit directly which doesn't have
-            // the aggregate device issues that AVAudioEngine's voice processing mode has
-            do {
-                try setupVoiceProcessingCapture(url: micURL)
-                print("AudioCaptureService: Using VoiceProcessingIO for echo cancellation")
-                return
-            } catch {
-                print("AudioCaptureService: VoiceProcessingIO failed: \(error)")
-                print("AudioCaptureService: Falling back to AVAudioEngine...")
+            // Initialize software AEC processor
+            // Use 48kHz for best quality - will resample system audio to match
+            aecProcessor = AECProcessor(sampleRate: 48000)
+
+            // Get stream delay from settings (default 50ms)
+            let streamDelayMs = UserDefaults.standard.integer(forKey: SettingsKeys.aecStreamDelayMs)
+            if streamDelayMs > 0 {
+                aecProcessor?.setStreamDelay(ms: streamDelayMs)
             }
+
+            print("AudioCaptureService: Software AEC initialized - echo cancellation enabled")
         } else {
             print("AudioCaptureService: Echo cancellation disabled by user setting")
+            aecProcessor = nil
         }
 
-        // Fallback: Use AVAudioEngine without voice processing
+        // Use standard AVAudioEngine for mic capture
+        // Software AEC will process the audio before writing to file
         try setupAVAudioEngineCapture(url: micURL)
     }
 
-    /// Set up microphone capture using VoiceProcessingIO AudioUnit (with echo cancellation)
-    private func setupVoiceProcessingCapture(url: URL) throws {
-        let deviceID = selectedInputDevice?.id
-
-        if let device = selectedInputDevice {
-            print("AudioCaptureService: Using input device: \(device.name) (ID: \(device.id))")
-        } else {
-            print("AudioCaptureService: Using system default input device")
-        }
-
-        let capture = VoiceProcessingAudioCapture(sampleRate: 48000, inputDeviceID: deviceID)
-
-        // Set up level callback
-        capture.audioLevelCallback = { [weak self] level in
-            Task { @MainActor in
-                self?.microphoneLevel = level
-            }
-        }
-
-        try capture.start(writingTo: url)
-
-        voiceProcessingCapture = capture
-
-        if capture.echoSuppressionEnabled {
-            print("AudioCaptureService: Echo cancellation ACTIVE - remote audio will be filtered from mic")
-        } else {
-            print("AudioCaptureService: Echo cancellation not available")
-        }
-    }
-
-    /// Fallback: Set up microphone capture using AVAudioEngine (without voice processing)
+    /// Set up microphone capture using AVAudioEngine (software AEC applied in handleMicrophoneBuffer)
     private func setupAVAudioEngineCapture(url: URL) throws {
         // Remove existing file if present
         if FileManager.default.fileExists(atPath: url.path) {
@@ -577,31 +545,50 @@ class AudioCaptureService: NSObject, ObservableObject {
         engine.prepare()
         try engine.start()
 
-        print("AudioCaptureService: AVAudioEngine started (NO echo cancellation - remote voice may be doubled)")
+        if self.aecProcessor != nil {
+            print("AudioCaptureService: AVAudioEngine started with software echo cancellation")
+        } else {
+            print("AudioCaptureService: AVAudioEngine started (no echo cancellation)")
+        }
     }
 
     private var currentMicURL: URL?
     private var audioFile: AVAudioFile?
 
+    private var micBufferCount: Int = 0
+
     private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer) {
-        // Calculate audio level for UI meter
-        if let channelData = buffer.floatChannelData?[0] {
-            let frameCount = Int(buffer.frameLength)
+        guard let channelData = buffer.floatChannelData?[0] else { return }
+        let frameCount = Int(buffer.frameLength)
+
+        // Apply software echo cancellation if enabled
+        if let aec = aecProcessor {
+            aec.process(samples: channelData, count: frameCount)
+        }
+
+        // Throttle UI level updates (every 10 buffers ~= 85ms at 4096 samples/48kHz)
+        micBufferCount += 1
+        if micBufferCount % 10 == 0 {
+            // Calculate audio level for UI meter (sample only first 256 samples for speed)
             var sum: Float = 0
-            for i in 0..<frameCount {
+            let sampleCount = min(frameCount, 256)
+            for i in 0..<sampleCount {
                 sum += abs(channelData[i])
             }
-            let average = sum / Float(max(frameCount, 1))
-            Task { @MainActor in
-                self.microphoneLevel = average
+            let average = sum / Float(max(sampleCount, 1))
+            Task { @MainActor [weak self, average] in
+                self?.microphoneLevel = average
             }
         }
 
-        // Write buffer to file
+        // Write buffer to file (with AEC applied)
         do {
             try audioFile?.write(from: buffer)
         } catch {
-            print("AudioCaptureService: Failed to write audio buffer: \(error)")
+            // Only log errors occasionally to avoid spam
+            if micBufferCount % 100 == 1 {
+                print("AudioCaptureService: Write error: \(error)")
+            }
         }
     }
 
@@ -658,7 +645,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         let config = SCStreamConfiguration()
         config.capturesAudio = true
         config.excludesCurrentProcessAudio = true
-        config.sampleRate = 44100  // Standard sample rate
+        config.sampleRate = 48000  // Match AEC and mic sample rate for echo cancellation
         config.channelCount = 1    // Mono
 
         // Minimal video capture (required by ScreenCaptureKit but we don't use it)
@@ -678,6 +665,14 @@ class AudioCaptureService: NSObject, ObservableObject {
         try stream.addStreamOutput(
             self,
             type: .audio,
+            sampleHandlerQueue: systemBufferQueue
+        )
+
+        // Add video output handler to suppress "stream output NOT found" errors
+        // We don't actually use the video frames, but ScreenCaptureKit requires a handler
+        try stream.addStreamOutput(
+            self,
+            type: .screen,
             sampleHandlerQueue: systemBufferQueue
         )
 
@@ -775,7 +770,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Notify that chunk is ready for transcription
         NotificationCenter.default.post(
             name: .audioChunkReady,
-            object: AudioChunkReadyInfo(sessionId: session.id, chunkIndex: chunkIndex)
+            object: AudioChunkReadyInfo(sessionId: session.id, chunkIndex: chunkIndex, chunkStartTime: sessionOffset)
         )
 
         currentChunkIndex += 1
@@ -791,16 +786,11 @@ class AudioCaptureService: NSObject, ObservableObject {
 
     private func rotateChunk() {
         guard isCapturing else { return }
-
-        // Need either VoiceProcessingIO or AVAudioEngine active
-        guard voiceProcessingCapture != nil || microphoneEngine != nil else { return }
+        guard microphoneEngine != nil else { return }
 
         print("AudioCaptureService: Rotating to chunk \(currentChunkIndex + 1)")
 
-        // Stop current capture
-        voiceProcessingCapture?.stop()
-        voiceProcessingCapture = nil
-
+        // Remove tap from current audio file
         if let engine = microphoneEngine {
             engine.inputNode.removeTap(onBus: 0)
         }
@@ -824,16 +814,7 @@ class AudioCaptureService: NSObject, ObservableObject {
 
             guard let micURL = currentMicURL else { return }
 
-            // Try VoiceProcessingIO first
-            do {
-                try setupVoiceProcessingCapture(url: micURL)
-                print("AudioCaptureService: Started new chunk \(currentChunkIndex) with VoiceProcessingIO")
-                return
-            } catch {
-                print("AudioCaptureService: VoiceProcessingIO failed for new chunk: \(error)")
-            }
-
-            // Fallback to AVAudioEngine
+            // Set up new audio file and tap
             if let engine = microphoneEngine {
                 let inputFormat = engine.inputNode.outputFormat(forBus: 0)
 
@@ -848,7 +829,7 @@ class AudioCaptureService: NSObject, ObservableObject {
                     self?.handleMicrophoneBuffer(buffer)
                 }
 
-                print("AudioCaptureService: Started new chunk \(currentChunkIndex) with AVAudioEngine")
+                print("AudioCaptureService: Started new chunk \(currentChunkIndex)")
             }
         } catch {
             print("AudioCaptureService: Failed to start new chunk: \(error)")
@@ -857,7 +838,7 @@ class AudioCaptureService: NSObject, ObservableObject {
 
     // MARK: - Asset Writer Creation
 
-    private func createAssetWriter(url: URL, sampleRate: Int = 44100) throws -> AVAssetWriter {
+    private func createAssetWriter(url: URL, sampleRate: Int = 48000) throws -> AVAssetWriter {
         // Remove existing file if present
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
@@ -915,80 +896,76 @@ extension AudioCaptureService: SCStreamDelegate {
 
 extension AudioCaptureService: SCStreamOutput {
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        // Skip video frames - we only want audio
+        // Silently ignore video frames (we added video output to suppress errors)
         guard type == .audio else { return }
 
-        // Log first few frames for debugging
         let numSamples = CMSampleBufferGetNumSamples(sampleBuffer)
 
-        // Create a copy of the sample buffer that will persist beyond this callback
-        // This is necessary because the original buffer is only valid during the callback
+        // Extract float samples for AEC reference (do on this thread to avoid copies)
+        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+
+        var length: Int = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+
+        let status = CMBlockBufferGetDataPointer(
+            blockBuffer,
+            atOffset: 0,
+            lengthAtOffsetOut: nil,
+            totalLengthOut: &length,
+            dataPointerOut: &dataPointer
+        )
+
+        guard status == noErr, let data = dataPointer, length > 0 else { return }
+
+        let floatCount = length / MemoryLayout<Float>.size
+        guard floatCount > 0 else { return }
+
+        let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
+
+        // Feed AEC reference directly on this thread (lock-free in AECBridge)
+        // Copy samples to array for AEC
+        let samples = Array(UnsafeBufferPointer(start: floatPointer, count: floatCount))
+
+        // Copy sample buffer for writing (must happen before callback returns)
         var copiedBuffer: CMSampleBuffer?
         let copyStatus = CMSampleBufferCreateCopy(allocator: kCFAllocatorDefault, sampleBuffer: sampleBuffer, sampleBufferOut: &copiedBuffer)
 
-        guard copyStatus == noErr, let bufferCopy = copiedBuffer else {
-            print("AudioCaptureService: Failed to copy sample buffer, status: \(copyStatus)")
-            return
-        }
+        guard copyStatus == noErr, let bufferCopy = copiedBuffer else { return }
 
-        Task { @MainActor [weak self] in
+        // Calculate level for UI (quick computation on this thread)
+        var sum: Float = 0
+        let sampleCount = min(floatCount, 256)
+        for i in 0..<sampleCount {
+            sum += abs(floatPointer[i])
+        }
+        let avgLevel = sum / Float(max(sampleCount, 1)) * 10
+
+        // Dispatch minimal work to main thread
+        Task { @MainActor [weak self, samples, bufferCopy, avgLevel, numSamples] in
             guard let self = self else { return }
 
-            // Track frame count
             self.systemAudioFrameCount += 1
 
-            // Log periodically
-            if self.systemAudioFrameCount <= 5 || self.systemAudioFrameCount % 100 == 0 {
-                print("AudioCaptureService: System audio frame \(self.systemAudioFrameCount) received, \(numSamples) samples")
+            // Feed AEC reference
+            self.aecProcessor?.feedReference(samples: samples)
+
+            // Update UI level (throttled)
+            if self.systemAudioFrameCount % 5 == 0 {
+                self.systemLevel = avgLevel
             }
 
-            // Calculate audio level from the sample buffer
-            if let blockBuffer = CMSampleBufferGetDataBuffer(bufferCopy) {
-                var length: Int = 0
-                var dataPointer: UnsafeMutablePointer<Int8>?
-                CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
-
-                if let data = dataPointer, length > 0 {
-                    let floatCount = length / MemoryLayout<Float>.size
-                    if floatCount > 0 {
-                        let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
-                        var sum: Float = 0
-                        for i in 0..<min(floatCount, 1024) {
-                            sum += abs(floatPointer[i])
-                        }
-                        let average = sum / Float(min(floatCount, 1024))
-                        self.systemLevel = average * 10
-                    }
-                }
+            // Log only first few and then every 500 frames
+            if self.systemAudioFrameCount <= 3 || self.systemAudioFrameCount % 500 == 0 {
+                print("AudioCaptureService: System audio frame \(self.systemAudioFrameCount), \(numSamples) samples")
             }
 
-            // Write to system audio file
+            // Write to file
             guard let writer = self.systemWriter,
-                  let input = self.systemWriterInput else {
-                if self.systemAudioFrameCount <= 5 {
-                    print("AudioCaptureService: System audio - no writer available")
-                }
-                return
-            }
+                  let input = self.systemWriterInput,
+                  writer.status == .writing,
+                  input.isReadyForMoreMediaData else { return }
 
-            guard writer.status == .writing else {
-                if self.systemAudioFrameCount <= 5 {
-                    print("AudioCaptureService: System audio - writer status is \(writer.status.rawValue), not writing")
-                }
-                return
-            }
-
-            guard input.isReadyForMoreMediaData else {
-                if self.systemAudioFrameCount <= 5 {
-                    print("AudioCaptureService: System audio - input not ready for more data")
-                }
-                return
-            }
-
-            let success = input.append(bufferCopy)
-            if !success && self.systemAudioFrameCount <= 5 {
-                print("AudioCaptureService: System audio - failed to append sample buffer")
-            }
+            input.append(bufferCopy)
         }
     }
 }
@@ -1063,6 +1040,8 @@ extension AVAudioPCMBuffer {
 struct AudioChunkReadyInfo {
     let sessionId: UUID
     let chunkIndex: Int
+    /// Start time of this chunk relative to session start (in seconds)
+    let chunkStartTime: TimeInterval
 }
 
 extension Notification.Name {
