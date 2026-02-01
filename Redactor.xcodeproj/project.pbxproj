@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -129,7 +129,7 @@
 		04593A8C8D3B19D5F44EAB58 /* HelpWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; };
 		06463A5E2CDA5C7A80638837 /* StatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBar.swift; sourceTree = "<group>"; };
 		0930F3E57AF670171CFA140C /* DateRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateRecognizer.swift; sourceTree = "<group>"; };
-		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
+		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
 		14BCD698F510EF8404855DD2 /* UserInclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionManager.swift; sourceTree = "<group>"; };
 		1A4488473B69644073207EA4 /* SourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDocument.swift; sourceTree = "<group>"; };
 		1C66CCCF0F3FF03B9B352299 /* SessionNamePromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionNamePromptView.swift; sourceTree = "<group>"; };
@@ -161,7 +161,7 @@
 		6BD6B9F353C60B9CCC7ECF86 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		6FF56CA9905A38AB9944FD11 /* special_tokens_map.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = special_tokens_map.json; sourceTree = "<group>"; };
 		7542F1D14F61F0CDFFA2ADAC /* UserInclusionRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionRecognizer.swift; sourceTree = "<group>"; };
-		77EF22DE5BA98525818E3B05 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; path = sentencepiece.bpe.model; sourceTree = "<group>"; };
+		77EF22DE5BA98525818E3B05 /* sentencepiece.bpe.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = sentencepiece.bpe.model; sourceTree = "<group>"; };
 		7A8271D45D9F73E46FEF6D35 /* EntityListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityListView.swift; sourceTree = "<group>"; };
 		7C5EA7B63579D21176D5D9DB /* RedactPhaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactPhaseView.swift; sourceTree = "<group>"; };
 		7CF78870AD7D55BAC5C43447 /* RestorePhaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestorePhaseView.swift; sourceTree = "<group>"; };
@@ -179,21 +179,21 @@
 		910964A6B0573085F191AC49 /* EmailRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailRecognizer.swift; sourceTree = "<group>"; };
 		93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarView.swift; sourceTree = "<group>"; };
 		9741FCB21B765FA21672D641 /* SwiftNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftNERService.swift; sourceTree = "<group>"; };
-		9896430EEB30A1EC8D7F8606 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
-		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
+		9896430EEB30A1EC8D7F8606 /* XLMRobertaNER.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = XLMRobertaNER.mlpackage; sourceTree = "<group>"; };
+		A199C0A3C7762DCEB082AEF2 /* SourceSans3-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-Bold.ttf"; sourceTree = "<group>"; };
 		A1E99991AD176BB9F3A8DE67 /* TextReidentifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReidentifier.swift; sourceTree = "<group>"; };
 		A48ADDFC7C981175E66A10B5 /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
 		A4DFCD98D30C64C8BD4FD174 /* SessionStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorageService.swift; sourceTree = "<group>"; };
 		A59DE12B6D7C0B0954557D76 /* EntityMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMapping.swift; sourceTree = "<group>"; };
 		A5B351B12D69B32D0A4D0DCE /* MemoryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStorage.swift; sourceTree = "<group>"; };
-		A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Regular.ttf"; sourceTree = "<group>"; };
+		A72F682068D5F4F83C91DE53 /* Lora-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Lora-Regular.ttf"; sourceTree = "<group>"; };
 		A899922CA47101C73867E8EB /* ExclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionSettingsView.swift; sourceTree = "<group>"; };
 		A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityRecognizer.swift; sourceTree = "<group>"; };
 		AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaoriNameRecognizer.swift; sourceTree = "<group>"; };
 		AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserExclusionManager.swift; sourceTree = "<group>"; };
 		AD4A3288CEF816ED9D3925CC /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
-		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
+		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
 		B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		BA30D891D8461DC2A1007544 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		BBADD3AD29E31A56881A0363 /* LiveSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSession.swift; sourceTree = "<group>"; };
@@ -207,8 +207,8 @@
 		D283D54D8952DB9D71D72D79 /* EntityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityDetector.swift; sourceTree = "<group>"; };
 		D2ED3BAB53DB8F1CBF0600D0 /* StringExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtensions.swift; sourceTree = "<group>"; };
 		D7697E2AA21EEF0AD2720888 /* xlmr_vocab.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = xlmr_vocab.json; sourceTree = "<group>"; };
-		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
-		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
+		D7BDE18F52771624D83D2E36 /* Lora-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Lora-Italic.ttf"; sourceTree = "<group>"; };
+		D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SourceSans3-Regular.ttf"; sourceTree = "<group>"; };
 		DA72D874BD6FB4834486B29F /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
 		DB70BFCACAD352B8F9A0A34D /* AppleNERRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleNERRecognizer.swift; sourceTree = "<group>"; };
 		DC5369BE80D34546E18EDCA1 /* TranscriptionGap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionGap.swift; sourceTree = "<group>"; };
@@ -561,7 +561,6 @@
 				B149747C569FF53C8E361CAD /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				67539FC4B977869248DAC8EC /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
-			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -715,12 +714,16 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ClinicalAnon/Preview Content\"";
+				DEVELOPMENT_TEAM = 5N8GXZGSZ5;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 3 Big Things. All rights reserved.";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.Redactor;
@@ -882,12 +885,16 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ClinicalAnon/Preview Content\"";
+				DEVELOPMENT_TEAM = 5N8GXZGSZ5;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 3 Big Things. All rights reserved.";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.3bigthings.Redactor;

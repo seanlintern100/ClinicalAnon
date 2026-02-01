@@ -87,10 +87,9 @@ class SessionManager: ObservableObject {
 
     /// Start a new recording session
     func startSession() async throws -> LiveSession {
-        // Ensure transcription model is loaded
-        if !transcriptionService.isModelLoaded {
-            try await transcriptionService.loadModel()
-        }
+        // Don't wait for transcription model here - it will load when needed
+        // This allows session to start immediately
+        // Model loading happens in background when first audio chunk is ready
 
         let session = LiveSession()
         sessions.insert(session, at: 0)  // Add to beginning (most recent)
@@ -117,11 +116,18 @@ class SessionManager: ObservableObject {
         // Only set start date on initial start, not on resume
         if sessionStartDate == nil {
             sessionStartDate = Date()
+            print("SessionManager: Started duration timer with start date \(sessionStartDate!)")
         }
         durationTimer?.invalidate()
-        durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+
+        // Create timer and explicitly add to main RunLoop
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self, session.state == .recording else { return }
+                guard let self = self else { return }
+                guard session.state == .recording else {
+                    print("SessionManager: Timer tick but session not recording (state: \(session.state))")
+                    return
+                }
                 if let startDate = self.sessionStartDate {
                     // Calculate total pause time
                     let totalPauseTime = session.pauseGaps.reduce(0.0) { total, gap in
@@ -130,10 +136,14 @@ class SessionManager: ObservableObject {
                         }
                         return total
                     }
-                    session.recordingDuration = Date().timeIntervalSince(startDate) - totalPauseTime
+                    let newDuration = Date().timeIntervalSince(startDate) - totalPauseTime
+                    session.recordingDuration = newDuration
                 }
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        durationTimer = timer
+        print("SessionManager: Timer added to main RunLoop")
     }
 
     private func stopDurationTimer() {
@@ -302,13 +312,18 @@ class SessionManager: ObservableObject {
     // MARK: - Transcription Handlers
 
     private func handleTranscriptionResult(_ result: TranscriptionResult) {
+        print("SessionManager: Received transcription result - \(result.segments.count) segments for chunk \(result.chunkIndex)")
+
         guard let session = sessions.first(where: { $0.id == result.sessionId }) else {
+            print("SessionManager: Session not found for id \(result.sessionId)")
             return
         }
 
         // Add segments to session
         session.transcriptSegments.append(contentsOf: result.segments)
         session.lastTranscriptUpdate = Date()
+
+        print("SessionManager: Session now has \(session.transcriptSegments.count) total segments")
 
         // Mark chunk as processed
         for i in session.audioChunkPaths.indices {

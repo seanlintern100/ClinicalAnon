@@ -127,11 +127,17 @@ class TranscriptionService: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let info = notification.object as? AudioChunkReadyInfo else { return }
+            print("TranscriptionService: Received audioChunkReady notification")
+            guard let info = notification.object as? AudioChunkReadyInfo else {
+                print("TranscriptionService: Invalid notification object")
+                return
+            }
+            print("TranscriptionService: Queuing chunk \(info.chunkIndex) for session \(info.sessionId)")
             Task { @MainActor in
                 self?.queueChunkForProcessing(sessionId: info.sessionId, chunkIndex: info.chunkIndex)
             }
         }
+        print("TranscriptionService: Initialized and listening for audio chunks")
     }
 
     deinit {
@@ -191,8 +197,15 @@ class TranscriptionService: ObservableObject {
             .appendingPathComponent("Redactor/Sessions/\(sessionId.uuidString)")
         let audioDir = sessionDir.appendingPathComponent("audio")
 
-        let micPath = audioDir.appendingPathComponent("mic_\(String(format: "%03d", chunkIndex)).m4a")
-        let sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).m4a")
+        // Try WAV first (current format), fall back to M4A
+        var micPath = audioDir.appendingPathComponent("mic_\(String(format: "%03d", chunkIndex)).wav")
+        if !FileManager.default.fileExists(atPath: micPath.path) {
+            micPath = audioDir.appendingPathComponent("mic_\(String(format: "%03d", chunkIndex)).m4a")
+        }
+        var sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).wav")
+        if !FileManager.default.fileExists(atPath: sysPath.path) {
+            sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).m4a")
+        }
 
         // Add to queue
         processingQueue.append((sessionId: sessionId, chunkIndex: chunkIndex, micPath: micPath, sysPath: sysPath))
@@ -208,16 +221,37 @@ class TranscriptionService: ObservableObject {
         isProcessingQueue = true
 
         currentTask = Task {
+            // Load model if not already loaded
+            if !isModelLoaded {
+                print("TranscriptionService: Loading Whisper model for transcription...")
+                do {
+                    try await loadModel()
+                    print("TranscriptionService: Model loaded successfully")
+                } catch {
+                    print("TranscriptionService: Failed to load model: \(error)")
+                    // Clear queue since we can't process without model
+                    processingQueue.removeAll()
+                    isProcessingQueue = false
+                    return
+                }
+            }
+
             while !processingQueue.isEmpty {
                 let item = processingQueue.removeFirst()
 
                 do {
+                    print("TranscriptionService: Processing chunk \(item.chunkIndex) for session \(item.sessionId)")
                     let segments = try await transcribeChunk(
                         sessionId: item.sessionId,
                         chunkIndex: item.chunkIndex,
                         microphonePath: item.micPath,
                         systemAudioPath: item.sysPath
                     )
+
+                    print("TranscriptionService: Transcription complete - \(segments.count) segments")
+                    for segment in segments.prefix(3) {
+                        print("TranscriptionService:   [\(segment.speaker.label)] \(segment.text.prefix(50))...")
+                    }
 
                     // Notify with results
                     NotificationCenter.default.post(
@@ -228,6 +262,7 @@ class TranscriptionService: ObservableObject {
                             segments: segments
                         )
                     )
+                    print("TranscriptionService: Posted transcriptionComplete notification")
                 } catch {
                     // Post failure notification
                     NotificationCenter.default.post(
@@ -342,19 +377,44 @@ class TranscriptionService: ObservableObject {
                 // WhisperKit returns segments with timing info
                 let whisperSegments = result.segments
                 for segment in whisperSegments {
+                    // Clean up Whisper tokens from text
+                    var cleanText = segment.text
+
+                    // Remove all Whisper special tokens: <|...|> patterns
+                    cleanText = cleanText.replacingOccurrences(
+                        of: #"<\|[^>]+\|>"#,
+                        with: "",
+                        options: .regularExpression
+                    )
+
+                    // Remove [BLANK_AUDIO] and similar bracketed markers
+                    cleanText = cleanText.replacingOccurrences(
+                        of: #"\[BLANK_AUDIO\]"#,
+                        with: "",
+                        options: .regularExpression
+                    )
+                    cleanText = cleanText.replacingOccurrences(
+                        of: #"\[MUSIC\]"#,
+                        with: "[music]",
+                        options: .regularExpression
+                    )
+
+                    // Clean up whitespace
+                    cleanText = cleanText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    // Skip empty or whitespace-only segments
+                    guard !cleanText.isEmpty else { continue }
+
                     let transcriptSegment = TranscriptSegment(
                         speaker: speaker,
-                        text: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                        text: cleanText,
                         startTime: TimeInterval(segment.start),
                         endTime: TimeInterval(segment.end),
                         chunkIndex: chunkIndex,
                         confidence: Double(segment.avgLogprob)
                     )
 
-                    // Only add segments with actual content
-                    if !transcriptSegment.text.isEmpty {
-                        segments.append(transcriptSegment)
-                    }
+                    segments.append(transcriptSegment)
                 }
             }
 
@@ -371,8 +431,15 @@ class TranscriptionService: ObservableObject {
         let sessionDir = SessionStorageService.sessionDirectory(for: session)
         let audioDir = sessionDir.appendingPathComponent("audio")
 
-        let micPath = audioDir.appendingPathComponent("mic_\(String(format: "%03d", chunkIndex)).m4a")
-        let sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).m4a")
+        // Try WAV first (current format), fall back to M4A
+        var micPath = audioDir.appendingPathComponent("mic_\(String(format: "%03d", chunkIndex)).wav")
+        if !FileManager.default.fileExists(atPath: micPath.path) {
+            micPath = audioDir.appendingPathComponent("mic_\(String(format: "%03d", chunkIndex)).m4a")
+        }
+        var sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).wav")
+        if !FileManager.default.fileExists(atPath: sysPath.path) {
+            sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).m4a")
+        }
 
         return try await transcribeChunk(
             sessionId: session.id,

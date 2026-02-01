@@ -74,23 +74,21 @@ class AudioCaptureService: NSObject, ObservableObject {
     @Published private(set) var systemLevel: Float = 0
     @Published private(set) var currentChunkIndex: Int = 0
 
-    // MARK: - Audio Engine
+    // MARK: - Audio Capture
 
     private var microphoneEngine: AVAudioEngine?
     private var systemAudioStream: SCStream?
     private var streamConfiguration: SCStreamConfiguration?
+    private var levelTimer: Timer?
 
-    // MARK: - File Writers
+    // MARK: - File Writers (for system audio)
 
-    private var microphoneWriter: AVAssetWriter?
-    private var microphoneWriterInput: AVAssetWriterInput?
     private var systemWriter: AVAssetWriter?
     private var systemWriterInput: AVAssetWriterInput?
     private var chunkStartTime: Date?
 
     // MARK: - Audio Buffers
 
-    private var microphoneBufferQueue = DispatchQueue(label: "com.redactor.mic-buffer", qos: .userInitiated)
     private var systemBufferQueue = DispatchQueue(label: "com.redactor.sys-buffer", qos: .userInitiated)
 
     // MARK: - Session Reference
@@ -112,25 +110,32 @@ class AudioCaptureService: NSObject, ObservableObject {
         currentSession = session
         currentChunkIndex = 0
 
-        // Capture shared start time BEFORE any stream setup
-        sessionStartTime = Date()
-
-        // Request permissions
+        // Request permissions first
         try await requestMicrophonePermission()
 
-        // Start microphone capture
+        // Give the system a moment after permission is granted
+        // This helps with the TCC database sync
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+        print("AudioCaptureService: Permission granted, setting up capture...")
+
+        // Capture shared start time BEFORE any stream setup
+        sessionStartTime = Date()
+        chunkStartTime = Date()
+
+        // Start microphone capture FIRST (uses AVAudioRecorder)
         try setupMicrophoneCapture()
 
-        // Start system audio capture
-        try await setupSystemAudioCapture()
-
-        // Start first chunk
-        try startNewChunk()
+        // System audio capture disabled - ScreenCaptureKit has issues
+        // TODO: Re-enable with proper voice processing / echo cancellation
+        // For now, mic captures everything (including speaker audio in room)
+        print("AudioCaptureService: System audio capture disabled (will implement with voice processing)")
 
         // Start chunk rotation timer
         startChunkRotationTimer()
 
         isCapturing = true
+        print("AudioCaptureService: Capture started successfully")
     }
 
     /// Pause audio capture
@@ -141,11 +146,18 @@ class AudioCaptureService: NSObject, ObservableObject {
         chunkRotationTimer?.invalidate()
         chunkRotationTimer = nil
 
+        // Stop level timer
+        levelTimer?.invalidate()
+        levelTimer = nil
+
+        // Pause the audio engine
+        microphoneEngine?.pause()
+
+        // Close current audio file
+        audioFile = nil
+
         // Finish current chunk
         finishCurrentChunk()
-
-        // Pause engines
-        microphoneEngine?.pause()
 
         isCapturing = false
     }
@@ -154,13 +166,8 @@ class AudioCaptureService: NSObject, ObservableObject {
     func resumeCapture() async throws {
         guard !isCapturing, currentSession != nil else { return }
 
-        // Start new chunk
-        try startNewChunk()
-
-        // Resume microphone engine
-        try microphoneEngine?.start()
-
-        // Resume system audio (ScreenCaptureKit handles this automatically)
+        // Set up new chunk and restart engine
+        try setupMicrophoneCapture()
 
         // Restart chunk rotation timer
         startChunkRotationTimer()
@@ -172,17 +179,29 @@ class AudioCaptureService: NSObject, ObservableObject {
     func stopCapture() {
         guard currentSession != nil else { return }
 
-        // Stop chunk rotation timer
+        // Stop timers
         chunkRotationTimer?.invalidate()
         chunkRotationTimer = nil
+        levelTimer?.invalidate()
+        levelTimer = nil
 
-        // Finish current chunk
-        finishCurrentChunk()
-
-        // Stop and cleanup microphone
-        microphoneEngine?.stop()
-        microphoneEngine?.inputNode.removeTap(onBus: 0)
+        // Stop and cleanup microphone engine
+        if let engine = microphoneEngine {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            print("AudioCaptureService: Stopped AVAudioEngine")
+        }
         microphoneEngine = nil
+
+        // Close audio file
+        if let url = currentMicURL {
+            print("AudioCaptureService: Closed audio file at \(url.path)")
+        }
+        audioFile = nil
+        currentMicURL = nil
+
+        // Finish current chunk (records file references)
+        finishCurrentChunk()
 
         // Stop and cleanup system audio
         Task {
@@ -198,53 +217,152 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Permission Handling
 
     private func requestMicrophonePermission() async throws {
+        print("AudioCaptureService: Checking microphone permission...")
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        print("AudioCaptureService: Current status: \(status.rawValue) (0=notDetermined, 1=restricted, 2=denied, 3=authorized)")
 
         switch status {
         case .authorized:
+            print("AudioCaptureService: Already authorized")
             return
         case .notDetermined:
+            print("AudioCaptureService: Requesting permission...")
             let granted = await AVCaptureDevice.requestAccess(for: .audio)
+            print("AudioCaptureService: User response: \(granted ? "granted" : "denied")")
             if !granted {
                 throw AudioCaptureError.microphonePermissionDenied
             }
+            // Trust the boolean response - don't re-check status
+            // (sandbox/signing issues can cause status check to return wrong value)
+            return
         case .denied, .restricted:
+            print("AudioCaptureService: Permission denied or restricted - please enable in System Settings > Privacy & Security > Microphone")
             throw AudioCaptureError.microphonePermissionDenied
         @unknown default:
+            print("AudioCaptureService: Unknown permission status")
             throw AudioCaptureError.microphonePermissionDenied
         }
     }
 
-    // MARK: - Microphone Setup
+    // MARK: - Microphone Setup with Voice Processing
 
     private func setupMicrophoneCapture() throws {
-        microphoneEngine = AVAudioEngine()
+        print("AudioCaptureService: Setting up microphone capture with AVAudioEngine + Voice Processing...")
 
-        guard let engine = microphoneEngine else {
+        guard let session = currentSession else {
             throw AudioCaptureError.engineSetupFailed
         }
+
+        // Create the audio file URL for this chunk
+        let sessionDir = SessionStorageService.sessionDirectory(for: session)
+        let audioDir = sessionDir.appendingPathComponent("audio", isDirectory: true)
+
+        // Ensure audio directory exists
+        try FileManager.default.createDirectory(at: audioDir, withIntermediateDirectories: true)
+
+        // Use M4A format
+        currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).m4a")
+
+        // Remove existing file if present
+        if let url = currentMicURL, FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+
+        // Create audio engine
+        let engine = AVAudioEngine()
+        microphoneEngine = engine
 
         let inputNode = engine.inputNode
 
-        // Get the native format and create a conversion format
-        let nativeFormat = inputNode.inputFormat(forBus: 0)
+        // Enable voice processing for echo cancellation
+        do {
+            try inputNode.setVoiceProcessingEnabled(true)
+            print("AudioCaptureService: Voice processing enabled (echo cancellation active)")
+        } catch {
+            print("AudioCaptureService: Failed to enable voice processing: \(error)")
+            // Continue without voice processing
+        }
 
-        // Create target format for 16kHz mono
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: channels,
-            interleaved: false
-        ) else {
+        // Get the format from the input node
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        print("AudioCaptureService: Input format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
+
+        guard inputFormat.sampleRate > 0 else {
+            print("AudioCaptureService: Invalid input format")
             throw AudioCaptureError.engineSetupFailed
         }
 
-        // Install tap on input node
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, time in
-            self?.handleMicrophoneBuffer(buffer, time: time, sourceFormat: nativeFormat, targetFormat: targetFormat)
+        // Create the audio file for writing
+        guard let micURL = currentMicURL else {
+            throw AudioCaptureError.engineSetupFailed
         }
 
+        // Create audio file with AAC format
+        let outputSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: inputFormat.sampleRate,
+            AVNumberOfChannelsKey: inputFormat.channelCount,
+            AVEncoderBitRateKey: 128000
+        ]
+
+        audioFile = try AVAudioFile(
+            forWriting: micURL,
+            settings: outputSettings,
+            commonFormat: inputFormat.commonFormat,
+            interleaved: inputFormat.isInterleaved
+        )
+
+        print("AudioCaptureService: Created audio file at: \(micURL.path)")
+
+        // Install tap on input node to capture audio
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
+            self?.handleMicrophoneBuffer(buffer)
+        }
+
+        // Start the engine
+        engine.prepare()
         try engine.start()
+
+        print("AudioCaptureService: AVAudioEngine started with voice processing")
+
+        // Start level metering timer
+        startLevelMeteringTimer()
+    }
+
+    private var currentMicURL: URL?
+    private var audioFile: AVAudioFile?
+
+    private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer) {
+        // Calculate audio level for UI meter
+        if let channelData = buffer.floatChannelData?[0] {
+            let frameCount = Int(buffer.frameLength)
+            var sum: Float = 0
+            for i in 0..<frameCount {
+                sum += abs(channelData[i])
+            }
+            let average = sum / Float(max(frameCount, 1))
+            Task { @MainActor in
+                self.microphoneLevel = average
+            }
+        }
+
+        // Write buffer to file
+        do {
+            try audioFile?.write(from: buffer)
+        } catch {
+            print("AudioCaptureService: Failed to write audio buffer: \(error)")
+        }
+    }
+
+    private func startLevelMeteringTimer() {
+        // Level metering is now done in handleMicrophoneBuffer
+        // This timer is just for backup/fallback
+        levelTimer?.invalidate()
+        levelTimer = nil
+    }
+
+    private func updateMicrophoneLevel() {
+        // Now handled in handleMicrophoneBuffer
     }
 
     // MARK: - System Audio Setup
@@ -299,7 +417,10 @@ class AudioCaptureService: NSObject, ObservableObject {
     private func startNewChunk() throws {
         guard let session = currentSession else { return }
 
-        chunkStartTime = Date()
+        // Only set chunk start time if not already set (initial setup sets it)
+        if chunkStartTime == nil {
+            chunkStartTime = Date()
+        }
 
         let sessionDir = SessionStorageService.sessionDirectory(for: session)
         let audioDir = sessionDir.appendingPathComponent("audio", isDirectory: true)
@@ -307,12 +428,9 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Ensure audio directory exists
         try FileManager.default.createDirectory(at: audioDir, withIntermediateDirectories: true)
 
-        // Create microphone writer
-        let micURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).m4a")
-        microphoneWriter = try createAssetWriter(url: micURL)
-        microphoneWriterInput = microphoneWriter?.inputs.first
+        // Note: Microphone chunk file is created by setupMicrophoneCapture() using AVAudioRecorder
 
-        // Create system audio writer
+        // Create system audio writer (if system audio capture is active)
         let sysURL = audioDir.appendingPathComponent("sys_\(String(format: "%03d", currentChunkIndex)).m4a")
         systemWriter = try createAssetWriter(url: sysURL)
         systemWriterInput = systemWriter?.inputs.first
@@ -326,69 +444,60 @@ class AudioCaptureService: NSObject, ObservableObject {
         let endTime = Date()
         let chunkDuration = endTime.timeIntervalSince(startTime)
         let sessionOffset = startTime.timeIntervalSince(sessionStart)
+        let chunkIndex = currentChunkIndex
 
-        // Finish writing microphone
-        microphoneWriterInput?.markAsFinished()
-        microphoneWriter?.finishWriting { [weak self] in
-            guard let self = self else { return }
+        // Get session directory
+        let sessionDir = SessionStorageService.sessionDirectory(for: session)
 
-            // Get file size
-            let sessionDir = SessionStorageService.sessionDirectory(for: session)
-            let micURL = sessionDir.appendingPathComponent("audio/mic_\(String(format: "%03d", self.currentChunkIndex)).m4a")
+        // Handle microphone chunk (recorded by AVAudioRecorder as M4A)
+        let micURL = sessionDir.appendingPathComponent("audio/mic_\(String(format: "%03d", chunkIndex)).m4a")
+        if FileManager.default.fileExists(atPath: micURL.path) {
             let micSize = (try? FileManager.default.attributesOfItem(atPath: micURL.path)[.size] as? Int64) ?? 0
 
-            // Create chunk reference
             let micChunk = AudioChunkReference(
                 stream: .microphone,
-                chunkIndex: self.currentChunkIndex,
+                chunkIndex: chunkIndex,
                 startTime: sessionOffset,
                 endTime: sessionOffset + chunkDuration,
-                filePath: "audio/mic_\(String(format: "%03d", self.currentChunkIndex)).m4a",
+                filePath: "audio/mic_\(String(format: "%03d", chunkIndex)).m4a",
                 fileSize: micSize,
                 isProcessed: false
             )
-
-            Task { @MainActor in
-                session.audioChunkPaths.append(micChunk)
-            }
+            session.audioChunkPaths.append(micChunk)
+            print("AudioCaptureService: Added mic chunk \(chunkIndex), size: \(micSize) bytes")
         }
 
-        // Finish writing system audio
-        systemWriterInput?.markAsFinished()
-        systemWriter?.finishWriting { [weak self] in
-            guard let self = self else { return }
+        // Finish writing system audio (if active)
+        if let writer = systemWriter, let input = systemWriterInput {
+            input.markAsFinished()
+            writer.finishWriting { [weak self] in
+                guard let self = self else { return }
 
-            // Get file size
-            let sessionDir = SessionStorageService.sessionDirectory(for: session)
-            let sysURL = sessionDir.appendingPathComponent("audio/sys_\(String(format: "%03d", self.currentChunkIndex)).m4a")
-            let sysSize = (try? FileManager.default.attributesOfItem(atPath: sysURL.path)[.size] as? Int64) ?? 0
+                let sysURL = sessionDir.appendingPathComponent("audio/sys_\(String(format: "%03d", chunkIndex)).m4a")
+                let sysSize = (try? FileManager.default.attributesOfItem(atPath: sysURL.path)[.size] as? Int64) ?? 0
 
-            // Create chunk reference
-            let sysChunk = AudioChunkReference(
-                stream: .system,
-                chunkIndex: self.currentChunkIndex,
-                startTime: sessionOffset,
-                endTime: sessionOffset + chunkDuration,
-                filePath: "audio/sys_\(String(format: "%03d", self.currentChunkIndex)).m4a",
-                fileSize: sysSize,
-                isProcessed: false
-            )
-
-            Task { @MainActor in
-                session.audioChunkPaths.append(sysChunk)
-
-                // Notify that chunk is ready for transcription
-                NotificationCenter.default.post(
-                    name: .audioChunkReady,
-                    object: AudioChunkReadyInfo(sessionId: session.id, chunkIndex: self.currentChunkIndex)
+                let sysChunk = AudioChunkReference(
+                    stream: .system,
+                    chunkIndex: chunkIndex,
+                    startTime: sessionOffset,
+                    endTime: sessionOffset + chunkDuration,
+                    filePath: "audio/sys_\(String(format: "%03d", chunkIndex)).m4a",
+                    fileSize: sysSize,
+                    isProcessed: false
                 )
+
+                Task { @MainActor in
+                    session.audioChunkPaths.append(sysChunk)
+                    print("AudioCaptureService: Added sys chunk \(chunkIndex), size: \(sysSize) bytes")
+                }
             }
         }
 
-        // Update session duration
-        Task { @MainActor in
-            session.recordingDuration += chunkDuration
-        }
+        // Notify that chunk is ready for transcription
+        NotificationCenter.default.post(
+            name: .audioChunkReady,
+            object: AudioChunkReadyInfo(sessionId: session.id, chunkIndex: chunkIndex)
+        )
 
         currentChunkIndex += 1
     }
@@ -402,12 +511,52 @@ class AudioCaptureService: NSObject, ObservableObject {
     }
 
     private func rotateChunk() {
-        guard isCapturing else { return }
+        guard isCapturing, let engine = microphoneEngine else { return }
 
+        print("AudioCaptureService: Rotating to chunk \(currentChunkIndex + 1)")
+
+        // Remove tap and close current audio file
+        engine.inputNode.removeTap(onBus: 0)
+        audioFile = nil
+
+        // Finish current chunk (records references)
         finishCurrentChunk()
 
+        // Reset chunk start time for new chunk
+        chunkStartTime = Date()
+
+        // Start new chunk
         do {
             try startNewChunk()
+
+            // Reinstall tap and create new audio file
+            guard let session = currentSession else { return }
+            let sessionDir = SessionStorageService.sessionDirectory(for: session)
+            let audioDir = sessionDir.appendingPathComponent("audio", isDirectory: true)
+            currentMicURL = audioDir.appendingPathComponent("mic_\(String(format: "%03d", currentChunkIndex)).m4a")
+
+            guard let micURL = currentMicURL else { return }
+
+            let inputFormat = engine.inputNode.outputFormat(forBus: 0)
+            let outputSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: inputFormat.sampleRate,
+                AVNumberOfChannelsKey: inputFormat.channelCount,
+                AVEncoderBitRateKey: 128000
+            ]
+
+            audioFile = try AVAudioFile(
+                forWriting: micURL,
+                settings: outputSettings,
+                commonFormat: inputFormat.commonFormat,
+                interleaved: inputFormat.isInterleaved
+            )
+
+            engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
+                self?.handleMicrophoneBuffer(buffer)
+            }
+
+            print("AudioCaptureService: Started new chunk \(currentChunkIndex)")
         } catch {
             print("AudioCaptureService: Failed to start new chunk: \(error)")
         }
@@ -440,9 +589,10 @@ class AudioCaptureService: NSObject, ObservableObject {
         return writer
     }
 
-    // MARK: - Buffer Handling
+    // MARK: - Buffer Handling (for AVAudioEngine - currently unused)
 
     private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, time: AVAudioTime, sourceFormat: AVAudioFormat, targetFormat: AVAudioFormat) {
+        // This is only used when AVAudioEngine is active (not currently used)
         // Calculate audio level for UI meter
         if let channelData = buffer.floatChannelData?[0] {
             let frameCount = Int(buffer.frameLength)
@@ -455,24 +605,6 @@ class AudioCaptureService: NSObject, ObservableObject {
                 self.microphoneLevel = average
             }
         }
-
-        // Convert buffer to CMSampleBuffer and write on MainActor
-        guard let sampleBuffer = buffer.toCMSampleBuffer() else { return }
-
-        Task { @MainActor in
-            self.writeSampleBufferToMicrophone(sampleBuffer)
-        }
-    }
-
-    private func writeSampleBufferToMicrophone(_ sampleBuffer: CMSampleBuffer) {
-        guard let writer = microphoneWriter,
-              let input = microphoneWriterInput,
-              writer.status == .writing,
-              input.isReadyForMoreMediaData else {
-            return
-        }
-
-        input.append(sampleBuffer)
     }
 }
 

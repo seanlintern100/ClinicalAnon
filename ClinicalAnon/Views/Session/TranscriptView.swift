@@ -18,6 +18,12 @@ struct TranscriptView: View {
     @ObservedObject var session: LiveSession
     @State private var scrollProxy: ScrollViewProxy?
 
+    /// Check if there are audio chunks that haven't been transcribed yet
+    private var hasUnprocessedChunks: Bool {
+        let unprocessedCount = session.audioChunkPaths.filter { !$0.isProcessed && $0.stream == .microphone }.count
+        return unprocessedCount > 0
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -96,6 +102,19 @@ struct TranscriptView: View {
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
 
                 Text("Transcript will appear after the first audio chunk is processed.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            } else if session.state == .complete && hasUnprocessedChunks {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .padding()
+
+                Text("Transcribing...")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                Text("Processing audio, transcript will appear shortly.")
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
