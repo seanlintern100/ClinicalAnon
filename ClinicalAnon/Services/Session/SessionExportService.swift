@@ -256,9 +256,10 @@ class SessionExportService {
         // Get session audio directory
         let audioDir = SessionStorageService.audioDirectory(for: session)
 
-        // Verify chunks exist
+        // Verify chunks exist - use stored filePath, not hardcoded fileName
+        let sessionDir = SessionStorageService.sessionDirectory(for: session)
         let chunkURLs = chunks.compactMap { chunk -> URL? in
-            let url = audioDir.appendingPathComponent(chunk.fileName)
+            let url = sessionDir.appendingPathComponent(chunk.filePath)
             return FileManager.default.fileExists(atPath: url.path) ? url : nil
         }
 
@@ -276,11 +277,14 @@ class SessionExportService {
             outputURL = try await concatenateAudioFiles(chunkURLs, stream: stream)
         }
 
+        // Determine file extension from source
+        let sourceExtension = chunkURLs.first?.pathExtension ?? "m4a"
+
         // Show save panel
-        let suggestedName = "\(session.displayName)-\(stream.displayName).m4a"
+        let suggestedName = "\(session.displayName)-\(stream.displayName).\(sourceExtension)"
         guard let destinationURL = await showSavePanel(
             suggestedName: suggestedName,
-            allowedTypes: ["m4a"]
+            allowedTypes: [sourceExtension]
         ) else {
             // Clean up temp file if we created one
             if chunkURLs.count > 1 {
@@ -305,6 +309,146 @@ class SessionExportService {
         }
 
         return destinationURL
+    }
+
+    /// Export combined audio (mic + system mixed together)
+    /// - Parameters:
+    ///   - session: The session containing the audio
+    /// - Returns: URL of the saved file
+    func exportCombinedAudio(session: LiveSession) async throws -> URL {
+        // Get all chunks for both streams
+        let micChunks = session.audioChunkPaths.filter { $0.stream == .microphone }
+            .sorted { $0.chunkIndex < $1.chunkIndex }
+        let sysChunks = session.audioChunkPaths.filter { $0.stream == .system }
+            .sorted { $0.chunkIndex < $1.chunkIndex }
+
+        guard !micChunks.isEmpty || !sysChunks.isEmpty else {
+            throw ExportError.noAudioAvailable
+        }
+
+        let sessionDir = SessionStorageService.sessionDirectory(for: session)
+
+        // Get URLs for all chunks
+        let micURLs = micChunks.compactMap { chunk -> URL? in
+            let url = sessionDir.appendingPathComponent(chunk.filePath)
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+        let sysURLs = sysChunks.compactMap { chunk -> URL? in
+            let url = sessionDir.appendingPathComponent(chunk.filePath)
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+
+        guard !micURLs.isEmpty || !sysURLs.isEmpty else {
+            throw ExportError.noAudioAvailable
+        }
+
+        // Mix the audio streams
+        let mixedURL = try await mixAudioStreams(micURLs: micURLs, sysURLs: sysURLs)
+
+        // Show save panel
+        let suggestedName = "\(session.displayName)-Combined.m4a"
+        guard let destinationURL = await showSavePanel(
+            suggestedName: suggestedName,
+            allowedTypes: ["m4a"]
+        ) else {
+            try? FileManager.default.removeItem(at: mixedURL)
+            throw ExportError.cancelled
+        }
+
+        // Copy to final location
+        do {
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+            try FileManager.default.copyItem(at: mixedURL, to: destinationURL)
+            try? FileManager.default.removeItem(at: mixedURL)
+        } catch {
+            throw ExportError.fileWriteFailed(error.localizedDescription)
+        }
+
+        return destinationURL
+    }
+
+    /// Mix mic and system audio streams into a single file
+    private func mixAudioStreams(micURLs: [URL], sysURLs: [URL]) async throws -> URL {
+        let composition = AVMutableComposition()
+
+        // Add mic audio track
+        if !micURLs.isEmpty {
+            guard let micTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                throw ExportError.audioExportFailed("Failed to create mic audio track")
+            }
+
+            var currentTime = CMTime.zero
+            for url in micURLs {
+                let asset = AVURLAsset(url: url)
+                do {
+                    let tracks = try await asset.loadTracks(withMediaType: .audio)
+                    guard let sourceTrack = tracks.first else { continue }
+                    let duration = try await asset.load(.duration)
+                    let timeRange = CMTimeRange(start: .zero, duration: duration)
+                    try micTrack.insertTimeRange(timeRange, of: sourceTrack, at: currentTime)
+                    currentTime = CMTimeAdd(currentTime, duration)
+                } catch {
+                    print("SessionExportService: Failed to load mic chunk: \(error)")
+                }
+            }
+        }
+
+        // Add system audio track (plays simultaneously with mic)
+        if !sysURLs.isEmpty {
+            guard let sysTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                throw ExportError.audioExportFailed("Failed to create system audio track")
+            }
+
+            var currentTime = CMTime.zero
+            for url in sysURLs {
+                let asset = AVURLAsset(url: url)
+                do {
+                    let tracks = try await asset.loadTracks(withMediaType: .audio)
+                    guard let sourceTrack = tracks.first else { continue }
+                    let duration = try await asset.load(.duration)
+                    let timeRange = CMTimeRange(start: .zero, duration: duration)
+                    try sysTrack.insertTimeRange(timeRange, of: sourceTrack, at: currentTime)
+                    currentTime = CMTimeAdd(currentTime, duration)
+                } catch {
+                    print("SessionExportService: Failed to load sys chunk: \(error)")
+                }
+            }
+        }
+
+        // Export to temp file
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFile = tempDir.appendingPathComponent("export-combined-\(UUID().uuidString).m4a")
+
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetAppleM4A
+        ) else {
+            throw ExportError.audioExportFailed("Failed to create export session")
+        }
+
+        exportSession.outputURL = tempFile
+        exportSession.outputFileType = .m4a
+
+        await exportSession.export()
+
+        switch exportSession.status {
+        case .completed:
+            return tempFile
+        case .failed:
+            throw ExportError.audioExportFailed(exportSession.error?.localizedDescription ?? "Unknown error")
+        case .cancelled:
+            throw ExportError.cancelled
+        default:
+            throw ExportError.audioExportFailed("Export ended with unexpected status")
+        }
     }
 
     /// Concatenate multiple audio files into one
@@ -382,7 +526,8 @@ class SessionExportService {
                     case "txt": return .plainText
                     case "md": return .init(filenameExtension: "md")
                     case "m4a": return .init(filenameExtension: "m4a")
-                    default: return nil
+                    case "wav": return .wav
+                    default: return .init(filenameExtension: ext)
                     }
                 }
                 panel.canCreateDirectories = true

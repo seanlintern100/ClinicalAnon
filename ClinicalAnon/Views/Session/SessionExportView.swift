@@ -200,7 +200,7 @@ struct TranscriptExportView: View {
 
 // MARK: - Audio Export View
 
-/// Sheet for exporting session audio
+/// Sheet for exporting session audio (combined mic + system)
 struct AudioExportView: View {
 
     // MARK: - Properties
@@ -208,9 +208,26 @@ struct AudioExportView: View {
     @ObservedObject var session: LiveSession
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedStream: AudioStream = .microphone
     @State private var isExporting: Bool = false
     @State private var exportError: String?
+
+    // MARK: - Computed Properties
+
+    private var micChunks: [AudioChunkReference] {
+        session.audioChunkPaths.filter { $0.stream == .microphone }
+    }
+
+    private var sysChunks: [AudioChunkReference] {
+        session.audioChunkPaths.filter { $0.stream == .system }
+    }
+
+    private var totalSize: Int64 {
+        session.audioChunkPaths.reduce(0) { $0 + $1.fileSize }
+    }
+
+    private var hasAudio: Bool {
+        !session.audioChunkPaths.isEmpty
+    }
 
     // MARK: - Body
 
@@ -221,8 +238,8 @@ struct AudioExportView: View {
 
             Divider()
 
-            // Options
-            optionsView
+            // Content
+            contentView
 
             Divider()
 
@@ -267,28 +284,62 @@ struct AudioExportView: View {
         .padding(DesignSystem.Spacing.medium)
     }
 
-    // MARK: - Options
+    // MARK: - Content
 
-    private var optionsView: some View {
+    private var contentView: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            // Stream picker
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text("Audio Source")
+            // Audio summary
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                Text("Audio Sources")
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
 
-                ForEach(AudioStream.allCases, id: \.self) { stream in
-                    streamOption(stream)
+                // Mic audio
+                HStack {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(micChunks.isEmpty ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
+                    Text("Microphone")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundStyle(micChunks.isEmpty ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
+                    Spacer()
+                    if micChunks.isEmpty {
+                        Text("No audio")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    } else {
+                        Text(ByteCountFormatter.string(fromByteCount: micChunks.reduce(0) { $0 + $1.fileSize }, countStyle: .file))
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                }
+
+                // System audio
+                HStack {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundStyle(sysChunks.isEmpty ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
+                    Text("System Audio")
+                        .font(DesignSystem.Typography.body)
+                        .foregroundStyle(sysChunks.isEmpty ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary)
+                    Spacer()
+                    if sysChunks.isEmpty {
+                        Text("No audio")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    } else {
+                        Text(ByteCountFormatter.string(fromByteCount: sysChunks.reduce(0) { $0 + $1.fileSize }, countStyle: .file))
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
                 }
             }
 
-            // Audio info
-            if let info = audioInfo(for: selectedStream) {
+            // Info box
+            if hasAudio {
                 HStack(spacing: DesignSystem.Spacing.small) {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(DesignSystem.Colors.primaryTeal)
 
-                    Text(info)
+                    Text("Both audio sources will be mixed into a single file.")
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                 }
@@ -298,64 +349,6 @@ struct AudioExportView: View {
             }
         }
         .padding(DesignSystem.Spacing.medium)
-    }
-
-    // MARK: - Stream Option
-
-    private func streamOption(_ stream: AudioStream) -> some View {
-        let chunks = session.audioChunkPaths.filter { $0.stream == stream }
-        let hasAudio = !chunks.isEmpty
-        let totalSize = chunks.reduce(0) { $0 + $1.fileSize }
-
-        return Button(action: {
-            if hasAudio {
-                selectedStream = stream
-            }
-        }) {
-            HStack {
-                Image(systemName: selectedStream == stream ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selectedStream == stream ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
-
-                Image(systemName: stream.iconName)
-                    .foregroundStyle(hasAudio ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-
-                Text(stream.displayName)
-                    .font(DesignSystem.Typography.body)
-                    .foregroundStyle(hasAudio ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-
-                Spacer()
-
-                if hasAudio {
-                    Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                } else {
-                    Text("No audio")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-            }
-            .padding(DesignSystem.Spacing.small)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                    .fill(selectedStream == stream ? DesignSystem.Colors.primaryTeal.opacity(0.1) : Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(!hasAudio)
-    }
-
-    // MARK: - Audio Info
-
-    private func audioInfo(for stream: AudioStream) -> String? {
-        let chunks = session.audioChunkPaths.filter { $0.stream == stream }
-        guard !chunks.isEmpty else { return nil }
-
-        if chunks.count == 1 {
-            return "Single audio file will be exported"
-        } else {
-            return "\(chunks.count) audio chunks will be merged into one file"
-        }
     }
 
     // MARK: - Footer
@@ -378,13 +371,9 @@ struct AudioExportView: View {
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(isExporting || !hasSelectedAudio)
+            .disabled(isExporting || !hasAudio)
         }
         .padding(DesignSystem.Spacing.medium)
-    }
-
-    private var hasSelectedAudio: Bool {
-        !session.audioChunkPaths.filter { $0.stream == selectedStream }.isEmpty
     }
 
     // MARK: - Actions
@@ -394,10 +383,7 @@ struct AudioExportView: View {
 
         Task {
             do {
-                let url = try await SessionExportService.shared.exportAudio(
-                    session: session,
-                    stream: selectedStream
-                )
+                let url = try await SessionExportService.shared.exportCombinedAudio(session: session)
                 print("Audio exported to: \(url.path)")
                 dismiss()
             } catch ExportError.cancelled {
