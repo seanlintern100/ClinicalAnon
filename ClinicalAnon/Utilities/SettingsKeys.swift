@@ -85,4 +85,10 @@ enum SettingsKeys {
     /// VAD sensitivity threshold (0.0-1.0, default: 0.5)
     /// Lower = more sensitive (more speech detected), Higher = less sensitive (stricter filtering)
     static let vadSensitivity = "vadSensitivity"
+
+    // MARK: - Speaker Diarization Settings
+
+    /// Enable enhanced speaker identification using SpeakerKit (default: false)
+    /// When enabled, system audio is analyzed to distinguish multiple remote speakers
+    static let enhancedDiarizationEnabled = "enhancedDiarizationEnabled"
 }

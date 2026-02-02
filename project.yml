@@ -12,6 +12,9 @@ packages:
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
     exactVersion: "0.15.0"
+  SpeakerKit:
+    url: https://github.com/argmaxinc/SpeakerKit
+    from: "1.0.0"
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
     exactVersion: "2.29.3"
@@ -37,6 +40,7 @@ targets:
       - package: AWSSDKSwift
         product: AWSBedrockRuntime
       - package: WhisperKit
+      - package: SpeakerKit
       - package: mlx-swift-lm
         product: MLXLLM
       - package: mlx-swift-lm

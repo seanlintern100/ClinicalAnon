@@ -127,7 +127,9 @@ class OverlapDetector {
                 chunkIndex: segment.chunkIndex,
                 confidence: segment.confidence,
                 hasOverlap: !overlappingIds.isEmpty,
-                overlappingSegmentIds: overlappingIds
+                overlappingSegmentIds: overlappingIds,
+                speakerId: segment.speakerId,
+                speakerConfidence: segment.speakerConfidence
             )
             annotatedSegments.append(annotated)
         }
@@ -143,7 +145,9 @@ class OverlapDetector {
                 chunkIndex: segment.chunkIndex,
                 confidence: segment.confidence,
                 hasOverlap: !overlappingIds.isEmpty,
-                overlappingSegmentIds: overlappingIds
+                overlappingSegmentIds: overlappingIds,
+                speakerId: segment.speakerId,
+                speakerConfidence: segment.speakerConfidence
             )
             annotatedSegments.append(annotated)
         }

@@ -223,7 +223,7 @@ struct TranscriptSegmentRow: View {
 
     @ViewBuilder
     private var speakerLabel: some View {
-        Text(segment.speaker.label)
+        Text(speakerDisplayLabel)
             .font(DesignSystem.Typography.caption)
             .fontWeight(.semibold)
             .foregroundStyle(.white)
@@ -235,10 +235,39 @@ struct TranscriptSegmentRow: View {
             )
     }
 
+    /// Display label for the speaker, including voice-based ID if available
+    private var speakerDisplayLabel: String {
+        if segment.speaker == .other, let speakerId = segment.speakerId {
+            // Convert "SPEAKER_00" to "Other A", "SPEAKER_01" to "Other B", etc.
+            let suffix = speakerIdToLetter(speakerId)
+            return "Other \(suffix)"
+        }
+        return segment.speaker.label
+    }
+
+    /// Convert speaker ID like "SPEAKER_00" to letter suffix "A", "B", etc.
+    private func speakerIdToLetter(_ speakerId: String) -> String {
+        // Extract number from speaker ID (e.g., "SPEAKER_00" -> 0)
+        let number = speakerId
+            .components(separatedBy: CharacterSet.decimalDigits.inverted)
+            .joined()
+        if let index = Int(number), index < 26 {
+            return String(UnicodeScalar(65 + index)!) // A=65, B=66, etc.
+        }
+        return speakerId
+    }
+
     private var speakerColor: Color {
         switch segment.speaker {
         case .clinician: return .blue
-        case .other: return .green
+        case .other:
+            // Use different shades of green for different remote speakers
+            if let speakerId = segment.speakerId {
+                let hash = abs(speakerId.hashValue)
+                let hue = Double(hash % 60) / 360.0 + 0.25 // Green-ish hues (0.25-0.42)
+                return Color(hue: hue, saturation: 0.6, brightness: 0.7)
+            }
+            return .green
         }
     }
 }

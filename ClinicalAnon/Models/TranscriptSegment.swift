@@ -77,6 +77,13 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
     /// IDs of segments that overlap with this one
     var overlappingSegmentIds: [UUID]
 
+    /// Voice-based speaker ID from diarization (e.g., "SPEAKER_00", "SPEAKER_01")
+    /// Only populated when enhanced speaker identification is enabled
+    var speakerId: String?
+
+    /// Confidence of speaker identification (0-1)
+    var speakerConfidence: Float?
+
     // MARK: - Initialization
 
     init(
@@ -88,7 +95,9 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
         chunkIndex: Int,
         confidence: Double? = nil,
         hasOverlap: Bool = false,
-        overlappingSegmentIds: [UUID] = []
+        overlappingSegmentIds: [UUID] = [],
+        speakerId: String? = nil,
+        speakerConfidence: Float? = nil
     ) {
         self.id = id
         self.speaker = speaker
@@ -98,6 +107,8 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
         self.chunkIndex = chunkIndex
         self.confidence = confidence
         self.hasOverlap = hasOverlap
+        self.speakerId = speakerId
+        self.speakerConfidence = speakerConfidence
         self.overlappingSegmentIds = overlappingSegmentIds
     }
 

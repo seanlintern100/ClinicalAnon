@@ -457,13 +457,22 @@ class TranscriptionService: ObservableObject {
             let fileSize = (try? FileManager.default.attributesOfItem(atPath: systemAudioPath.path)[.size] as? Int64) ?? 0
             if fileSize > 1000 {  // Skip files smaller than 1KB (likely empty/headers only)
                 do {
-                    let sysSegments = try await transcribeFile(
+                    var sysSegments = try await transcribeFile(
                         whisper: whisper,
                         audioPath: systemAudioPath,
                         speaker: .other,
                         chunkIndex: chunkIndex,
                         chunkStartTime: chunkStartTime
                     )
+
+                    // Apply speaker diarization if enabled (identifies multiple remote speakers)
+                    if SpeakerDiarizationService.isEnabled {
+                        sysSegments = await applySpeakerDiarization(
+                            segments: sysSegments,
+                            audioPath: systemAudioPath
+                        )
+                    }
+
                     allSegments.append(contentsOf: sysSegments)
                 } catch {
                     print("TranscriptionService: System audio transcription failed (non-fatal): \(error)")
@@ -635,6 +644,41 @@ class TranscriptionService: ObservableObject {
     /// - Returns: Segments with overlap annotations
     func annotateOverlaps(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
         return overlapDetector.annotateOverlaps(segments: segments)
+    }
+
+    // MARK: - Speaker Diarization
+
+    /// Apply speaker diarization to identify multiple speakers in system audio
+    /// - Parameters:
+    ///   - segments: Transcript segments from system audio (speaker = .other)
+    ///   - audioPath: Path to the system audio file
+    /// - Returns: Segments with speaker IDs assigned based on voice analysis
+    private func applySpeakerDiarization(
+        segments: [TranscriptSegment],
+        audioPath: URL
+    ) async -> [TranscriptSegment] {
+        do {
+            let diarizationService = SpeakerDiarizationService.shared
+            let speakerSegments = try await diarizationService.diarize(audioURL: audioPath)
+
+            // Merge diarization results with transcript
+            let enhancedSegments = diarizationService.mergeWithTranscript(
+                transcriptSegments: segments,
+                speakerSegments: speakerSegments
+            )
+
+            // Log results
+            let uniqueSpeakers = Set(enhancedSegments.compactMap { $0.speakerId })
+            if uniqueSpeakers.count > 1 {
+                print("TranscriptionService: Diarization identified \(uniqueSpeakers.count) distinct speakers in system audio")
+            }
+
+            return enhancedSegments
+        } catch {
+            print("TranscriptionService: Speaker diarization failed (non-fatal): \(error)")
+            // Return original segments if diarization fails
+            return segments
+        }
     }
 }
 

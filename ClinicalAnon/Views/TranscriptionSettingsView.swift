@@ -99,6 +99,26 @@ struct TranscriptionSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            // Speaker Identification Section
+            Section {
+                Toggle(isOn: $enhancedDiarizationEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enhanced Speaker Identification")
+                            .font(.body)
+                        Text("Distinguish multiple remote participants by voice")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+            } header: {
+                Text("Speaker Identification")
+            } footer: {
+                Text("When enabled, remote audio is analyzed to identify distinct speakers (e.g., Patient A, Patient B). Useful for group sessions. Adds ~1 second processing time per minute of audio. All processing is on-device.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -109,6 +129,7 @@ struct TranscriptionSettingsView: View {
     @AppStorage(SettingsKeys.voiceProcessingEnabled) private var voiceProcessingEnabled: Bool = true
     @AppStorage(SettingsKeys.noiseSuppressionEnabled) private var noiseSuppressionEnabled: Bool = true
     @AppStorage(SettingsKeys.vadEnabled) private var vadEnabled: Bool = true
+    @AppStorage(SettingsKeys.enhancedDiarizationEnabled) private var enhancedDiarizationEnabled: Bool = false
 
     // MARK: - Status Helpers
 
