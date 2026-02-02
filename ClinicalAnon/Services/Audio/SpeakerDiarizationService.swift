@@ -2,17 +2,24 @@
 //  SpeakerDiarizationService.swift
 //  ClinicalAnon
 //
-//  Purpose: Speaker diarization using SpeakerKit for identifying multiple remote speakers
+//  Purpose: Speaker diarization for identifying multiple remote speakers
 //  Organization: 3 Big Things
+//
+//  NOTE: Full implementation requires Argmax Pro SDK license for SpeakerKit.
+//  See: https://www.argmaxinc.com/blog/speakerkit
+//
+//  This is a placeholder that provides the interface. When SpeakerKit license
+//  is obtained, uncomment the import and implement the diarize() method.
 //
 
 import Foundation
-import SpeakerKit
+// import SpeakerKit  // Requires Argmax Pro SDK license
 
 // MARK: - Diarization Error
 
 enum DiarizationError: Error, LocalizedError {
     case notInitialized
+    case notAvailable
     case modelLoadFailed(String)
     case diarizationFailed(String)
     case audioFileNotFound(String)
@@ -21,6 +28,8 @@ enum DiarizationError: Error, LocalizedError {
         switch self {
         case .notInitialized:
             return "Speaker diarization service is not initialized."
+        case .notAvailable:
+            return "Speaker diarization requires Argmax Pro SDK license. See Settings for details."
         case .modelLoadFailed(let reason):
             return "Failed to load diarization model: \(reason)"
         case .diarizationFailed(let reason):
@@ -56,7 +65,11 @@ struct SpeakerSegment {
 // MARK: - Speaker Diarization Service
 
 /// Service for identifying and separating multiple speakers in audio
-/// Uses SpeakerKit (from Argmax, same team as WhisperKit) for on-device diarization
+///
+/// NOTE: Full implementation requires Argmax Pro SDK license for SpeakerKit.
+/// Currently this is a placeholder that returns the setting check but doesn't
+/// actually perform diarization. The infrastructure (settings, UI, data model)
+/// is in place for when the license is obtained.
 @MainActor
 class SpeakerDiarizationService: ObservableObject {
 
@@ -67,37 +80,31 @@ class SpeakerDiarizationService: ObservableObject {
     // MARK: - Published State
 
     @Published private(set) var isInitialized: Bool = false
+    @Published private(set) var isAvailable: Bool = false
     @Published private(set) var isProcessing: Bool = false
     @Published private(set) var error: DiarizationError?
 
-    // MARK: - SpeakerKit Instance
-
-    private var speakerKit: SpeakerKit?
-
     // MARK: - Initialization
 
-    private init() {}
+    private init() {
+        // SpeakerKit requires Argmax Pro SDK license
+        // When license is obtained, initialize here
+        isAvailable = false
+    }
 
     /// Initialize the diarization model
-    /// Call this before first use (can be called during app startup or lazily)
+    /// Currently a no-op until SpeakerKit license is obtained
     func initialize() async throws {
-        guard !isInitialized else { return }
+        // TODO: When SpeakerKit license is obtained:
+        // speakerKit = try await SpeakerKit()
+        // isInitialized = true
+        // isAvailable = true
 
-        do {
-            speakerKit = try await SpeakerKit()
-            isInitialized = true
-#if DEBUG
-            print("SpeakerDiarizationService: SpeakerKit initialized successfully")
-#endif
-        } catch {
-            self.error = .modelLoadFailed(error.localizedDescription)
-            throw DiarizationError.modelLoadFailed(error.localizedDescription)
-        }
+        throw DiarizationError.notAvailable
     }
 
     /// Unload the model to free memory
     func unload() {
-        speakerKit = nil
         isInitialized = false
     }
 
@@ -107,21 +114,10 @@ class SpeakerDiarizationService: ObservableObject {
     /// - Parameter audioURL: URL to the audio file
     /// - Returns: Array of speaker segments with timing and speaker IDs
     func diarize(audioURL: URL) async throws -> [SpeakerSegment] {
-        guard let kit = speakerKit else {
-            // Try to initialize if not already
-            if !isInitialized {
-                try await initialize()
-            }
-            guard let kit = speakerKit else {
-                throw DiarizationError.notInitialized
-            }
-            return try await performDiarization(kit: kit, audioURL: audioURL)
+        guard isAvailable else {
+            throw DiarizationError.notAvailable
         }
 
-        return try await performDiarization(kit: kit, audioURL: audioURL)
-    }
-
-    private func performDiarization(kit: SpeakerKit, audioURL: URL) async throws -> [SpeakerSegment] {
         guard FileManager.default.fileExists(atPath: audioURL.path) else {
             throw DiarizationError.audioFileNotFound(audioURL.path)
         }
@@ -129,29 +125,11 @@ class SpeakerDiarizationService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        do {
-            let result = try await kit.diarize(audioURL)
+        // TODO: When SpeakerKit license is obtained:
+        // let result = try await speakerKit.diarize(audioURL)
+        // return result.segments.map { ... }
 
-            // Convert SpeakerKit results to our SpeakerSegment type
-            let segments = result.segments.map { segment in
-                SpeakerSegment(
-                    speakerId: segment.speaker,
-                    startTime: TimeInterval(segment.start),
-                    endTime: TimeInterval(segment.end),
-                    confidence: segment.confidence
-                )
-            }
-
-#if DEBUG
-            let uniqueSpeakers = Set(segments.map { $0.speakerId })
-            print("SpeakerDiarizationService: Found \(uniqueSpeakers.count) speakers, \(segments.count) segments")
-#endif
-
-            return segments
-        } catch {
-            self.error = .diarizationFailed(error.localizedDescription)
-            throw DiarizationError.diarizationFailed(error.localizedDescription)
-        }
+        throw DiarizationError.notAvailable
     }
 
     // MARK: - Merging with Transcription
@@ -233,7 +211,13 @@ class SpeakerDiarizationService: ObservableObject {
     // MARK: - Settings Check
 
     /// Check if enhanced diarization is enabled in settings
+    /// Note: Even if enabled, feature requires Argmax Pro SDK license
     static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: SettingsKeys.enhancedDiarizationEnabled)
+    }
+
+    /// Check if the feature is available (licensed)
+    static var isFeatureAvailable: Bool {
+        return SpeakerDiarizationService.shared.isAvailable
     }
 }

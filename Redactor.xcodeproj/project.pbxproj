@@ -62,7 +62,7 @@
 		7BD00CACD935BCBBCFF9FC97 /* Entity.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FAD264CF63B5F813E89B8B /* Entity.swift */; };
 		7C177DB8B1E1822074624322 /* StatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06463A5E2CDA5C7A80638837 /* StatusBar.swift */; };
 		7C5A704EC04D2A4F500805EA /* PhaseIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A33EEDA9994E6071CE026BF /* PhaseIndicator.swift */; };
-		83867D9F9ED6C36CDA8E7755 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = C050F5F527137B1D3545E60B /* MLXLMCommon */; };
+		83867D9F9ED6C36CDA8E7755 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 5D751FDF7B7F82943DD81D36 /* Hub */; };
 		83C182014F29137D44E9BD07 /* LiveRedactor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83CA0A638F02F1971C040D3D /* LiveRedactor.swift */; };
 		83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD141C928FBD98682F47FE2 /* DesignSystem.swift */; };
 		87523666F790F570FF50CACF /* SessionWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CD77A5DF066B5F6DD40317 /* SessionWindowController.swift */; };
@@ -72,8 +72,7 @@
 		913A43814EBACCC657047706 /* TextEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12D9D103CAFF380C32B56D9 /* TextEditorView.swift */; };
 		9305F0A93AE56D10A9BEB497 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */; };
 		976A38CC706CDF708430B7A8 /* SessionSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */; };
-		9879FB3755B0A1965AB653F0 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 5D751FDF7B7F82943DD81D36 /* Hub */; };
-		98A6CBABBE704F1553573D47 /* SpeakerKit in Frameworks */ = {isa = PBXBuildFile; productRef = A9BFF756F17108ECE60E43D8 /* SpeakerKit */; };
+		98A6CBABBE704F1553573D47 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = EA2659098EDE9C772C763EAE /* MLXLLM */; };
 		9B7B2BA26EF227BFA7EDE1AD /* NZPhoneRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */; };
 		9D5745C3198DCB84F7ECA1BD /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7542F1D14F61F0CDFFA2ADAC /* UserInclusionRecognizer.swift */; };
 		9E144935796D58A6F68EAF3D /* AWSCredentialsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22DB2B5F3E1335B11F8AA173 /* AWSCredentialsManager.swift */; };
@@ -110,7 +109,7 @@
 		D5687F6A235C1813B408AE75 /* AudioChunkReference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB38F7125E40E874EC9EA45 /* AudioChunkReference.swift */; };
 		D94DDCDAE70997D9BA8E153A /* ClinicalAnonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E1A8B81A151F466ED5CCFE /* ClinicalAnonApp.swift */; };
 		DF613FB501E6B895B256D034 /* HighlightCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DF0F4B2A03CE960B5F6FD8 /* HighlightCacheManager.swift */; };
-		E4302874D354BD0337E6A0D6 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = EA2659098EDE9C772C763EAE /* MLXLLM */; };
+		E4302874D354BD0337E6A0D6 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = C050F5F527137B1D3545E60B /* MLXLMCommon */; };
 		E60A4A054EE865DDDDE82072 /* XLMRobertaNERService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEE09AC0EE82FA4C87F8ECF9 /* XLMRobertaNERService.swift */; };
 		E689F0DAFC1B38945477A67A /* NERUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AF4AC1CEAC94616AF24DBB /* NERUtilities.swift */; };
 		E9A164691AF75A7CB57A7283 /* HighlightedTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE8D8F6E96779634BB4189 /* HighlightedTextView.swift */; };
@@ -266,10 +265,9 @@
 			files = (
 				9305F0A93AE56D10A9BEB497 /* AWSBedrockRuntime in Frameworks */,
 				70DE14B9D8F82D9B57F8898F /* WhisperKit in Frameworks */,
-				98A6CBABBE704F1553573D47 /* SpeakerKit in Frameworks */,
-				E4302874D354BD0337E6A0D6 /* MLXLLM in Frameworks */,
-				83867D9F9ED6C36CDA8E7755 /* MLXLMCommon in Frameworks */,
-				9879FB3755B0A1965AB653F0 /* Hub in Frameworks */,
+				98A6CBABBE704F1553573D47 /* MLXLLM in Frameworks */,
+				E4302874D354BD0337E6A0D6 /* MLXLMCommon in Frameworks */,
+				83867D9F9ED6C36CDA8E7755 /* Hub in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -564,7 +562,6 @@
 			packageProductDependencies = (
 				B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */,
 				0F1216A901BF25EABF787392 /* WhisperKit */,
-				A9BFF756F17108ECE60E43D8 /* SpeakerKit */,
 				EA2659098EDE9C772C763EAE /* MLXLLM */,
 				C050F5F527137B1D3545E60B /* MLXLMCommon */,
 				5D751FDF7B7F82943DD81D36 /* Hub */,
@@ -618,7 +615,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				117C3E2CDC8D8C97B6CB9ABE /* XCRemoteSwiftPackageReference "aws-sdk-swift" */,
-				A146820CA596AC18206CBC5D /* XCRemoteSwiftPackageReference "SpeakerKit" */,
 				B82ED759E96D255EC21466A9 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				B149747C569FF53C8E361CAD /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				67539FC4B977869248DAC8EC /* XCRemoteSwiftPackageReference "swift-transformers" */,
@@ -1140,14 +1136,6 @@
 				minimumVersion = 1.1.6;
 			};
 		};
-		A146820CA596AC18206CBC5D /* XCRemoteSwiftPackageReference "SpeakerKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/argmaxinc/SpeakerKit";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
 		B149747C569FF53C8E361CAD /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
@@ -1176,11 +1164,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 67539FC4B977869248DAC8EC /* XCRemoteSwiftPackageReference "swift-transformers" */;
 			productName = Hub;
-		};
-		A9BFF756F17108ECE60E43D8 /* SpeakerKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A146820CA596AC18206CBC5D /* XCRemoteSwiftPackageReference "SpeakerKit" */;
-			productName = SpeakerKit;
 		};
 		B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */ = {
 			isa = XCSwiftPackageProductDependency;
