@@ -18,6 +18,9 @@ struct SessionSidebarView: View {
     @ObservedObject var sessionManager: SessionManager
     @Binding var selectedSession: LiveSession?
 
+    @State private var sessionToExportTranscript: LiveSession?
+    @State private var sessionToExportAudio: LiveSession?
+
     // MARK: - Body
 
     var body: some View {
@@ -36,6 +39,12 @@ struct SessionSidebarView: View {
         }
         .frame(width: 260)
         .background(DesignSystem.Colors.surface)
+        .sheet(item: $sessionToExportTranscript) { session in
+            TranscriptExportView(session: session)
+        }
+        .sheet(item: $sessionToExportAudio) { session in
+            AudioExportView(session: session)
+        }
     }
 
     // MARK: - Header
@@ -122,6 +131,16 @@ struct SessionSidebarView: View {
         if session.state == .complete {
             Button("Send to Redact") {
                 sendToRedact(session)
+            }
+
+            Divider()
+
+            Button("Export Transcript...") {
+                sessionToExportTranscript = session
+            }
+
+            Button("Export Audio...") {
+                sessionToExportAudio = session
             }
         }
 

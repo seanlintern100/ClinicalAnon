@@ -79,6 +79,7 @@
 		A93FF3DADC116A455D831CF7 /* EntityRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F0B7A49CB9DC4C27BC357D /* EntityRecognizer.swift */; };
 		AC6A61607E5F74EBA08D532E /* SourceSans3-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D854F239CBC1E7ED5320BF28 /* SourceSans3-Regular.ttf */; };
 		AF86309F4111C19C6A170E03 /* WorkflowPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39AA02B94C43190B3535E10 /* WorkflowPhase.swift */; };
+		B3A4CE415F4192248F8D52CB /* SessionExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2200615CB715B38B4C8DED /* SessionExportService.swift */; };
 		B95A47DED2D5B9E43B0A0095 /* LiveSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBADD3AD29E31A56881A0363 /* LiveSession.swift */; };
 		BDCE129B32BFAB043737182F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */; };
 		BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */; };
@@ -87,6 +88,7 @@
 		C026D24088042251AFAEFCEF /* WorkflowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5652BE3366DB6BB9613DBF9C /* WorkflowViewModel.swift */; };
 		C215AD0F5B89967304A3D3D8 /* TitleNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21809F1390306CC2272B1C1E /* TitleNameRecognizer.swift */; };
 		C459430DD92E2C888FA69914 /* SourceSans3-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */; };
+		C611D5FEA423B93FA62636C8 /* SessionExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16BEEF66057D540CFD26F416 /* SessionExportView.swift */; };
 		C666AFFD8AEA20C304F1158F /* MemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B351B12D69B32D0A4D0DCE /* MemoryStorage.swift */; };
 		C7A88A1CE629870F858269F7 /* NZAddressRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39842730A81E3E5F5BF42B6C /* NZAddressRecognizer.swift */; };
 		C8311007D93C54B334D46F52 /* HelpContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4695C3542262D3AAEE29F4DA /* HelpContent.swift */; };
@@ -138,6 +140,7 @@
 		0A3F1D84B59476D4EEEA8A66 /* AECBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AECBridge.mm; sourceTree = "<group>"; };
 		0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSans3-SemiBold.ttf"; sourceTree = "<group>"; };
 		14BCD698F510EF8404855DD2 /* UserInclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionManager.swift; sourceTree = "<group>"; };
+		16BEEF66057D540CFD26F416 /* SessionExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExportView.swift; sourceTree = "<group>"; };
 		1A4488473B69644073207EA4 /* SourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDocument.swift; sourceTree = "<group>"; };
 		1C66CCCF0F3FF03B9B352299 /* SessionNamePromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionNamePromptView.swift; sourceTree = "<group>"; };
 		1CB38F7125E40E874EC9EA45 /* AudioChunkReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChunkReference.swift; sourceTree = "<group>"; };
@@ -210,6 +213,7 @@
 		B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		BA30D891D8461DC2A1007544 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		BBADD3AD29E31A56881A0363 /* LiveSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSession.swift; sourceTree = "<group>"; };
+		BC2200615CB715B38B4C8DED /* SessionExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExportService.swift; sourceTree = "<group>"; };
 		BE9A2DA52F7352379B6F372B /* TranscriptSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptSegment.swift; sourceTree = "<group>"; };
 		C0ACE7440A212F9067F57972 /* BedrockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedrockService.swift; sourceTree = "<group>"; };
 		C0FAD264CF63B5F813E89B8B /* Entity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entity.swift; sourceTree = "<group>"; };
@@ -361,6 +365,7 @@
 			isa = PBXGroup;
 			children = (
 				4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */,
+				BC2200615CB715B38B4C8DED /* SessionExportService.swift */,
 				61BEC03B51DE72463B083E60 /* SessionManager.swift */,
 				A4DFCD98D30C64C8BD4FD174 /* SessionStorageService.swift */,
 				BA30D891D8461DC2A1007544 /* TranscriptionService.swift */,
@@ -466,6 +471,7 @@
 			isa = PBXGroup;
 			children = (
 				CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */,
+				16BEEF66057D540CFD26F416 /* SessionExportView.swift */,
 				1C66CCCF0F3FF03B9B352299 /* SessionNamePromptView.swift */,
 				93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */,
 				DEC924F7EF383E70C56A332D /* SessionWindowContentView.swift */,
@@ -693,6 +699,8 @@
 				8A4431B706F76840302FA1D9 /* RestorePhaseView.swift in Sources */,
 				565289EA4CD4C319C4FDAD0F /* RingBuffer.swift in Sources */,
 				BDCE129B32BFAB043737182F /* SessionDetailView.swift in Sources */,
+				B3A4CE415F4192248F8D52CB /* SessionExportService.swift in Sources */,
+				C611D5FEA423B93FA62636C8 /* SessionExportView.swift in Sources */,
 				A7C455478E6634394659C3DD /* SessionManager.swift in Sources */,
 				52DC14EE86F9B67814B0E441 /* SessionNamePromptView.swift in Sources */,
 				976A38CC706CDF708430B7A8 /* SessionSidebarView.swift in Sources */,

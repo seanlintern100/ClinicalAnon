@@ -18,6 +18,9 @@ struct SessionDetailView: View {
     @ObservedObject var session: LiveSession
     @ObservedObject var sessionManager: SessionManager
 
+    @State private var showTranscriptExport = false
+    @State private var showAudioExport = false
+
     // MARK: - Body
 
     var body: some View {
@@ -31,6 +34,12 @@ struct SessionDetailView: View {
             TranscriptView(session: session)
         }
         .background(DesignSystem.Colors.background)
+        .sheet(isPresented: $showTranscriptExport) {
+            TranscriptExportView(session: session)
+        }
+        .sheet(isPresented: $showAudioExport) {
+            AudioExportView(session: session)
+        }
     }
 
     // MARK: - Control Bar
@@ -177,7 +186,28 @@ struct SessionDetailView: View {
                 .buttonStyle(SecondaryButtonStyle())
 
             case .complete:
-                // Send to Redact button
+                // Actions menu
+                Menu {
+                    Button(action: { showTranscriptExport = true }) {
+                        Label("Export Transcript...", systemImage: "doc.text")
+                    }
+
+                    Button(action: { showAudioExport = true }) {
+                        Label("Export Audio...", systemImage: "waveform")
+                    }
+
+                    Divider()
+
+                    Button(action: sendToRedact) {
+                        Label("Send to Redact", systemImage: "arrow.right.circle.fill")
+                    }
+                    .disabled(session.transcriptSegments.isEmpty)
+                } label: {
+                    Label("Actions", systemImage: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+
+                // Send to Redact button (primary action)
                 Button(action: sendToRedact) {
                     Label("Send to Redact", systemImage: "arrow.right.circle.fill")
                 }
