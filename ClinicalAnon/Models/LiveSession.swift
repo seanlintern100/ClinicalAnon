@@ -151,6 +151,11 @@ class LiveSession: ObservableObject, Identifiable {
 
     @Published var audioChunkPaths: [AudioChunkReference] = []
 
+    // MARK: - Chat
+
+    @Published var chatMessages: [ChatMessage] = []
+    let conversationContext: ConversationContext
+
     // MARK: - Initialization
 
     init(id: UUID = UUID(), createdAt: Date = Date()) {
@@ -160,6 +165,7 @@ class LiveSession: ObservableObject, Identifiable {
         self.name = ""
         self.recordingDuration = 0
         self.entityMapping = EntityMapping()
+        self.conversationContext = ConversationContext()
     }
 
     /// Initialize from persisted data

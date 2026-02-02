@@ -17,9 +17,22 @@ struct SessionDetailView: View {
 
     @ObservedObject var session: LiveSession
     @ObservedObject var sessionManager: SessionManager
+    @StateObject private var aiService: SessionAIService
 
     @State private var showTranscriptExport = false
     @State private var showAudioExport = false
+    @State private var showChatPanel = false
+
+    // MARK: - Initialization
+
+    init(session: LiveSession, sessionManager: SessionManager) {
+        self._session = ObservedObject(wrappedValue: session)
+        self._sessionManager = ObservedObject(wrappedValue: sessionManager)
+        self._aiService = StateObject(wrappedValue: SessionAIService(
+            bedrockService: BedrockService(),
+            credentialsManager: .shared
+        ))
+    }
 
     // MARK: - Body
 
@@ -30,8 +43,21 @@ struct SessionDetailView: View {
 
             Divider()
 
-            // Transcript view
-            TranscriptView(session: session)
+            // Main content area: Transcript + Chat
+            HStack(spacing: 0) {
+                // Transcript view (left pane)
+                TranscriptView(session: session)
+                    .frame(maxWidth: .infinity)
+
+                // Chat panel (right pane, collapsible)
+                if showChatPanel {
+                    Divider()
+
+                    SessionChatView(session: session, aiService: aiService)
+                        .frame(width: 350)
+                        .transition(.move(edge: .trailing))
+                }
+            }
         }
         .background(DesignSystem.Colors.background)
         .sheet(isPresented: $showTranscriptExport) {
@@ -93,6 +119,9 @@ struct SessionDetailView: View {
             if session.state == .recording {
                 audioLevelMeters
             }
+
+            // Chat controls
+            chatControls
 
             // Control buttons
             controlButtons
@@ -171,6 +200,46 @@ struct SessionDetailView: View {
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                 AudioLevelMeter(level: sessionManager.systemLevel)
             }
+        }
+    }
+
+    // MARK: - Chat Controls
+
+    private var chatControls: some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            // Transcript context toggle
+            Button {
+                withAnimation {
+                    aiService.includeTranscriptContext.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: aiService.includeTranscriptContext ? "doc.text.fill" : "doc.text")
+                        .font(.caption)
+                }
+                .foregroundStyle(aiService.includeTranscriptContext
+                    ? DesignSystem.Colors.primaryTeal
+                    : DesignSystem.Colors.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help(aiService.includeTranscriptContext ? "Transcript included in AI context" : "Transcript excluded from AI context")
+
+            // Chat panel toggle
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showChatPanel.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: showChatPanel ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+                        .font(.caption)
+                }
+                .foregroundStyle(showChatPanel
+                    ? DesignSystem.Colors.primaryTeal
+                    : DesignSystem.Colors.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help(showChatPanel ? "Hide AI chat" : "Show AI chat")
         }
     }
 
