@@ -42,17 +42,18 @@ Key files:
 
 User setting: Settings > Transcription > Echo Cancellation (default: ON)
 
-## TODO / Future Work
+## Speaker Diarization
 
-### Speaker Diarization (Check Feb 2026)
+Uses **FluidAudio** (Apache 2.0, open source) for on-device speaker diarization via pyannote.
 
-Infrastructure for speaker diarization is in place but disabled. Argmax is open-sourcing SpeakerKit's pyannote 4 engine with "Argmax SDK 2" release.
+**Architecture:**
+- WhisperKit → Transcription (keep existing, broad language support)
+- FluidAudio → Speaker diarization (identifies "who spoke when" in system audio)
+- Merge results by timestamp overlap
 
-**Action**: Check https://github.com/argmaxinc and https://www.argmaxinc.com/blog for SDK 2 release. When available:
-1. Add the open-source SpeakerKit package to `project.yml`
-2. Update `SpeakerDiarizationService.swift` to use actual implementation
-3. Enable the toggle in `TranscriptionSettingsView.swift`
+**Key files:**
+- `SpeakerDiarizationService.swift` - FluidAudio wrapper using `OfflineDiarizerManager`
+- `TranscriptSegment.swift` - `speakerId` and `speakerConfidence` fields
+- `TranscriptView.swift` - Shows "Other A", "Other B" with color variation
 
-**Current state**: Setting exists but disabled with "Pro" badge. All data model fields (`speakerId`, `speakerConfidence`) and UI (color-coded speakers) are ready.
-
-**Reference**: https://www.argmaxinc.com/blog/speakerkit
+**User setting:** Settings > Transcription > Enhanced Speaker Identification (default: OFF)

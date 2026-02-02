@@ -2,40 +2,35 @@
 //  SpeakerDiarizationService.swift
 //  ClinicalAnon
 //
-//  Purpose: Speaker diarization for identifying multiple remote speakers
+//  Purpose: Speaker diarization using FluidAudio for identifying multiple remote speakers
 //  Organization: 3 Big Things
-//
-//  NOTE: Full implementation requires Argmax Pro SDK license for SpeakerKit.
-//  See: https://www.argmaxinc.com/blog/speakerkit
-//
-//  This is a placeholder that provides the interface. When SpeakerKit license
-//  is obtained, uncomment the import and implement the diarize() method.
 //
 
 import Foundation
-// import SpeakerKit  // Requires Argmax Pro SDK license
+import AVFoundation
+import FluidAudio
 
 // MARK: - Diarization Error
 
 enum DiarizationError: Error, LocalizedError {
     case notInitialized
-    case notAvailable
     case modelLoadFailed(String)
     case diarizationFailed(String)
     case audioFileNotFound(String)
+    case audioLoadFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .notInitialized:
             return "Speaker diarization service is not initialized."
-        case .notAvailable:
-            return "Speaker diarization requires Argmax Pro SDK license. See Settings for details."
         case .modelLoadFailed(let reason):
             return "Failed to load diarization model: \(reason)"
         case .diarizationFailed(let reason):
             return "Diarization failed: \(reason)"
         case .audioFileNotFound(let path):
             return "Audio file not found at: \(path)"
+        case .audioLoadFailed(let reason):
+            return "Failed to load audio: \(reason)"
         }
     }
 }
@@ -65,11 +60,7 @@ struct SpeakerSegment {
 // MARK: - Speaker Diarization Service
 
 /// Service for identifying and separating multiple speakers in audio
-///
-/// NOTE: Full implementation requires Argmax Pro SDK license for SpeakerKit.
-/// Currently this is a placeholder that returns the setting check but doesn't
-/// actually perform diarization. The infrastructure (settings, UI, data model)
-/// is in place for when the license is obtained.
+/// Uses FluidAudio's OfflineDiarizerManager (pyannote-based) for on-device diarization
 @MainActor
 class SpeakerDiarizationService: ObservableObject {
 
@@ -80,31 +71,39 @@ class SpeakerDiarizationService: ObservableObject {
     // MARK: - Published State
 
     @Published private(set) var isInitialized: Bool = false
-    @Published private(set) var isAvailable: Bool = false
     @Published private(set) var isProcessing: Bool = false
     @Published private(set) var error: DiarizationError?
 
+    // MARK: - FluidAudio Diarizer
+
+    private var diarizer: OfflineDiarizerManager?
+
     // MARK: - Initialization
 
-    private init() {
-        // SpeakerKit requires Argmax Pro SDK license
-        // When license is obtained, initialize here
-        isAvailable = false
-    }
+    private init() {}
 
     /// Initialize the diarization model
-    /// Currently a no-op until SpeakerKit license is obtained
+    /// Call this before first use (can be called during app startup or lazily)
     func initialize() async throws {
-        // TODO: When SpeakerKit license is obtained:
-        // speakerKit = try await SpeakerKit()
-        // isInitialized = true
-        // isAvailable = true
+        guard !isInitialized else { return }
 
-        throw DiarizationError.notAvailable
+        do {
+            let config = OfflineDiarizerConfig()
+            diarizer = OfflineDiarizerManager(config: config)
+            try await diarizer?.prepareModels()
+            isInitialized = true
+#if DEBUG
+            print("SpeakerDiarizationService: FluidAudio diarizer initialized successfully")
+#endif
+        } catch {
+            self.error = .modelLoadFailed(error.localizedDescription)
+            throw DiarizationError.modelLoadFailed(error.localizedDescription)
+        }
     }
 
     /// Unload the model to free memory
     func unload() {
+        diarizer = nil
         isInitialized = false
     }
 
@@ -114,8 +113,13 @@ class SpeakerDiarizationService: ObservableObject {
     /// - Parameter audioURL: URL to the audio file
     /// - Returns: Array of speaker segments with timing and speaker IDs
     func diarize(audioURL: URL) async throws -> [SpeakerSegment] {
-        guard isAvailable else {
-            throw DiarizationError.notAvailable
+        // Initialize if needed
+        if !isInitialized {
+            try await initialize()
+        }
+
+        guard let diarizer = diarizer else {
+            throw DiarizationError.notInitialized
         }
 
         guard FileManager.default.fileExists(atPath: audioURL.path) else {
@@ -125,11 +129,88 @@ class SpeakerDiarizationService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        // TODO: When SpeakerKit license is obtained:
-        // let result = try await speakerKit.diarize(audioURL)
-        // return result.segments.map { ... }
+        do {
+            // Load audio samples from file
+            let samples = try await loadAudioSamples(from: audioURL)
 
-        throw DiarizationError.notAvailable
+            // Run diarization
+            let result = try await diarizer.process(audio: samples)
+
+            // Convert FluidAudio results to our SpeakerSegment type
+            let segments = result.map { segment in
+                SpeakerSegment(
+                    speakerId: segment.speaker,
+                    startTime: TimeInterval(segment.start),
+                    endTime: TimeInterval(segment.end),
+                    confidence: segment.confidence ?? 1.0
+                )
+            }
+
+#if DEBUG
+            let uniqueSpeakers = Set(segments.map { $0.speakerId })
+            print("SpeakerDiarizationService: Found \(uniqueSpeakers.count) speakers, \(segments.count) segments")
+#endif
+
+            return segments
+        } catch let error as DiarizationError {
+            self.error = error
+            throw error
+        } catch {
+            let diarizationError = DiarizationError.diarizationFailed(error.localizedDescription)
+            self.error = diarizationError
+            throw diarizationError
+        }
+    }
+
+    // MARK: - Audio Loading
+
+    /// Load audio samples from a file URL
+    private func loadAudioSamples(from url: URL) async throws -> [Float] {
+        let audioFile: AVAudioFile
+        do {
+            audioFile = try AVAudioFile(forReading: url)
+        } catch {
+            throw DiarizationError.audioLoadFailed(error.localizedDescription)
+        }
+
+        let format = audioFile.processingFormat
+        let frameCount = AVAudioFrameCount(audioFile.length)
+
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            throw DiarizationError.audioLoadFailed("Failed to create audio buffer")
+        }
+
+        do {
+            try audioFile.read(into: buffer)
+        } catch {
+            throw DiarizationError.audioLoadFailed(error.localizedDescription)
+        }
+
+        guard let channelData = buffer.floatChannelData else {
+            throw DiarizationError.audioLoadFailed("No channel data in buffer")
+        }
+
+        // Convert to mono if stereo
+        let channelCount = Int(format.channelCount)
+        var samples = [Float](repeating: 0, count: Int(buffer.frameLength))
+
+        if channelCount == 1 {
+            // Mono - just copy
+            for i in 0..<Int(buffer.frameLength) {
+                samples[i] = channelData[0][i]
+            }
+        } else {
+            // Stereo - mix to mono
+            for i in 0..<Int(buffer.frameLength) {
+                var sum: Float = 0
+                for ch in 0..<channelCount {
+                    sum += channelData[ch][i]
+                }
+                samples[i] = sum / Float(channelCount)
+            }
+        }
+
+        return samples
     }
 
     // MARK: - Merging with Transcription
@@ -138,7 +219,7 @@ class SpeakerDiarizationService: ObservableObject {
     /// This assigns specific speaker IDs to "Other" segments based on voice matching
     /// - Parameters:
     ///   - transcriptSegments: Segments from Whisper transcription
-    ///   - speakerSegments: Segments from SpeakerKit diarization
+    ///   - speakerSegments: Segments from diarization
     /// - Returns: Transcript segments with speaker IDs assigned
     func mergeWithTranscript(
         transcriptSegments: [TranscriptSegment],
@@ -211,13 +292,7 @@ class SpeakerDiarizationService: ObservableObject {
     // MARK: - Settings Check
 
     /// Check if enhanced diarization is enabled in settings
-    /// Note: Even if enabled, feature requires Argmax Pro SDK license
     static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: SettingsKeys.enhancedDiarizationEnabled)
-    }
-
-    /// Check if the feature is available (licensed)
-    static var isFeatureAvailable: Bool {
-        return SpeakerDiarizationService.shared.isAvailable
     }
 }

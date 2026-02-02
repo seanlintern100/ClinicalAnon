@@ -104,35 +104,20 @@ struct TranscriptionSettingsView: View {
             Section {
                 Toggle(isOn: $enhancedDiarizationEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text("Enhanced Speaker Identification")
-                                .font(.body)
-                            Text("Pro")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.purple)
-                                .cornerRadius(4)
-                        }
+                        Text("Enhanced Speaker Identification")
+                            .font(.body)
                         Text("Distinguish multiple remote participants by voice")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
                 .toggleStyle(.switch)
-                .disabled(true) // Requires Argmax Pro SDK license
             } header: {
                 Text("Speaker Identification")
             } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Identifies distinct speakers in remote audio (e.g., Patient A, Patient B). Useful for group sessions.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Link("Requires Argmax Pro SDK license →", destination: URL(string: "https://www.argmaxinc.com/blog/speakerkit")!)
-                        .font(.caption)
-                }
+                Text("When enabled, remote audio is analyzed to identify distinct speakers (e.g., Patient A, Patient B). Useful for group sessions. Adds processing time per chunk. All processing is on-device.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .formStyle(.grouped)

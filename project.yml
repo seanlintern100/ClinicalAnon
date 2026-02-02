@@ -12,11 +12,9 @@ packages:
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
     exactVersion: "0.15.0"
-  # SpeakerKit requires Argmax Pro SDK license - see https://www.argmaxinc.com/blog/speakerkit
-  # Uncomment when license is obtained:
-  # SpeakerKit:
-  #   url: https://github.com/argmaxinc/SpeakerKit
-  #   from: "1.0.0"
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio.git
+    from: "0.7.7"
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
     exactVersion: "2.29.3"
@@ -42,7 +40,7 @@ targets:
       - package: AWSSDKSwift
         product: AWSBedrockRuntime
       - package: WhisperKit
-      # - package: SpeakerKit  # Requires Argmax Pro SDK license
+      - package: FluidAudio
       - package: mlx-swift-lm
         product: MLXLLM
       - package: mlx-swift-lm
