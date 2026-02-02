@@ -63,10 +63,31 @@ struct SessionDetailView: View {
                     Text(session.formattedDuration)
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                    // Entity count indicator
+                    if !session.detectedEntities.isEmpty {
+                        Text("•")
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                        Text("\(session.detectedEntities.count) entities")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.primaryTeal)
+                    }
                 }
             }
 
             Spacer()
+
+            // Entity detection indicator
+            if LiveRedactor.shared.isProcessing {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Detecting...")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+            }
 
             // Audio level meters
             if session.state == .recording {
@@ -245,7 +266,12 @@ struct SessionDetailView: View {
         let transcript = sessionManager.handoffToRedact(session)
         NotificationCenter.default.post(
             name: .sessionHandoffToRedact,
-            object: (session.id, transcript)
+            object: SessionHandoffPayload(
+                sessionId: session.id,
+                transcript: transcript,
+                detectedEntities: session.detectedEntities,
+                entityMapping: session.entityMapping
+            )
         )
     }
 }

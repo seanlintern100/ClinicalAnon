@@ -36,8 +36,11 @@ struct TranscriptView: View {
                         ForEach(sortedContent, id: \.id) { item in
                             switch item {
                             case .segment(let segment):
-                                TranscriptSegmentRow(segment: segment)
-                                    .id(segment.id)
+                                TranscriptSegmentRow(
+                                    segment: segment,
+                                    entities: session.detectedEntities
+                                )
+                                .id(segment.id)
 
                             case .gap(let gap):
                                 TranscriptionGapRow(gap: gap)
@@ -164,10 +167,11 @@ enum TranscriptItem: Identifiable {
 
 // MARK: - Transcript Segment Row
 
-/// Individual segment row with speaker label
+/// Individual segment row with speaker label and entity highlighting
 struct TranscriptSegmentRow: View {
 
     let segment: TranscriptSegment
+    let entities: [Entity]
 
     var body: some View {
         HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
@@ -180,12 +184,14 @@ struct TranscriptSegmentRow: View {
             // Speaker label
             speakerLabel
 
-            // Text content
+            // Text content with entity highlighting
             VStack(alignment: .leading, spacing: 4) {
-                Text(segment.text)
-                    .font(DesignSystem.Typography.body)
-                    .foregroundStyle(DesignSystem.Colors.textPrimary)
-                    .textSelection(.enabled)
+                LiveHighlightedSegment(
+                    text: segment.text,
+                    entities: entities
+                )
+                .font(DesignSystem.Typography.body)
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
 
                 if segment.isLowConfidence {
                     HStack(spacing: 4) {

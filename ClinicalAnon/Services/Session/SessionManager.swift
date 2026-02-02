@@ -271,6 +271,9 @@ class SessionManager: ObservableObject {
             activeSession = nil
         }
 
+        // Clear LiveRedactor tracking for this session
+        LiveRedactor.shared.clearSession(session.id)
+
         sessions.removeAll { $0.id == session.id }
 
         try? await storageService.deleteSession(session)
@@ -330,6 +333,11 @@ class SessionManager: ObservableObject {
             if session.audioChunkPaths[i].chunkIndex == result.chunkIndex {
                 session.audioChunkPaths[i].isProcessed = true
             }
+        }
+
+        // Trigger incremental entity detection
+        Task {
+            await LiveRedactor.shared.processNewSegments(for: session, segments: result.segments)
         }
 
         // Auto-save

@@ -33,17 +33,27 @@ struct MainContentView: View {
         .background(DesignSystem.Colors.background)
         .frame(minWidth: 1000, minHeight: 600)
         .onReceive(NotificationCenter.default.publisher(for: .sessionTranscriptReadyForRedact)) { notification in
-            if let transcript = notification.object as? String {
-                handleSessionHandoff(transcript: transcript)
+            if let payload = notification.object as? SessionHandoffPayload {
+                handleSessionHandoff(payload: payload)
             }
         }
     }
 
     // MARK: - Session Handoff
 
-    private func handleSessionHandoff(transcript: String) {
+    private func handleSessionHandoff(payload: SessionHandoffPayload) {
         // Load transcript into Redact phase
-        viewModel.inputText = transcript
+        viewModel.inputText = payload.transcript
+
+        // Pre-populate entity mapping from live session
+        // This ensures entities detected during live recording get consistent codes
+        for entity in payload.detectedEntities {
+            _ = viewModel.engine.entityMapping.getReplacementCode(
+                for: entity.originalText,
+                type: entity.type
+            )
+        }
+
         viewModel.currentPhase = .redact
     }
 

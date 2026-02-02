@@ -51,11 +51,11 @@ struct SessionWindowContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .sessionHandoffToRedact)) { notification in
-            if let (_, transcript) = notification.object as? (UUID, String) {
-                // Forward to main window
+            if let payload = notification.object as? SessionHandoffPayload {
+                // Forward to main window with full payload
                 NotificationCenter.default.post(
                     name: .sessionTranscriptReadyForRedact,
-                    object: transcript
+                    object: payload
                 )
             }
         }

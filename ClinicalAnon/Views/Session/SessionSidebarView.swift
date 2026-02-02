@@ -174,10 +174,15 @@ struct SessionSidebarView: View {
 
     private func sendToRedact(_ session: LiveSession) {
         let transcript = sessionManager.handoffToRedact(session)
-        // Post notification with transcript for WorkflowViewModel to handle
+        // Post notification with transcript and entities for WorkflowViewModel to handle
         NotificationCenter.default.post(
             name: .sessionHandoffToRedact,
-            object: (session.id, transcript)
+            object: SessionHandoffPayload(
+                sessionId: session.id,
+                transcript: transcript,
+                detectedEntities: session.detectedEntities,
+                entityMapping: session.entityMapping
+            )
         )
     }
 
@@ -299,6 +304,16 @@ struct PulsingModifier: ViewModifier {
 
 extension Notification.Name {
     static let sessionHandoffToRedact = Notification.Name("sessionHandoffToRedact")
+}
+
+// MARK: - Session Handoff Payload
+
+/// Payload for session handoff to Redact phase
+struct SessionHandoffPayload {
+    let sessionId: UUID
+    let transcript: String
+    let detectedEntities: [Entity]
+    let entityMapping: EntityMapping
 }
 
 // MARK: - Preview
