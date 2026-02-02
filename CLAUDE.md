@@ -41,3 +41,18 @@ Key files:
 - `VoiceProcessingAudioCapture.swift` - VoiceProcessingIO AudioUnit wrapper for echo cancellation
 
 User setting: Settings > Transcription > Echo Cancellation (default: ON)
+
+## TODO / Future Work
+
+### Speaker Diarization (Check Feb 2026)
+
+Infrastructure for speaker diarization is in place but disabled. Argmax is open-sourcing SpeakerKit's pyannote 4 engine with "Argmax SDK 2" release.
+
+**Action**: Check https://github.com/argmaxinc and https://www.argmaxinc.com/blog for SDK 2 release. When available:
+1. Add the open-source SpeakerKit package to `project.yml`
+2. Update `SpeakerDiarizationService.swift` to use actual implementation
+3. Enable the toggle in `TranscriptionSettingsView.swift`
+
+**Current state**: Setting exists but disabled with "Pro" badge. All data model fields (`speakerId`, `speakerConfidence`) and UI (color-coded speakers) are ready.
+
+**Reference**: https://www.argmaxinc.com/blog/speakerkit
