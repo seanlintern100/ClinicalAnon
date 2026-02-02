@@ -126,8 +126,12 @@ class SpeakerDiarizationService: ObservableObject {
         defer { isProcessing = false }
 
         do {
-            // Run diarization directly on file URL (memory-efficient streaming)
-            let result = try await diarizer.process(url: audioURL)
+            // Load and resample audio to 16kHz mono (required by FluidAudio)
+            let converter = AudioConverter()
+            let samples = try converter.resampleAudioFile(path: audioURL.path)
+
+            // Run diarization on audio samples
+            let result = try await diarizer.process(audio: samples)
 
             // Convert FluidAudio results to our SpeakerSegment type
             let segments = result.segments.map { segment in
