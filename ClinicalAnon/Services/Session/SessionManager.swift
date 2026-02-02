@@ -32,6 +32,14 @@ class SessionManager: ObservableObject {
     private let transcriptionService = TranscriptionService.shared
     private let storageService = SessionStorageService.shared
 
+    // MARK: - Session Assistant
+
+    private(set) lazy var assistantService: SessionAssistantService = {
+        let bedrockService = BedrockService()
+        let preferencesManager = ClinicianPreferencesManager()
+        return SessionAssistantService(bedrockService: bedrockService, preferencesManager: preferencesManager)
+    }()
+
     // MARK: - Duration Timer
 
     private var durationTimer: Timer?
@@ -90,6 +98,9 @@ class SessionManager: ObservableObject {
         // Don't wait for transcription model here - it will load when needed
         // This allows session to start immediately
         // Model loading happens in background when first audio chunk is ready
+
+        // Reset assistant for new session
+        assistantService.reset()
 
         let session = LiveSession()
         sessions.insert(session, at: 0)  // Add to beginning (most recent)
@@ -219,6 +230,11 @@ class SessionManager: ObservableObject {
 
         // Stop audio capture
         audioCaptureService.stopCapture()
+
+        // Save assistant learnings from this session
+        Task {
+            await assistantService.endSession()
+        }
 
         // Mark session complete
         session.state = .complete
@@ -355,6 +371,11 @@ class SessionManager: ObservableObject {
             print("SessionManager: [DEBUG] LiveRedactor task starting...")
             await LiveRedactor.shared.processNewSegments(for: session, segments: result.segments)
             print("SessionManager: [DEBUG] LiveRedactor task completed")
+        }
+
+        // Trigger AI assistant analysis (processes in background, analyses every 3 chunks)
+        Task {
+            await assistantService.processNewSegments(result.segments, for: session)
         }
 
         // Auto-save

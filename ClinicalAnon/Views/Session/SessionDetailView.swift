@@ -22,6 +22,7 @@ struct SessionDetailView: View {
     @State private var showTranscriptExport = false
     @State private var showAudioExport = false
     @State private var showChatPanel = false
+    @State private var showAssistant = true
 
     // MARK: - Initialization
 
@@ -37,26 +38,36 @@ struct SessionDetailView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Control bar
-            controlBar
+        HSplitView {
+            // Main content (left side)
+            VStack(spacing: 0) {
+                // Control bar
+                controlBar
 
-            Divider()
+                Divider()
 
-            // Main content area: Transcript + Chat
-            HStack(spacing: 0) {
-                // Transcript view (left pane)
-                TranscriptView(session: session)
-                    .frame(maxWidth: .infinity)
+                // Main content area: Transcript + Chat
+                HStack(spacing: 0) {
+                    // Transcript view (left pane)
+                    TranscriptView(session: session)
+                        .frame(maxWidth: .infinity)
 
-                // Chat panel (right pane, collapsible)
-                if showChatPanel {
-                    Divider()
+                    // Chat panel (right pane, collapsible)
+                    if showChatPanel {
+                        Divider()
 
-                    SessionChatView(session: session, aiService: aiService)
-                        .frame(width: 350)
-                        .transition(.move(edge: .trailing))
+                        SessionChatView(session: session, aiService: aiService)
+                            .frame(width: 350)
+                            .transition(.move(edge: .trailing))
+                    }
                 }
+            }
+            .frame(minWidth: 500)
+
+            // Session Assistant panel (right side, collapsible)
+            if showAssistant {
+                SessionAssistantView(assistantService: sessionManager.assistantService)
+                    .frame(minWidth: 400, idealWidth: 500)
             }
         }
         .background(DesignSystem.Colors.background)
@@ -240,6 +251,23 @@ struct SessionDetailView: View {
             }
             .buttonStyle(.plain)
             .help(showChatPanel ? "Hide AI chat" : "Show AI chat")
+
+            // Session Assistant toggle
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showAssistant.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: showAssistant ? "brain.head.profile.fill" : "brain.head.profile")
+                        .font(.caption)
+                }
+                .foregroundStyle(showAssistant
+                    ? DesignSystem.Colors.primaryTeal
+                    : DesignSystem.Colors.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help(showAssistant ? "Hide session assistant" : "Show session assistant")
         }
     }
 
