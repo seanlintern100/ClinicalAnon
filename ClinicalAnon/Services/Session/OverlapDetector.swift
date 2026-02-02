@@ -66,8 +66,9 @@ class OverlapDetector {
     // MARK: - Configuration
 
     /// Minimum overlap duration to consider (in seconds)
-    /// Overlaps shorter than this are ignored as they may be timing noise
-    var minimumOverlapDuration: TimeInterval = 0.1
+    /// Set to 0.5s to only flag significant interruptions, not natural conversational overlaps
+    /// (backchannels like "uh-huh", brief turn-taking overlaps are normal and shouldn't be flagged)
+    var minimumOverlapDuration: TimeInterval = 0.5
 
     // MARK: - Public Methods
 
@@ -95,8 +96,22 @@ class OverlapDetector {
                     let overlapEnd = min(micSegment.endTime, sysSegment.endTime)
                     let overlapDuration = overlapEnd - overlapStart
 
-                    // Only count if overlap is significant enough
-                    if overlapDuration >= minimumOverlapDuration {
+                    // Calculate segment durations
+                    let micDuration = micSegment.endTime - micSegment.startTime
+                    let sysDuration = sysSegment.endTime - sysSegment.startTime
+
+                    // Calculate overlap ratio for each segment
+                    let micOverlapRatio = micDuration > 0 ? overlapDuration / micDuration : 0
+                    let sysOverlapRatio = sysDuration > 0 ? overlapDuration / sysDuration : 0
+
+                    // Only count if:
+                    // 1. Overlap duration is significant (>= 0.5s)
+                    // 2. Overlap is at least 20% of one of the segments
+                    //    (prevents false positives from long hallucinated segments with broad timestamps)
+                    let hasSignificantOverlap = overlapDuration >= minimumOverlapDuration
+                    let hasSignificantRatio = micOverlapRatio >= 0.2 || sysOverlapRatio >= 0.2
+
+                    if hasSignificantOverlap && hasSignificantRatio {
                         let annotation = OverlapAnnotation(
                             startTime: overlapStart,
                             endTime: overlapEnd,

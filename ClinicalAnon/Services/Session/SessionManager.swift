@@ -388,9 +388,9 @@ class SessionManager: ObservableObject {
 
     // MARK: - Audio Service Access
 
-    /// Get current microphone level for UI
+    /// Get current microphone level for UI (scaled 0-1 based on voice probability)
     var microphoneLevel: Float {
-        audioCaptureService.microphoneLevel
+        audioCaptureService.voiceProbability
     }
 
     /// Get current system audio level for UI

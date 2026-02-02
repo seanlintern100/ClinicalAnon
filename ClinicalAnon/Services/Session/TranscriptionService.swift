@@ -9,6 +9,7 @@
 import Foundation
 import WhisperKit
 import Combine
+import AVFoundation
 
 // MARK: - Transcription Error
 
@@ -511,6 +512,15 @@ class TranscriptionService: ObservableObject {
             throw TranscriptionError.audioFileNotFound(audioPath.path)
         }
 
+        // VAD pre-filtering: Skip transcription if audio doesn't contain speech
+        if isVADEnabled {
+            let containsSpeech = audioContainsSpeech(at: audioPath, sensitivity: vadSensitivity)
+            if !containsSpeech {
+                print("TranscriptionService: [VAD] Skipping transcription for \(speaker.label) at \(audioPath.lastPathComponent) - no speech detected")
+                return []  // Return empty - timestamps preserved at chunk level
+            }
+        }
+
         do {
             // Transcribe with WhisperKit
             print("TranscriptionService: [DEBUG] Starting whisper.transcribe() for \(speaker.label) at \(audioPath.lastPathComponent)")
@@ -635,6 +645,20 @@ class TranscriptionService: ObservableObject {
         currentProgress = nil
     }
 
+    // MARK: - VAD Settings
+
+    /// Check if VAD is enabled in settings
+    private var isVADEnabled: Bool {
+        UserDefaults.standard.bool(forKey: SettingsKeys.vadEnabled)
+    }
+
+    /// VAD sensitivity threshold (0.0-1.0)
+    /// Lower values = more sensitive (more speech detected)
+    private var vadSensitivity: Float {
+        let saved = UserDefaults.standard.float(forKey: SettingsKeys.vadSensitivity)
+        return saved > 0 ? saved : 0.5  // Default 0.5
+    }
+
     // MARK: - Overlap Detection
 
     private let overlapDetector = OverlapDetector()
@@ -678,6 +702,98 @@ class TranscriptionService: ObservableObject {
             print("TranscriptionService: Speaker diarization failed (non-fatal): \(error)")
             // Return original segments if diarization fails
             return segments
+        }
+    }
+
+    // MARK: - Voice Activity Detection
+
+    /// Analyze audio file for speech presence
+    /// - Parameters:
+    ///   - audioPath: Path to the audio file
+    ///   - sensitivity: Threshold for speech detection (0.0-1.0, lower = more sensitive)
+    /// - Returns: True if the audio contains speech above the threshold
+    private func audioContainsSpeech(at audioPath: URL, sensitivity: Float = 0.5) -> Bool {
+        do {
+            let audioFile = try AVAudioFile(forReading: audioPath)
+            let format = audioFile.processingFormat
+            let frameCount = AVAudioFrameCount(audioFile.length)
+
+            // Don't process very short files (< 0.1 seconds)
+            guard frameCount > 0, audioFile.length > Int64(format.sampleRate * 0.1) else {
+                return false
+            }
+
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+                print("TranscriptionService: VAD - Could not create buffer")
+                return true  // Fail open - transcribe if we can't analyze
+            }
+
+            try audioFile.read(into: buffer)
+
+            guard let channelData = buffer.floatChannelData else {
+                print("TranscriptionService: VAD - Could not get channel data")
+                return true  // Fail open
+            }
+
+            // Calculate RMS energy across the audio
+            let samples = channelData[0]
+            let sampleCount = Int(buffer.frameLength)
+
+            var totalEnergy: Float = 0.0
+            var peakEnergy: Float = 0.0
+            var speechFrameCount = 0
+
+            // Process in frames (10ms windows for speech detection)
+            let frameSize = Int(format.sampleRate * 0.01)  // 10ms frame
+            let frameCount_int = sampleCount / frameSize
+
+            // Energy threshold based on sensitivity
+            // sensitivity 0.0 -> threshold ~0.001 (very sensitive)
+            // sensitivity 0.5 -> threshold ~0.01
+            // sensitivity 1.0 -> threshold ~0.1 (strict)
+            let energyThreshold = pow(10, -3 + sensitivity * 2)  // 0.001 to 0.1 range
+
+            for frameIdx in 0..<frameCount_int {
+                let startSample = frameIdx * frameSize
+                var frameEnergy: Float = 0.0
+
+                for i in 0..<frameSize {
+                    let sample = samples[startSample + i]
+                    frameEnergy += sample * sample
+                }
+
+                let rms = sqrt(frameEnergy / Float(frameSize))
+                totalEnergy += rms
+                peakEnergy = max(peakEnergy, rms)
+
+                // Count frames with speech-level energy
+                if rms > energyThreshold {
+                    speechFrameCount += 1
+                }
+            }
+
+            guard frameCount_int > 0 else {
+                return false
+            }
+
+            let avgEnergy = totalEnergy / Float(frameCount_int)
+            let speechRatio = Float(speechFrameCount) / Float(frameCount_int)
+
+            // Require at least 5% of frames to have speech-level energy
+            // AND average energy above a minimum threshold
+            let minSpeechRatio: Float = 0.05
+            let minAvgEnergy = energyThreshold * 0.5
+
+            let hasSpeech = speechRatio >= minSpeechRatio && avgEnergy >= minAvgEnergy
+
+            #if DEBUG
+            print("TranscriptionService: VAD analysis - avgEnergy=\(String(format: "%.4f", avgEnergy)), peakEnergy=\(String(format: "%.4f", peakEnergy)), speechRatio=\(String(format: "%.2f", speechRatio)), threshold=\(String(format: "%.4f", energyThreshold)), hasSpeech=\(hasSpeech)")
+            #endif
+
+            return hasSpeech
+        } catch {
+            print("TranscriptionService: VAD analysis failed: \(error)")
+            return true  // Fail open - transcribe if we can't analyze
         }
     }
 }
