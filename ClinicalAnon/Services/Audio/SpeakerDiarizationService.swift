@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import AVFoundation
 import FluidAudio
 
 // MARK: - Diarization Error
@@ -17,7 +16,6 @@ enum DiarizationError: Error, LocalizedError {
     case modelLoadFailed(String)
     case diarizationFailed(String)
     case audioFileNotFound(String)
-    case audioLoadFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -29,8 +27,6 @@ enum DiarizationError: Error, LocalizedError {
             return "Diarization failed: \(reason)"
         case .audioFileNotFound(let path):
             return "Audio file not found at: \(path)"
-        case .audioLoadFailed(let reason):
-            return "Failed to load audio: \(reason)"
         }
     }
 }
@@ -130,19 +126,16 @@ class SpeakerDiarizationService: ObservableObject {
         defer { isProcessing = false }
 
         do {
-            // Load audio samples from file
-            let samples = try await loadAudioSamples(from: audioURL)
-
-            // Run diarization
-            let result = try await diarizer.process(audio: samples)
+            // Run diarization directly on file URL (memory-efficient streaming)
+            let result = try await diarizer.process(url: audioURL)
 
             // Convert FluidAudio results to our SpeakerSegment type
-            let segments = result.map { segment in
+            let segments = result.segments.map { segment in
                 SpeakerSegment(
-                    speakerId: segment.speaker,
-                    startTime: TimeInterval(segment.start),
-                    endTime: TimeInterval(segment.end),
-                    confidence: segment.confidence ?? 1.0
+                    speakerId: segment.speakerId,
+                    startTime: TimeInterval(segment.startTimeSeconds),
+                    endTime: TimeInterval(segment.endTimeSeconds),
+                    confidence: 1.0  // FluidAudio doesn't provide per-segment confidence
                 )
             }
 
@@ -160,57 +153,6 @@ class SpeakerDiarizationService: ObservableObject {
             self.error = diarizationError
             throw diarizationError
         }
-    }
-
-    // MARK: - Audio Loading
-
-    /// Load audio samples from a file URL
-    private func loadAudioSamples(from url: URL) async throws -> [Float] {
-        let audioFile: AVAudioFile
-        do {
-            audioFile = try AVAudioFile(forReading: url)
-        } catch {
-            throw DiarizationError.audioLoadFailed(error.localizedDescription)
-        }
-
-        let format = audioFile.processingFormat
-        let frameCount = AVAudioFrameCount(audioFile.length)
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-            throw DiarizationError.audioLoadFailed("Failed to create audio buffer")
-        }
-
-        do {
-            try audioFile.read(into: buffer)
-        } catch {
-            throw DiarizationError.audioLoadFailed(error.localizedDescription)
-        }
-
-        guard let channelData = buffer.floatChannelData else {
-            throw DiarizationError.audioLoadFailed("No channel data in buffer")
-        }
-
-        // Convert to mono if stereo
-        let channelCount = Int(format.channelCount)
-        var samples = [Float](repeating: 0, count: Int(buffer.frameLength))
-
-        if channelCount == 1 {
-            // Mono - just copy
-            for i in 0..<Int(buffer.frameLength) {
-                samples[i] = channelData[0][i]
-            }
-        } else {
-            // Stereo - mix to mono
-            for i in 0..<Int(buffer.frameLength) {
-                var sum: Float = 0
-                for ch in 0..<channelCount {
-                    sum += channelData[ch][i]
-                }
-                samples[i] = sum / Float(channelCount)
-            }
-        }
-
-        return samples
     }
 
     // MARK: - Merging with Transcription
