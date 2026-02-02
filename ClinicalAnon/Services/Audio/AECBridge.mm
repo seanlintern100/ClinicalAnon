@@ -10,9 +10,11 @@
 
 // WebRTC headers
 #include "webrtc/api/audio/audio_processing.h"
+#include "webrtc/api/audio/audio_processing_statistics.h"
 #include "webrtc/api/scoped_refptr.h"
 #include <pthread.h>
 #include <os/lock.h>
+#include <math.h>
 
 // WebRTC requires 10ms frames
 static const int kFrameSizeMs = 10;
@@ -83,9 +85,19 @@ static const int kFrameSizeMs = 10;
 
     static int refCallCount = 0;
     refCallCount++;
-    if (refCallCount <= 5 || refCallCount % 100 == 0) {
-        NSLog(@"AECBridge: processReferenceFrame called, count=%d, call#%d, hasRef=%d",
-              count, refCallCount, _hasReceivedReference);
+
+    // Log audio levels to verify format (should be in [-1, 1] range)
+    if (refCallCount <= 5 || refCallCount % 500 == 0) {
+        float minVal = 0, maxVal = 0, sum = 0;
+        for (int i = 0; i < MIN(count, 480); i++) {
+            float s = samples[i];
+            if (s < minVal) minVal = s;
+            if (s > maxVal) maxVal = s;
+            sum += fabsf(s);
+        }
+        float avgLevel = sum / MIN(count, 480);
+        NSLog(@"AECBridge: REF #%d - samples=%d, range=[%.4f, %.4f], avgLevel=%.4f",
+              refCallCount, count, minVal, maxVal, avgLevel);
     }
 
     // Configure stream for mono audio at our sample rate
@@ -94,22 +106,25 @@ static const int kFrameSizeMs = 10;
     // Process ALL complete 10ms frames to ensure AEC has full reference data
     int framesToProcess = count / _expectedFrameSize;
 
-    if (refCallCount <= 5) {
-        NSLog(@"AECBridge: Processing %d reference frames (of %d samples)", framesToProcess, count);
-    }
-
     // Lock to prevent concurrent access with ProcessStream
     os_unfair_lock_lock(&_lock);
 
+    int lastError = 0;
     for (int frame = 0; frame < framesToProcess; frame++) {
         const float* channelPtr = samples + (frame * _expectedFrameSize);
         const float* const* channelPtrs = &channelPtr;
 
         // Use AnalyzeReverseStream for reference-only analysis (no output needed)
-        _apm->AnalyzeReverseStream(channelPtrs, streamConfig);
+        int err = _apm->AnalyzeReverseStream(channelPtrs, streamConfig);
+        if (err != 0) lastError = err;
     }
 
     os_unfair_lock_unlock(&_lock);
+
+    // Log errors if any
+    if (lastError != 0 && (refCallCount <= 10 || refCallCount % 100 == 0)) {
+        NSLog(@"AECBridge: REF ERROR - AnalyzeReverseStream returned %d", lastError);
+    }
 
     // After processing enough reference frames, enable capture processing
     if (!_hasReceivedReference) {
@@ -118,10 +133,6 @@ static const int kFrameSizeMs = 10;
             _hasReceivedReference = YES;
             NSLog(@"AECBridge: Reference audio established - enabling AEC on capture");
         }
-    }
-
-    if (refCallCount <= 5) {
-        NSLog(@"AECBridge: processReferenceFrame done");
     }
 }
 
@@ -132,7 +143,6 @@ static const int kFrameSizeMs = 10;
     if (count < _expectedFrameSize) return;
 
     // Skip AEC processing until we've received reference audio
-    // This prevents calling ProcessStream before ProcessReverseStream
     if (!_hasReceivedReference) {
         static int skipCount = 0;
         skipCount++;
@@ -144,19 +154,22 @@ static const int kFrameSizeMs = 10;
 
     static int capCallCount = 0;
     capCallCount++;
-    if (capCallCount <= 3 || capCallCount % 100 == 0) {
-        NSLog(@"AECBridge: processCaptureFrame called, count=%d, call#%d", count, capCallCount);
+
+    // Log audio levels BEFORE processing to verify input format
+    float preMinVal = 0, preMaxVal = 0, preSum = 0;
+    if (capCallCount <= 5 || capCallCount % 500 == 0) {
+        for (int i = 0; i < MIN(count, 480); i++) {
+            float s = samples[i];
+            if (s < preMinVal) preMinVal = s;
+            if (s > preMaxVal) preMaxVal = s;
+            preSum += fabsf(s);
+        }
     }
 
     webrtc::StreamConfig streamConfig(_sampleRate, 1);  // mono
 
     // Process ALL complete 10ms frames to apply AEC to entire buffer
-    // This is critical - only processed samples have echo removed!
     int framesToProcess = count / _expectedFrameSize;
-
-    if (capCallCount <= 3) {
-        NSLog(@"AECBridge: Processing %d capture frames (of %d samples)", framesToProcess, count);
-    }
 
     // Lock to prevent concurrent access with AnalyzeReverseStream
     os_unfair_lock_lock(&_lock);
@@ -164,18 +177,51 @@ static const int kFrameSizeMs = 10;
     // Set stream delay before processing
     _apm->set_stream_delay_ms(_streamDelayMs);
 
+    int lastError = 0;
     for (int frame = 0; frame < framesToProcess; frame++) {
         float* channelPtr = samples + (frame * _expectedFrameSize);
         float* const* channelPtrs = &channelPtr;
 
         // ProcessStream modifies samples in-place with echo removed
-        _apm->ProcessStream(channelPtrs, streamConfig, streamConfig, channelPtrs);
+        int err = _apm->ProcessStream(channelPtrs, streamConfig, streamConfig, channelPtrs);
+        if (err != 0) lastError = err;
     }
+
+    // Get AEC statistics
+    webrtc::AudioProcessingStats stats = _apm->GetStatistics();
 
     os_unfair_lock_unlock(&_lock);
 
-    if (capCallCount <= 3) {
-        NSLog(@"AECBridge: processCaptureFrame done");
+    // Log audio levels AFTER processing to see if AEC changed anything
+    if (capCallCount <= 5 || capCallCount % 500 == 0) {
+        float postMinVal = 0, postMaxVal = 0, postSum = 0;
+        for (int i = 0; i < MIN(count, 480); i++) {
+            float s = samples[i];
+            if (s < postMinVal) postMinVal = s;
+            if (s > postMaxVal) postMaxVal = s;
+            postSum += fabsf(s);
+        }
+        float preAvg = preSum / MIN(count, 480);
+        float postAvg = postSum / MIN(count, 480);
+        float reduction = (preAvg > 0.0001f) ? ((preAvg - postAvg) / preAvg * 100.0f) : 0.0f;
+
+        NSLog(@"AECBridge: CAP #%d - BEFORE: range=[%.4f,%.4f] avg=%.4f | AFTER: range=[%.4f,%.4f] avg=%.4f | reduction=%.1f%%",
+              capCallCount, preMinVal, preMaxVal, preAvg, postMinVal, postMaxVal, postAvg, reduction);
+
+        // Log AEC statistics
+        if (stats.echo_return_loss.has_value()) {
+            NSLog(@"AECBridge: AEC Stats - ERL=%.1fdB, ERLE=%.1fdB, divergent=%d",
+                  stats.echo_return_loss.value_or(0),
+                  stats.echo_return_loss_enhancement.value_or(0),
+                  stats.divergent_filter_fraction.has_value() ? (int)(stats.divergent_filter_fraction.value() * 100) : -1);
+        } else {
+            NSLog(@"AECBridge: AEC Stats - No echo metrics available (AEC may not be detecting echo)");
+        }
+    }
+
+    // Log errors if any
+    if (lastError != 0 && (capCallCount <= 10 || capCallCount % 100 == 0)) {
+        NSLog(@"AECBridge: CAP ERROR - ProcessStream returned %d", lastError);
     }
 }
 

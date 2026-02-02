@@ -34,6 +34,8 @@
 	<true/>
 	<key>NSSupportsSuddenTermination</key>
 	<true/>
+	<key>NSQuitAlwaysKeepsWindows</key>
+	<false/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fonts/Lora-Regular.ttf</string>

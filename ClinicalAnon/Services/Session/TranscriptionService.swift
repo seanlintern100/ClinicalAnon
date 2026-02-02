@@ -514,7 +514,7 @@ class TranscriptionService: ObservableObject {
                         options: .regularExpression
                     )
 
-                    // Remove [BLANK_AUDIO] and similar bracketed markers
+                    // Remove [BLANK_AUDIO] and similar bracketed markers that indicate no speech
                     cleanText = cleanText.replacingOccurrences(
                         of: #"\[BLANK_AUDIO\]"#,
                         with: "",
@@ -525,6 +525,22 @@ class TranscriptionService: ObservableObject {
                         with: "[music]",
                         options: .regularExpression
                     )
+                    // Remove [inaudible], [no audio], [silence] markers - these don't add value
+                    cleanText = cleanText.replacingOccurrences(
+                        of: #"\[inaudible\]"#,
+                        with: "",
+                        options: [.regularExpression, .caseInsensitive]
+                    )
+                    cleanText = cleanText.replacingOccurrences(
+                        of: #"\[no audio\]"#,
+                        with: "",
+                        options: [.regularExpression, .caseInsensitive]
+                    )
+                    cleanText = cleanText.replacingOccurrences(
+                        of: #"\[silence\]"#,
+                        with: "",
+                        options: [.regularExpression, .caseInsensitive]
+                    )
 
                     // Clean up whitespace
                     cleanText = cleanText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -533,13 +549,17 @@ class TranscriptionService: ObservableObject {
                     guard !cleanText.isEmpty else { continue }
 
                     // Add chunk start time offset to get absolute session timestamp
+                    // Convert avgLogprob (negative log probability) to 0-1 probability scale
+                    // avgLogprob is typically -0.1 to -1.0, where closer to 0 = higher confidence
+                    let probability = exp(Double(segment.avgLogprob))
+
                     let transcriptSegment = TranscriptSegment(
                         speaker: speaker,
                         text: cleanText,
                         startTime: chunkStartTime + TimeInterval(segment.start),
                         endTime: chunkStartTime + TimeInterval(segment.end),
                         chunkIndex: chunkIndex,
-                        confidence: Double(segment.avgLogprob)
+                        confidence: probability
                     )
 
                     segments.append(transcriptSegment)

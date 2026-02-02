@@ -533,15 +533,30 @@ class AudioCaptureService: NSObject, ObservableObject {
 
         // Get input format
         let inputFormat = inputNode.outputFormat(forBus: 0)
-        print("AudioCaptureService: Recording format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
+        print("AudioCaptureService: Input format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
 
         guard inputFormat.sampleRate > 0 else {
             print("AudioCaptureService: Invalid input format")
             throw AudioCaptureError.engineSetupFailed
         }
 
-        // Create audio file
-        audioFile = try AVAudioFile(forWriting: url, settings: inputFormat.settings)
+        // When AEC is enabled, we mix stereo to mono before processing
+        // So the output file should be mono format
+        let fileFormat: AVAudioFormat
+        if aecProcessor != nil && inputFormat.channelCount > 1 {
+            // Create mono format at same sample rate
+            guard let mono = AVAudioFormat(standardFormatWithSampleRate: inputFormat.sampleRate, channels: 1) else {
+                throw AudioCaptureError.engineSetupFailed
+            }
+            fileFormat = mono
+            print("AudioCaptureService: Output format: \(mono.sampleRate) Hz, 1 channel (mono for AEC)")
+        } else {
+            fileFormat = inputFormat
+            print("AudioCaptureService: Output format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) channels")
+        }
+
+        // Create audio file with appropriate format
+        audioFile = try AVAudioFile(forWriting: url, settings: fileFormat.settings)
         print("AudioCaptureService: Created audio file at: \(url.path)")
 
         // Install tap on input node
@@ -554,7 +569,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         try engine.start()
 
         if self.aecProcessor != nil {
-            print("AudioCaptureService: AVAudioEngine started with software echo cancellation")
+            print("AudioCaptureService: AVAudioEngine started with software echo cancellation (stereo→mono)")
         } else {
             print("AudioCaptureService: AVAudioEngine started (no echo cancellation)")
         }
@@ -565,13 +580,55 @@ class AudioCaptureService: NSObject, ObservableObject {
 
     private var micBufferCount: Int = 0
 
+    /// Mono buffer for AEC processing (reused to avoid allocations)
+    private var monoBuffer: AVAudioPCMBuffer?
+    private var monoFormat: AVAudioFormat?
+
     private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
+        guard let channelData = buffer.floatChannelData else { return }
         let frameCount = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+
+        // If stereo, mix to mono first (AEC requires mono input)
+        // This is CRITICAL: AEC must process ALL audio, not just one channel
+        let monoSamples: UnsafeMutablePointer<Float>
+        let outputBuffer: AVAudioPCMBuffer
+
+        if channelCount >= 2 {
+            // Create or reuse mono buffer
+            if monoBuffer == nil || monoBuffer!.frameCapacity < AVAudioFrameCount(frameCount) {
+                monoFormat = AVAudioFormat(standardFormatWithSampleRate: buffer.format.sampleRate, channels: 1)
+                if let format = monoFormat {
+                    monoBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount * 2))
+                    print("AudioCaptureService: Created mono buffer for stereo→mono conversion (AEC requires mono)")
+                }
+            }
+
+            if let mono = monoBuffer, let monoData = mono.floatChannelData?[0] {
+                // Mix stereo to mono: (L + R) / 2
+                let left = channelData[0]
+                let right = channelData[1]
+                for i in 0..<frameCount {
+                    monoData[i] = (left[i] + right[i]) * 0.5
+                }
+                mono.frameLength = AVAudioFrameCount(frameCount)
+
+                monoSamples = monoData
+                outputBuffer = mono
+            } else {
+                // Fallback: just process channel 0 of original buffer
+                monoSamples = channelData[0]
+                outputBuffer = buffer
+            }
+        } else {
+            // Already mono
+            monoSamples = channelData[0]
+            outputBuffer = buffer
+        }
 
         // Apply software echo cancellation if enabled
         if let aec = aecProcessor {
-            aec.process(samples: channelData, count: frameCount)
+            aec.process(samples: monoSamples, count: frameCount)
         }
 
         // Throttle UI level updates (every 10 buffers ~= 85ms at 4096 samples/48kHz)
@@ -581,7 +638,7 @@ class AudioCaptureService: NSObject, ObservableObject {
             var sum: Float = 0
             let sampleCount = min(frameCount, 256)
             for i in 0..<sampleCount {
-                sum += abs(channelData[i])
+                sum += abs(monoSamples[i])
             }
             let average = sum / Float(max(sampleCount, 1))
             Task { @MainActor [weak self, average] in
@@ -589,9 +646,9 @@ class AudioCaptureService: NSObject, ObservableObject {
             }
         }
 
-        // Write buffer to file (with AEC applied)
+        // Write processed mono buffer to file
         do {
-            try audioFile?.write(from: buffer)
+            try audioFile?.write(from: outputBuffer)
         } catch {
             // Only log errors occasionally to avoid spam
             if micBufferCount % 100 == 1 {
@@ -826,11 +883,19 @@ class AudioCaptureService: NSObject, ObservableObject {
             if let engine = microphoneEngine {
                 let inputFormat = engine.inputNode.outputFormat(forBus: 0)
 
+                // When AEC is enabled, use mono format (we mix stereo to mono before AEC)
+                let fileFormat: AVAudioFormat
+                if aecProcessor != nil && inputFormat.channelCount > 1 {
+                    fileFormat = AVAudioFormat(standardFormatWithSampleRate: inputFormat.sampleRate, channels: 1)!
+                } else {
+                    fileFormat = inputFormat
+                }
+
                 audioFile = try AVAudioFile(
                     forWriting: micURL,
-                    settings: inputFormat.settings,
-                    commonFormat: inputFormat.commonFormat,
-                    interleaved: inputFormat.isInterleaved
+                    settings: fileFormat.settings,
+                    commonFormat: fileFormat.commonFormat,
+                    interleaved: fileFormat.isInterleaved
                 )
 
                 engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
