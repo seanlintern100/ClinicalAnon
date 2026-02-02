@@ -66,12 +66,43 @@ struct AIDetail: Codable {
         case content, category, timestamp
         case sourceQuote = "source_quote"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        content = try container.decode(String.self, forKey: .content)
+        category = try container.decode(String.self, forKey: .category)
+        sourceQuote = (try? container.decode(String.self, forKey: .sourceQuote)) ?? ""
+        timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
+    }
+
+    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
+        return 0
+    }
 }
 
 struct AIQuote: Codable {
     var text: String
     var timestamp: Double
     var significance: String
+
+    enum CodingKeys: String, CodingKey {
+        case text, timestamp, significance
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        significance = (try? container.decode(String.self, forKey: .significance)) ?? ""
+        timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
+    }
+
+    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
+        return 0
+    }
 }
 
 struct AIAgendaItem: Codable {
@@ -85,6 +116,21 @@ struct AIAgendaItem: Codable {
         case topic, status, evidence
         case agreedAt = "agreed_at"
         case timeRange = "time_range"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        topic = try container.decode(String.self, forKey: .topic)
+        status = (try? container.decode(String.self, forKey: .status)) ?? "not_started"
+        evidence = try? container.decode(String.self, forKey: .evidence)
+        timeRange = try? container.decode(AITimeRange.self, forKey: .timeRange)
+        agreedAt = Self.decodeTimestamp(from: container, forKey: .agreedAt)
+    }
+
+    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
+        return 0
     }
 }
 
@@ -102,6 +148,22 @@ struct AITheme: Codable {
 struct AIThemeMention: Codable {
     var timestamp: Double
     var context: String
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp, context
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        context = (try? container.decode(String.self, forKey: .context)) ?? ""
+        timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
+    }
+
+    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
+        return 0
+    }
 }
 
 struct AIFlag: Codable {
@@ -109,10 +171,45 @@ struct AIFlag: Codable {
     var content: String
     var timestamp: Double
     var rationale: String
+
+    enum CodingKeys: String, CodingKey {
+        case severity, content, timestamp, rationale
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        severity = (try? container.decode(String.self, forKey: .severity)) ?? "note"
+        content = try container.decode(String.self, forKey: .content)
+        rationale = (try? container.decode(String.self, forKey: .rationale)) ?? ""
+        timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
+    }
+
+    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
+        return 0
+    }
 }
 
 struct AISuggestion: Codable {
     var content: String
     var rationale: String
     var timestamp: Double
+
+    enum CodingKeys: String, CodingKey {
+        case content, rationale, timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        content = try container.decode(String.self, forKey: .content)
+        rationale = (try? container.decode(String.self, forKey: .rationale)) ?? ""
+        timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
+    }
+
+    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
+        return 0
+    }
 }

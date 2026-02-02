@@ -365,16 +365,16 @@ class SessionManager: ObservableObject {
             }
         }
 
-        // Trigger incremental entity detection
-        print("SessionManager: [DEBUG] Spawning LiveRedactor task for \(result.segments.count) segments")
+        // Trigger incremental entity detection, then AI assistant (sequential for privacy)
+        print("SessionManager: [DEBUG] Spawning LiveRedactor + SessionAssistant task for \(result.segments.count) segments")
         Task {
+            // Step 1: LiveRedactor detects entities FIRST
             print("SessionManager: [DEBUG] LiveRedactor task starting...")
             await LiveRedactor.shared.processNewSegments(for: session, segments: result.segments)
             print("SessionManager: [DEBUG] LiveRedactor task completed")
-        }
 
-        // Trigger AI assistant analysis (processes in background, analyses every 3 chunks)
-        Task {
+            // Step 2: SessionAssistant runs AFTER entities detected
+            // This ensures session.redactedTranscript includes all detected entities
             await assistantService.processNewSegments(result.segments, for: session)
         }
 

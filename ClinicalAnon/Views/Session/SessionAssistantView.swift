@@ -32,8 +32,8 @@ struct SessionAssistantView: View {
                 ParkingLotView(assistantService: assistantService)
                     .frame(minWidth: 280, idealWidth: 320)
 
-                // Live Feed placeholder (right) - Phase 4
-                liveFeedPlaceholder
+                // Live Feed (right)
+                LiveFeedView(assistantService: assistantService)
                     .frame(minWidth: 200, idealWidth: 280)
             }
         }
@@ -99,30 +99,6 @@ struct SessionAssistantView: View {
         .background(DesignSystem.Colors.surface)
     }
 
-    // MARK: - Live Feed Placeholder
-
-    private var liveFeedPlaceholder: some View {
-        VStack(spacing: DesignSystem.Spacing.medium) {
-            Spacer()
-
-            Image(systemName: "sparkles")
-                .font(.largeTitle)
-                .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
-
-            Text("Live Feed")
-                .font(DesignSystem.Typography.subheading)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-            Text("Flags, suggestions, and alerts will appear here")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesignSystem.Colors.surface.opacity(0.5))
-    }
 }
 
 // MARK: - Preview

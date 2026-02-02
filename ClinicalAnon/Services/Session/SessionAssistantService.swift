@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Main service for AI-powered session assistance
 @MainActor
@@ -16,6 +17,7 @@ class SessionAssistantService: ObservableObject {
 
     private let bedrockService: BedrockService
     private let preferencesManager: ClinicianPreferencesManager
+    private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Configuration
 
@@ -35,8 +37,8 @@ class SessionAssistantService: ObservableObject {
     @Published var isEnabled: Bool = true
 
     private var chunksProcessedSinceAnalysis = 0
-    private var cumulativeTranscript: String = ""
     private var lastAnalysedChunkIndex: Int = -1
+    private weak var currentSession: LiveSession?
 
     // MARK: - Initialisation
 
@@ -44,26 +46,30 @@ class SessionAssistantService: ObservableObject {
         self.bedrockService = bedrockService
         self.preferencesManager = preferencesManager
         self.state = SessionAssistantState()
+
+        // Forward state changes to service (nested ObservableObject fix)
+        state.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
     }
 
     // MARK: - Transcript Processing
 
-    /// Called when new transcript segments arrive
+    /// Called when new transcript segments arrive (after LiveRedactor has processed them)
     func processNewSegments(_ segments: [TranscriptSegment], for session: LiveSession) async {
-        guard isEnabled else { return }
+        guard isEnabled else {
+            print("SessionAssistant: Skipping - assistant disabled")
+            return
+        }
         guard !segments.isEmpty else { return }
 
-        // Format new segments
-        let newText = segments.map { "[\($0.speaker.label)] \($0.text)" }.joined(separator: "\n")
-
-        // Append to cumulative (with truncation)
-        cumulativeTranscript = truncateTranscript(cumulativeTranscript + "\n" + newText)
-
-        // Track chunks
+        // Track chunks (transcript is obtained from session.redactedTranscript when needed)
         chunksProcessedSinceAnalysis += 1
+        print("SessionAssistant: Received \(segments.count) segments. Chunks since analysis: \(chunksProcessedSinceAnalysis)/\(analysisIntervalChunks)")
 
         // Trigger full analysis every 3 chunks
         if chunksProcessedSinceAnalysis >= analysisIntervalChunks {
+            print("SessionAssistant: Triggering analysis (reached \(analysisIntervalChunks) chunks)")
             await runAnalysis(for: session)
             chunksProcessedSinceAnalysis = 0
         }
@@ -85,12 +91,30 @@ class SessionAssistantService: ObservableObject {
         return "[Earlier transcript truncated for context limits]\n\n" + truncated
     }
 
+    // MARK: - De-redaction
+
+    /// De-redact text using current session's entity mapping
+    /// Converts codes like [PERSON_A] back to original names for display
+    private func deRedact(_ text: String) -> String {
+        guard let session = currentSession else { return text }
+        let reidentifier = TextReidentifier()
+        return reidentifier.restore(text: text, using: session.entityMapping, normalizeDates: false)
+    }
+
     // MARK: - AI Analysis
 
     /// Run AI analysis with retry logic for transient failures
     func runAnalysis(for session: LiveSession) async {
+        // Store session for de-redaction of AI responses
+        currentSession = session
+
+        let redactedTranscript = truncateTranscript(session.redactedTranscript)
+        print("SessionAssistant: [START] Running analysis...")
+        print("SessionAssistant: Redacted transcript length: \(redactedTranscript.count) chars")
+
         guard bedrockService.isConfigured else {
             state.lastAnalysisError = "AI service not configured"
+            print("SessionAssistant: [ERROR] Bedrock not configured")
             return
         }
 
@@ -100,11 +124,13 @@ class SessionAssistantService: ObservableObject {
         defer {
             state.isAnalysing = false
             state.lastAnalysisTime = Date()
+            print("SessionAssistant: [END] Analysis complete")
         }
 
         // Build prompts
         let systemPrompt = buildSystemPrompt()
-        let userMessage = buildUserMessage()
+        let userMessage = buildUserMessage(transcript: redactedTranscript)
+        print("SessionAssistant: Sending to AI (model: \(preferencesManager.selectedModel))...")
 
         // Retry loop with exponential backoff
         var lastError: Error?
@@ -118,12 +144,18 @@ class SessionAssistantService: ObservableObject {
                     maxTokens: 2048
                 )
 
+                print("SessionAssistant: [RECEIVED] Response length: \(response.count) chars")
+                print("SessionAssistant: Response preview: \(String(response.prefix(200)))...")
+
                 // Parse and process response
                 if let analysisResponse = parseAIResponse(response) {
+                    print("SessionAssistant: [PARSED] details=\(analysisResponse.details.count), quotes=\(analysisResponse.quotes.count), agenda=\(analysisResponse.agenda.count), themes=\(analysisResponse.themes.count), flags=\(analysisResponse.flags.count), suggestions=\(analysisResponse.suggestions.count)")
                     processAnalysisResponse(analysisResponse)
+                    print("SessionAssistant: [PROCESSED] State now has: details=\(state.details.count), quotes=\(state.quotes.count), agenda=\(state.agendaItems.count), themes=\(state.themes.count)")
                     return  // Success
                 } else {
                     state.lastAnalysisError = "Failed to parse AI response"
+                    print("SessionAssistant: [ERROR] Failed to parse response")
                     return  // Don't retry parse failures
                 }
 
@@ -188,48 +220,50 @@ class SessionAssistantService: ObservableObject {
 
         Analyse the NEW transcript content and return structured observations. You will receive the current Parking Lot state — DO NOT re-report items already captured.
 
+        **IMPORTANT: All timestamp fields must be NUMBERS (seconds from session start), e.g. 45, 120, 180. NOT strings like "early" or "3:00".**
+
         ### 1. DETAILS (→ Parking Lot)
         Extract factual information: people mentioned, relationships, ages, professions, durations, key facts.
-        For each: content, category (person|relationship|fact|profession|history), source_quote, timestamp
+        For each: content, category (person|relationship|fact|profession|history), source_quote, timestamp (number in seconds)
 
         ### 2. QUOTES (→ Parking Lot)
         Capture significant language: metaphors, emotionally charged statements, repeated phrases, self-descriptions.
-        For each: text, timestamp, significance
+        For each: text, timestamp (number in seconds), significance
 
         ### 3. AGENDA (→ Parking Lot)
         Track topics agreed to discuss. Status: not_started, partial, covered.
-        For each: topic, agreed_at, status, evidence, time_range
+        For each: topic, agreed_at (number in seconds), status, evidence, time_range {start, end} (numbers)
 
         ### 4. THEMES (→ Parking Lot / Live Feed)
         Identify recurring patterns. Mark explored (true/false) based on clinician acknowledgment.
-        For each: name, mentions (timestamp + context), explored
+        For each: name, mentions [{timestamp (number), context}], explored
 
         ### 5. FLAGS (→ Live Feed)
         🔴 SAFETY: Risk language, crisis indicators — always flag even if uncertain
         🟠 IMPORTANT: Significant revelations, contradictions, emotional moments
         🟡 NOTE: Observations, patterns, areas to explore
-        For each: severity, content, timestamp, rationale
+        For each: severity, content, timestamp (number in seconds), rationale
 
         ### 6. SUGGESTIONS (→ Live Feed)
         Offer therapeutic ideas when contextually appropriate.
-        For each: content, rationale, timestamp
+        For each: content, rationale, timestamp (number in seconds)
 
         ## OUTPUT FORMAT
 
-        Respond with valid JSON only. No preamble, no markdown.
+        Respond with valid JSON only. No preamble, no markdown code blocks.
         Include all six keys, even if empty arrays.
+        All timestamps MUST be numbers (seconds), not strings.
 
-        ```json
+        Example structure:
         {
-          "details": [],
-          "quotes": [],
-          "agenda": [],
-          "themes": [],
-          "flags": [],
+          "details": [{"content": "Client has a brother", "category": "relationship", "source_quote": "my brother and I", "timestamp": 45}],
+          "quotes": [{"text": "I feel like I'm drowning", "timestamp": 120, "significance": "Metaphor for overwhelm"}],
+          "agenda": [{"topic": "Work stress", "agreed_at": 30, "status": "partial", "evidence": "discussed briefly"}],
+          "themes": [{"name": "Family conflict", "mentions": [{"timestamp": 45, "context": "mentioned brother"}], "explored": false}],
+          "flags": [{"severity": "note", "content": "Client seemed hesitant", "timestamp": 90, "rationale": "Long pause before answering"}],
           "suggestions": [],
           "analysis_note": "Optional note"
         }
-        ```
 
         ## CRITICAL GUIDELINES
 
@@ -241,8 +275,8 @@ class SessionAssistantService: ObservableObject {
         """
     }
 
-    /// Build user message using cumulative transcript
-    private func buildUserMessage() -> String {
+    /// Build user message using redacted transcript
+    private func buildUserMessage(transcript: String) -> String {
         let preferences = preferencesManager.preferences
 
         // Format starred/dismissed items
@@ -271,7 +305,7 @@ class SessionAssistantService: ObservableObject {
 
         ## TRANSCRIPT TO ANALYSE
 
-        \(cumulativeTranscript)
+        \(transcript)
 
         ---
 
@@ -351,18 +385,22 @@ class SessionAssistantService: ObservableObject {
     }
 
     private func processDetail(_ aiDetail: AIDetail) {
-        // Check for duplicate
+        // De-redact AI response text
+        let content = deRedact(aiDetail.content)
+        let sourceQuote = deRedact(aiDetail.sourceQuote)
+
+        // Check for duplicate using de-redacted content
         let isDuplicate = state.details.contains {
-            $0.content.lowercased() == aiDetail.content.lowercased()
+            $0.content.lowercased() == content.lowercased()
         }
         guard !isDuplicate else { return }
 
         let category = DetailCategory(rawValue: aiDetail.category) ?? .fact
 
         let detail = ClientDetail(
-            content: aiDetail.content,
+            content: content,
             category: category,
-            sourceQuote: aiDetail.sourceQuote,
+            sourceQuote: sourceQuote,
             timestamp: aiDetail.timestamp
         )
 
@@ -380,17 +418,21 @@ class SessionAssistantService: ObservableObject {
     }
 
     private func processQuote(_ aiQuote: AIQuote) {
-        // Check for duplicate (fuzzy match)
+        // De-redact AI response text
+        let text = deRedact(aiQuote.text)
+        let significance = deRedact(aiQuote.significance)
+
+        // Check for duplicate (fuzzy match) using de-redacted text
         let isDuplicate = state.quotes.contains {
-            $0.text.lowercased().contains(aiQuote.text.lowercased()) ||
-            aiQuote.text.lowercased().contains($0.text.lowercased())
+            $0.text.lowercased().contains(text.lowercased()) ||
+            text.lowercased().contains($0.text.lowercased())
         }
         guard !isDuplicate else { return }
 
         let quote = Quote(
-            text: aiQuote.text,
+            text: text,
             timestamp: aiQuote.timestamp,
-            significance: aiQuote.significance
+            significance: significance
         )
 
         state.quotes.append(quote)
@@ -406,27 +448,31 @@ class SessionAssistantService: ObservableObject {
     }
 
     private func processAgendaItem(_ aiAgenda: AIAgendaItem) {
+        // De-redact AI response text
+        let topic = deRedact(aiAgenda.topic)
+        let evidence = aiAgenda.evidence.map { deRedact($0) }
+
         let status = AgendaStatus(rawValue: aiAgenda.status) ?? .notStarted
         let timeRange = aiAgenda.timeRange.map { TimeRange(start: $0.start, end: $0.end) }
 
         // Check if existing agenda item (match by topic)
         if let index = state.agendaItems.firstIndex(where: {
-            $0.topic.lowercased() == aiAgenda.topic.lowercased()
+            $0.topic.lowercased() == topic.lowercased()
         }) {
             // Update existing
             let oldStatus = state.agendaItems[index].status
             state.agendaItems[index].status = status
-            state.agendaItems[index].evidence = aiAgenda.evidence
+            state.agendaItems[index].evidence = evidence
             state.agendaItems[index].timeRange = timeRange
 
             // Add feed item if status changed
             if oldStatus != status {
                 let feedItem = FeedItem(
                     itemType: .agendaUpdate,
-                    content: "\(aiAgenda.topic): \(status.displayName)",
-                    rationale: aiAgenda.evidence ?? "Status updated",
+                    content: "\(topic): \(status.displayName)",
+                    rationale: evidence ?? "Status updated",
                     timestamp: aiAgenda.agreedAt,
-                    agendaTopic: aiAgenda.topic,
+                    agendaTopic: topic,
                     agendaStatus: status
                 )
                 state.feedItems.append(feedItem)
@@ -434,10 +480,10 @@ class SessionAssistantService: ObservableObject {
         } else {
             // New agenda item
             let item = AgendaItem(
-                topic: aiAgenda.topic,
+                topic: topic,
                 agreedAt: aiAgenda.agreedAt,
                 status: status,
-                evidence: aiAgenda.evidence,
+                evidence: evidence,
                 timeRange: timeRange
             )
             state.agendaItems.append(item)
@@ -456,13 +502,15 @@ class SessionAssistantService: ObservableObject {
     }
 
     private func processTheme(_ aiTheme: AITheme) {
+        // De-redact AI response text
+        let name = deRedact(aiTheme.name)
         let newMentions = aiTheme.mentions.map {
-            ThemeMention(timestamp: $0.timestamp, context: $0.context)
+            ThemeMention(timestamp: $0.timestamp, context: deRedact($0.context))
         }
 
         // Check if existing theme
         if let index = state.themes.firstIndex(where: {
-            $0.name.lowercased() == aiTheme.name.lowercased()
+            $0.name.lowercased() == name.lowercased()
         }) {
             // Add new mentions to existing
             state.themes[index].mentions.append(contentsOf: newMentions)
@@ -470,7 +518,7 @@ class SessionAssistantService: ObservableObject {
         } else {
             // New theme
             let theme = Theme(
-                name: aiTheme.name,
+                name: name,
                 mentions: newMentions,
                 explored: aiTheme.explored
             )
@@ -491,12 +539,16 @@ class SessionAssistantService: ObservableObject {
     }
 
     private func processFlag(_ aiFlag: AIFlag) {
+        // De-redact AI response text
+        let content = deRedact(aiFlag.content)
+        let rationale = deRedact(aiFlag.rationale)
+
         let severity = FlagSeverity(rawValue: aiFlag.severity) ?? .note
 
         let feedItem = FeedItem(
             itemType: .flag,
-            content: aiFlag.content,
-            rationale: aiFlag.rationale,
+            content: content,
+            rationale: rationale,
             timestamp: aiFlag.timestamp,
             flagSeverity: severity
         )
@@ -504,10 +556,14 @@ class SessionAssistantService: ObservableObject {
     }
 
     private func processSuggestion(_ aiSuggestion: AISuggestion) {
+        // De-redact AI response text
+        let content = deRedact(aiSuggestion.content)
+        let rationale = deRedact(aiSuggestion.rationale)
+
         let feedItem = FeedItem(
             itemType: .suggestion,
-            content: aiSuggestion.content,
-            rationale: aiSuggestion.rationale,
+            content: content,
+            rationale: rationale,
             timestamp: aiSuggestion.timestamp
         )
         state.feedItems.append(feedItem)
@@ -618,7 +674,7 @@ class SessionAssistantService: ObservableObject {
 
     func reset() {
         state.reset()
-        cumulativeTranscript = ""
+        currentSession = nil
         chunksProcessedSinceAnalysis = 0
         lastAnalysedChunkIndex = -1
     }
