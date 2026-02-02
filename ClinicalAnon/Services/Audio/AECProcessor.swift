@@ -16,7 +16,6 @@ final class AECProcessor {
     // MARK: - Properties
 
     private let bridge: AECBridge
-    private let processingQueue = DispatchQueue(label: "com.redactor.aec", qos: .userInteractive)
 
     /// Expose bridge for direct thread-safe access from background queues
     var underlyingBridge: AECBridge { bridge }
@@ -26,10 +25,6 @@ final class AECProcessor {
 
     /// Whether the processor has been initialized successfully
     private(set) var isInitialized: Bool = false
-
-    /// Statistics for debugging
-    private(set) var referenceFramesProcessed: Int = 0
-    private(set) var captureFramesProcessed: Int = 0
 
     // MARK: - Initialization
 
@@ -43,11 +38,13 @@ final class AECProcessor {
         bridge.setStreamDelayMs(50)
 
         isInitialized = bridge.isActive
+#if DEBUG
         if isInitialized {
             print("AECProcessor: WebRTC AEC3 initialized at \(sampleRate) Hz")
         } else {
             print("AECProcessor: Failed to initialize WebRTC AEC3")
         }
+#endif
     }
 
     // MARK: - Public Methods
@@ -59,9 +56,7 @@ final class AECProcessor {
     ///   - count: Number of samples
     func feedReference(samples: UnsafePointer<Float>, count: Int) {
         guard isInitialized, count > 0 else { return }
-
         bridge.processReferenceFrame(samples, count: Int32(count))
-        referenceFramesProcessed += 1
     }
 
     /// Feed reference signal from an array
@@ -81,9 +76,7 @@ final class AECProcessor {
     ///   - count: Number of samples
     func process(samples: UnsafeMutablePointer<Float>, count: Int) {
         guard isInitialized, count > 0 else { return }
-
         bridge.processCaptureFrame(samples, count: Int32(count))
-        captureFramesProcessed += 1
     }
 
     /// Process microphone audio from a PCM buffer
@@ -105,81 +98,19 @@ final class AECProcessor {
     /// - Parameter ms: Delay in milliseconds (typical range: 20-100ms)
     func setStreamDelay(ms: Int) {
         bridge.setStreamDelayMs(Int32(ms))
-        print("AECProcessor: Stream delay set to \(ms) ms")
     }
 
     /// Reset the AEC state
     /// Call when starting a new recording session
     func reset() {
         bridge.reset()
-        referenceFramesProcessed = 0
-        captureFramesProcessed = 0
+#if DEBUG
         print("AECProcessor: Reset")
+#endif
     }
 
     /// Whether the AEC is actively processing
     var isActive: Bool {
         return bridge.isActive
-    }
-
-    // MARK: - Utility Methods
-
-    /// Mix stereo audio to mono
-    /// System audio may be stereo but AEC expects mono
-    /// - Parameters:
-    ///   - stereo: Pointer to interleaved stereo float samples
-    ///   - frameCount: Number of frames (each frame has 2 samples for stereo)
-    /// - Returns: Mono float array
-    static func mixToMono(stereo: UnsafePointer<Float>, frameCount: Int) -> [Float] {
-        var mono = [Float](repeating: 0, count: frameCount)
-        for i in 0..<frameCount {
-            mono[i] = (stereo[i * 2] + stereo[i * 2 + 1]) * 0.5
-        }
-        return mono
-    }
-
-    /// Mix non-interleaved stereo channels to mono
-    /// - Parameters:
-    ///   - left: Left channel samples
-    ///   - right: Right channel samples
-    ///   - count: Number of samples per channel
-    /// - Returns: Mono float array
-    static func mixToMono(left: UnsafePointer<Float>, right: UnsafePointer<Float>, count: Int) -> [Float] {
-        var mono = [Float](repeating: 0, count: count)
-        for i in 0..<count {
-            mono[i] = (left[i] + right[i]) * 0.5
-        }
-        return mono
-    }
-
-    /// Extract float samples from CMSampleBuffer
-    /// - Parameter sampleBuffer: The sample buffer to extract from
-    /// - Returns: Float array of audio samples, or nil if extraction fails
-    static func extractFloatSamples(from sampleBuffer: CMSampleBuffer) -> [Float]? {
-        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
-            return nil
-        }
-
-        var length: Int = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-
-        let status = CMBlockBufferGetDataPointer(
-            blockBuffer,
-            atOffset: 0,
-            lengthAtOffsetOut: nil,
-            totalLengthOut: &length,
-            dataPointerOut: &dataPointer
-        )
-
-        guard status == noErr, let data = dataPointer, length > 0 else {
-            return nil
-        }
-
-        // Assume float32 format
-        let floatCount = length / MemoryLayout<Float>.size
-        guard floatCount > 0 else { return nil }
-
-        let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
-        return Array(UnsafeBufferPointer(start: floatPointer, count: floatCount))
     }
 }

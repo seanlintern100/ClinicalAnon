@@ -106,7 +106,6 @@ class AudioCaptureService: NSObject, ObservableObject {
     private var microphoneEngine: AVAudioEngine?
     private var systemAudioStream: SCStream?
     private var streamConfiguration: SCStreamConfiguration?
-    private var levelTimer: Timer?
 
     // MARK: - Software Echo Cancellation
 
@@ -355,10 +354,6 @@ class AudioCaptureService: NSObject, ObservableObject {
         chunkRotationTimer?.invalidate()
         chunkRotationTimer = nil
 
-        // Stop level timer
-        levelTimer?.invalidate()
-        levelTimer = nil
-
         // Pause AVAudioEngine if active
         microphoneEngine?.pause()
 
@@ -391,8 +386,6 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Stop timers
         chunkRotationTimer?.invalidate()
         chunkRotationTimer = nil
-        levelTimer?.invalidate()
-        levelTimer = nil
 
         // Stop AVAudioEngine if active
         if let engine = microphoneEngine {
@@ -655,17 +648,6 @@ class AudioCaptureService: NSObject, ObservableObject {
                 print("AudioCaptureService: Write error: \(error)")
             }
         }
-    }
-
-    private func startLevelMeteringTimer() {
-        // Level metering is now done in handleMicrophoneBuffer
-        // This timer is just for backup/fallback
-        levelTimer?.invalidate()
-        levelTimer = nil
-    }
-
-    private func updateMicrophoneLevel() {
-        // Now handled in handleMicrophoneBuffer
     }
 
     // MARK: - System Audio Setup
@@ -938,26 +920,9 @@ class AudioCaptureService: NSObject, ObservableObject {
         return writer
     }
 
-    // MARK: - Buffer Handling (for AVAudioEngine - currently unused)
-
-    private func handleMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, time: AVAudioTime, sourceFormat: AVAudioFormat, targetFormat: AVAudioFormat) {
-        // This is only used when AVAudioEngine is active (not currently used)
-        // Calculate audio level for UI meter
-        if let channelData = buffer.floatChannelData?[0] {
-            let frameCount = Int(buffer.frameLength)
-            var sum: Float = 0
-            for i in 0..<frameCount {
-                sum += abs(channelData[i])
-            }
-            let average = sum / Float(max(frameCount, 1))
-            Task { @MainActor in
-                self.microphoneLevel = average
-            }
-        }
-    }
 }
 
-/// MARK: - SCStreamDelegate
+// MARK: - SCStreamDelegate
 
 extension AudioCaptureService: SCStreamDelegate {
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
@@ -1037,70 +1002,6 @@ extension AudioCaptureService: SCStreamOutput {
 
             input.append(bufferCopy)
         }
-    }
-}
-
-/// MARK: - AVAudioPCMBuffer Extension
-
-extension AVAudioPCMBuffer {
-    /// Convert AVAudioPCMBuffer to CMSampleBuffer for AVAssetWriter
-    func toCMSampleBuffer() -> CMSampleBuffer? {
-        guard frameLength > 0 else { return nil }
-
-        var format: CMFormatDescription?
-        let asbd = self.format.streamDescription.pointee
-
-        var mutableASBD = asbd
-        let status = CMAudioFormatDescriptionCreate(
-            allocator: kCFAllocatorDefault,
-            asbd: &mutableASBD,
-            layoutSize: 0,
-            layout: nil,
-            magicCookieSize: 0,
-            magicCookie: nil,
-            extensions: nil,
-            formatDescriptionOut: &format
-        )
-
-        guard status == noErr, let formatDesc = format else { return nil }
-
-        var sampleBuffer: CMSampleBuffer?
-        var timing = CMSampleTimingInfo(
-            duration: CMTime(value: CMTimeValue(frameLength), timescale: CMTimeScale(self.format.sampleRate)),
-            presentationTimeStamp: .zero,
-            decodeTimeStamp: .invalid
-        )
-
-        let createStatus = CMSampleBufferCreate(
-            allocator: kCFAllocatorDefault,
-            dataBuffer: nil,
-            dataReady: false,
-            makeDataReadyCallback: nil,
-            refcon: nil,
-            formatDescription: formatDesc,
-            sampleCount: CMItemCount(frameLength),
-            sampleTimingEntryCount: 1,
-            sampleTimingArray: &timing,
-            sampleSizeEntryCount: 0,
-            sampleSizeArray: nil,
-            sampleBufferOut: &sampleBuffer
-        )
-
-        guard createStatus == noErr, let buffer = sampleBuffer else { return nil }
-
-        // Set the audio buffer data from the PCM buffer
-        let audioBufferList = self.audioBufferList
-        let setStatus = CMSampleBufferSetDataBufferFromAudioBufferList(
-            buffer,
-            blockBufferAllocator: kCFAllocatorDefault,
-            blockBufferMemoryAllocator: kCFAllocatorDefault,
-            flags: 0,
-            bufferList: audioBufferList
-        )
-
-        guard setStatus == noErr else { return nil }
-
-        return buffer
     }
 }
 
