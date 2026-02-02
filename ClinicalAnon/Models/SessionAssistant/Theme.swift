@@ -10,23 +10,32 @@ import Foundation
 
 struct Theme: Identifiable, Codable, Equatable {
     let id: UUID
+    var stableId: String              // AI-assigned ID for continuity across analyses
     var name: String
     var mentions: [ThemeMention]
     var explored: Bool
     var manuallyMarkedExplored: Bool
+    var relatedThemeIds: [String]?    // Links to related themes (stableIds)
+    var description: String?          // AI explanation of the theme
 
     init(
         id: UUID = UUID(),
+        stableId: String? = nil,
         name: String,
         mentions: [ThemeMention] = [],
         explored: Bool = false,
-        manuallyMarkedExplored: Bool = false
+        manuallyMarkedExplored: Bool = false,
+        relatedThemeIds: [String]? = nil,
+        description: String? = nil
     ) {
         self.id = id
+        self.stableId = stableId ?? "manual_\(id.uuidString.prefix(8))"
         self.name = name
         self.mentions = mentions
         self.explored = explored
         self.manuallyMarkedExplored = manuallyMarkedExplored
+        self.relatedThemeIds = relatedThemeIds
+        self.description = description
     }
 
     var mentionCount: Int {

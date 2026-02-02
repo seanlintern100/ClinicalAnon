@@ -59,8 +59,19 @@ struct AgendaListView: View {
     private var agendaList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                ForEach(assistantService.state.agendaItems) { item in
-                    agendaRow(item)
+                // Top-level items first
+                let topLevel = assistantService.state.agendaItems.filter { $0.isTopLevel }
+
+                ForEach(topLevel) { item in
+                    agendaRow(item, depth: 0)
+
+                    // Sub-items indented below parent
+                    let children = assistantService.state.agendaItems.filter {
+                        $0.parentId == item.stableId
+                    }
+                    ForEach(children) { child in
+                        agendaRow(child, depth: 1)
+                    }
                 }
             }
             .padding(DesignSystem.Spacing.medium)
@@ -69,19 +80,27 @@ struct AgendaListView: View {
 
     // MARK: - Agenda Row
 
-    private func agendaRow(_ item: AgendaItem) -> some View {
+    private func agendaRow(_ item: AgendaItem, depth: Int) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             // Topic with status icon
             HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                // Indentation for sub-items
+                if depth > 0 {
+                    Rectangle()
+                        .fill(DesignSystem.Colors.textSecondary.opacity(0.3))
+                        .frame(width: 2, height: 20)
+                        .padding(.leading, CGFloat(depth) * 8)
+                }
+
                 // Status icon
                 Image(systemName: item.statusIcon)
-                    .font(.body)
+                    .font(depth > 0 ? .caption : .body)
                     .foregroundStyle(item.statusColor)
 
                 VStack(alignment: .leading, spacing: 4) {
                     // Topic
                     Text(item.topic)
-                        .font(DesignSystem.Typography.body)
+                        .font(depth > 0 ? DesignSystem.Typography.caption : DesignSystem.Typography.body)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
 
                     // Evidence
@@ -103,12 +122,18 @@ struct AgendaListView: View {
                 Spacer()
             }
 
-            // Status controls
-            statusControls(for: item)
+            // Status controls (compact for sub-items)
+            if depth == 0 {
+                statusControls(for: item)
+            } else {
+                compactStatusControls(for: item)
+            }
         }
         .padding(DesignSystem.Spacing.small)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignSystem.Colors.surface)
+        .background(depth > 0
+            ? DesignSystem.Colors.surface.opacity(0.5)
+            : DesignSystem.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .contextMenu {
             Button(role: .destructive) {
@@ -116,6 +141,28 @@ struct AgendaListView: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+    }
+
+    // MARK: - Compact Status Controls (for sub-items)
+
+    private func compactStatusControls(for item: AgendaItem) -> some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            ForEach(AgendaStatus.allCases, id: \.rawValue) { status in
+                Button {
+                    assistantService.updateAgendaStatus(item, to: status)
+                } label: {
+                    Image(systemName: status.icon)
+                        .font(.caption2)
+                        .foregroundStyle(
+                            item.status == status
+                                ? status.color
+                                : DesignSystem.Colors.textSecondary.opacity(0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
         }
     }
 

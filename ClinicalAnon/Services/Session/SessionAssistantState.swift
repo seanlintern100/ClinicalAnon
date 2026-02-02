@@ -93,10 +93,13 @@ class SessionAssistantState: ObservableObject {
             currentThemes = currentThemes.map { theme in
                 Theme(
                     id: theme.id,
+                    stableId: theme.stableId,
                     name: theme.name,
                     mentions: Array(theme.mentions.suffix(3)),  // Keep last 3 mentions
                     explored: theme.explored,
-                    manuallyMarkedExplored: theme.manuallyMarkedExplored
+                    manuallyMarkedExplored: theme.manuallyMarkedExplored,
+                    relatedThemeIds: theme.relatedThemeIds,
+                    description: theme.description
                 )
             }
 

@@ -218,33 +218,70 @@ class SessionAssistantService: ObservableObject {
 
         ## YOUR TASKS
 
-        Analyse the NEW transcript content and return structured observations. You will receive the current Parking Lot state — DO NOT re-report items already captured.
+        Analyse the transcript and return structured observations.
 
         **IMPORTANT: All timestamp fields must be NUMBERS (seconds from session start), e.g. 45, 120, 180. NOT strings like "early" or "3:00".**
 
-        ### 1. DETAILS (→ Parking Lot)
-        Extract factual information: people mentioned, relationships, ages, professions, durations, key facts.
+        ### 1. DETAILS (→ Parking Lot) — Additive
+        Extract NEW factual information: people mentioned, relationships, ages, professions, durations, key facts.
         For each: content, category (person|relationship|fact|profession|history), source_quote, timestamp (number in seconds)
 
-        ### 2. QUOTES (→ Parking Lot)
-        Capture significant language: metaphors, emotionally charged statements, repeated phrases, self-descriptions.
+        ### 2. QUOTES (→ Parking Lot) — Additive
+        Capture NEW significant language: metaphors, emotionally charged statements, repeated phrases, self-descriptions.
         For each: text, timestamp (number in seconds), significance
 
-        ### 3. AGENDA (→ Parking Lot)
-        Track topics agreed to discuss. Status: not_started, partial, covered.
-        For each: topic, agreed_at (number in seconds), status, evidence, time_range {start, end} (numbers)
+        ### 3. AGENDA (→ Parking Lot) — COMPLETE STATE MANAGEMENT
 
-        ### 4. THEMES (→ Parking Lot / Live Feed)
-        Identify recurring patterns. Mark explored (true/false) based on clinician acknowledgment.
-        For each: name, mentions [{timestamp (number), context}], explored
+        **CRITICAL: Return the COMPLETE agenda list every analysis, not just new items.**
 
-        ### 5. FLAGS (→ Live Feed)
+        You OWN this list. Each analysis:
+        - Include ALL items from current state (preserve their stable_id)
+        - Update status, evidence as discussion progresses
+        - Add new items with new stable_id values
+        - Create sub-items using parent_id
+        - Add progress_note when meaningful progress occurs
+
+        **Manual items:** Items with stable_id starting with "manual_" MUST be preserved.
+
+        **Stable IDs:** Use descriptive identifiers: "work_stress", "relationship_mother", "sleep_issues"
+
+        For each item:
+        - stable_id (required): Persistent identifier
+        - topic: Clear description
+        - agreed_at: When agreed (seconds)
+        - status: not_started | partial | covered
+        - evidence: Supporting quote/summary
+        - parent_id (optional): For sub-items (references parent's stable_id)
+        - progress_note (optional): New observation this analysis
+
+        ### 4. THEMES (→ Parking Lot / Live Feed) — COMPLETE STATE MANAGEMENT
+
+        **CRITICAL: Return the COMPLETE themes list every analysis.**
+
+        You OWN this list. Each analysis:
+        - Include ALL themes (preserve stable_id)
+        - Add new mentions to existing themes
+        - Update explored status
+        - Create new themes with new stable_id
+        - Link related themes using related_theme_ids
+
+        **Manual items:** Themes with stable_id starting with "manual_" MUST be preserved.
+
+        For each theme:
+        - stable_id (required): Persistent identifier (e.g., "theme_anxiety", "theme_control")
+        - name: Clear theme name
+        - description (optional): Brief explanation
+        - mentions: [{timestamp, context}]
+        - explored: true if acknowledged
+        - related_theme_ids (optional): Linked theme stable_ids
+
+        ### 5. FLAGS (→ Live Feed) — Additive
         🔴 SAFETY: Risk language, crisis indicators — always flag even if uncertain
         🟠 IMPORTANT: Significant revelations, contradictions, emotional moments
         🟡 NOTE: Observations, patterns, areas to explore
         For each: severity, content, timestamp (number in seconds), rationale
 
-        ### 6. SUGGESTIONS (→ Live Feed)
+        ### 6. SUGGESTIONS (→ Live Feed) — Additive
         Offer therapeutic ideas when contextually appropriate.
         For each: content, rationale, timestamp (number in seconds)
 
@@ -258,8 +295,13 @@ class SessionAssistantService: ObservableObject {
         {
           "details": [{"content": "Client has a brother", "category": "relationship", "source_quote": "my brother and I", "timestamp": 45}],
           "quotes": [{"text": "I feel like I'm drowning", "timestamp": 120, "significance": "Metaphor for overwhelm"}],
-          "agenda": [{"topic": "Work stress", "agreed_at": 30, "status": "partial", "evidence": "discussed briefly"}],
-          "themes": [{"name": "Family conflict", "mentions": [{"timestamp": 45, "context": "mentioned brother"}], "explored": false}],
+          "agenda": [
+            {"stable_id": "work_stress", "topic": "Work stress and burnout", "agreed_at": 30, "status": "partial", "evidence": "discussed workload"},
+            {"stable_id": "work_manager", "topic": "Conflict with manager", "parent_id": "work_stress", "agreed_at": 150, "status": "not_started"}
+          ],
+          "themes": [
+            {"stable_id": "theme_perfectionism", "name": "Perfectionism", "description": "Pattern of self-criticism", "mentions": [{"timestamp": 45, "context": "mentioned being hard on self"}], "explored": false}
+          ],
           "flags": [{"severity": "note", "content": "Client seemed hesitant", "timestamp": 90, "rationale": "Long pause before answering"}],
           "suggestions": [],
           "analysis_note": "Optional note"
@@ -268,7 +310,7 @@ class SessionAssistantService: ObservableObject {
         ## CRITICAL GUIDELINES
 
         1. Safety first — Always flag risk language, even if uncertain
-        2. No duplicates — Check Parking Lot before reporting
+        2. Agenda/Themes — Return COMPLETE updated lists, not just new items
         3. Quality over quantity — Don't flood the clinician
         4. Use their language — Preserve client's exact words in quotes
         5. Stay grounded — Only report what's explicitly in the transcript
@@ -309,8 +351,9 @@ class SessionAssistantService: ObservableObject {
 
         ---
 
-        Analyse this transcript and return structured JSON with your observations.
-        Only report NEW information not already in the Parking Lot.
+        Analyse this transcript and return structured JSON.
+        - Details/Quotes: Only report NEW items not already in Parking Lot
+        - Agenda/Themes: Return COMPLETE updated lists (you own these - update existing, add new)
         """
     }
 
@@ -341,42 +384,38 @@ class SessionAssistantService: ObservableObject {
     // MARK: - Response Processing
 
     private func processAnalysisResponse(_ response: AIAnalysisResponse) {
-        // Process details
+        // Process details (additive)
         if featureToggles.detailsEnabled {
             for aiDetail in response.details {
                 processDetail(aiDetail)
             }
         }
 
-        // Process quotes
+        // Process quotes (additive)
         if featureToggles.quotesEnabled {
             for aiQuote in response.quotes {
                 processQuote(aiQuote)
             }
         }
 
-        // Process agenda items
+        // Reconcile agenda (AI owns the complete list)
         if featureToggles.agendaEnabled {
-            for aiAgenda in response.agenda {
-                processAgendaItem(aiAgenda)
-            }
+            reconcileAgenda(response.agenda)
         }
 
-        // Process themes
+        // Reconcile themes (AI owns the complete list)
         if featureToggles.themesEnabled {
-            for aiTheme in response.themes {
-                processTheme(aiTheme)
-            }
+            reconcileThemes(response.themes)
         }
 
-        // Process flags
+        // Process flags (additive)
         if featureToggles.flagsEnabled {
             for aiFlag in response.flags {
                 processFlag(aiFlag)
             }
         }
 
-        // Process suggestions
+        // Process suggestions (additive)
         if featureToggles.suggestionsEnabled {
             for aiSuggestion in response.suggestions {
                 processSuggestion(aiSuggestion)
@@ -447,94 +486,223 @@ class SessionAssistantService: ObservableObject {
         state.feedItems.append(feedItem)
     }
 
-    private func processAgendaItem(_ aiAgenda: AIAgendaItem) {
-        // De-redact AI response text
-        let topic = deRedact(aiAgenda.topic)
-        let evidence = aiAgenda.evidence.map { deRedact($0) }
+    // MARK: - Agenda Reconciliation
 
-        let status = AgendaStatus(rawValue: aiAgenda.status) ?? .notStarted
-        let timeRange = aiAgenda.timeRange.map { TimeRange(start: $0.start, end: $0.end) }
+    /// Reconcile AI's complete agenda with local state
+    /// AI owns the list - local state is updated to match, preserving manual items
+    private func reconcileAgenda(_ aiAgenda: [AIAgendaItem]) {
+        // Build lookup of existing items by stableId
+        var existingByStableId: [String: AgendaItem] = [:]
+        for item in state.agendaItems {
+            existingByStableId[item.stableId] = item
+        }
 
-        // Check if existing agenda item (match by topic)
-        if let index = state.agendaItems.firstIndex(where: {
-            $0.topic.lowercased() == topic.lowercased()
-        }) {
-            // Update existing
-            let oldStatus = state.agendaItems[index].status
-            state.agendaItems[index].status = status
-            state.agendaItems[index].evidence = evidence
-            state.agendaItems[index].timeRange = timeRange
+        // Track which items AI returned
+        var returnedStableIds: Set<String> = []
 
-            // Add feed item if status changed
-            if oldStatus != status {
-                let feedItem = FeedItem(
-                    itemType: .agendaUpdate,
-                    content: "\(topic): \(status.displayName)",
-                    rationale: evidence ?? "Status updated",
-                    timestamp: aiAgenda.agreedAt,
-                    agendaTopic: topic,
-                    agendaStatus: status
+        // Track changes for feed items
+        var newItems: [AgendaItem] = []
+        var statusChanges: [(item: AgendaItem, oldStatus: AgendaStatus, newStatus: AgendaStatus)] = []
+
+        // Process AI items
+        var reconciled: [AgendaItem] = []
+
+        for aiItem in aiAgenda {
+            let topic = deRedact(aiItem.topic)
+            let evidence = aiItem.evidence.map { deRedact($0) }
+            let status = AgendaStatus(rawValue: aiItem.status) ?? .notStarted
+            let timeRange = aiItem.timeRange.map { TimeRange(start: $0.start, end: $0.end) }
+
+            returnedStableIds.insert(aiItem.stableId)
+
+            if let existing = existingByStableId[aiItem.stableId] {
+                // Update existing item
+                var updated = existing
+                updated.topic = topic
+                updated.status = status
+                updated.evidence = evidence
+                updated.timeRange = timeRange
+                updated.parentId = aiItem.parentId
+
+                // Track status change
+                if existing.status != status {
+                    statusChanges.append((item: updated, oldStatus: existing.status, newStatus: status))
+                }
+
+                // Add progress note if provided
+                if let progressNote = aiItem.progressNote, !progressNote.isEmpty {
+                    let note = ProgressNote(
+                        timestamp: aiItem.agreedAt,
+                        note: deRedact(progressNote),
+                        statusAtTime: status
+                    )
+                    updated.progressNotes.append(note)
+                }
+
+                reconciled.append(updated)
+
+            } else {
+                // New item
+                let newItem = AgendaItem(
+                    stableId: aiItem.stableId,
+                    topic: topic,
+                    agreedAt: aiItem.agreedAt,
+                    status: status,
+                    evidence: evidence,
+                    timeRange: timeRange,
+                    isManuallyAdded: false,
+                    parentId: aiItem.parentId
                 )
-                state.feedItems.append(feedItem)
+                reconciled.append(newItem)
+                newItems.append(newItem)
             }
-        } else {
-            // New agenda item
-            let item = AgendaItem(
-                topic: topic,
-                agreedAt: aiAgenda.agreedAt,
-                status: status,
-                evidence: evidence,
-                timeRange: timeRange
-            )
-            state.agendaItems.append(item)
+        }
 
-            // Add to feed
+        // Preserve manual items that AI didn't return
+        for (stableId, existing) in existingByStableId {
+            if !returnedStableIds.contains(stableId) && existing.isManuallyAdded {
+                reconciled.append(existing)
+                print("SessionAssistant: Preserved manual agenda item: \(existing.topic)")
+            }
+        }
+
+        // Sort: top-level items by agreedAt, then sub-items grouped under parents
+        reconciled.sort { a, b in
+            if a.isTopLevel && !b.isTopLevel { return true }
+            if !a.isTopLevel && b.isTopLevel { return false }
+            return a.agreedAt < b.agreedAt
+        }
+
+        // Update state
+        state.agendaItems = reconciled
+
+        // Generate feed items
+        generateAgendaFeedItems(new: newItems, statusChanges: statusChanges)
+    }
+
+    /// Generate feed items for agenda changes
+    private func generateAgendaFeedItems(
+        new: [AgendaItem],
+        statusChanges: [(item: AgendaItem, oldStatus: AgendaStatus, newStatus: AgendaStatus)]
+    ) {
+        // New items
+        for item in new {
+            let isSubItem = item.parentId != nil
+            let content = isSubItem
+                ? "Sub-topic: \(item.topic)"
+                : "New agenda: \(item.topic)"
+
             let feedItem = FeedItem(
                 itemType: .agendaUpdate,
-                content: "New agenda: \(item.topic)",
-                rationale: "Agreed to discuss",
+                content: content,
+                rationale: item.evidence ?? "Agreed to discuss",
                 timestamp: item.agreedAt,
                 agendaTopic: item.topic,
-                agendaStatus: status
+                agendaStatus: item.status
+            )
+            state.feedItems.append(feedItem)
+        }
+
+        // Status changes (only significant ones)
+        for (item, oldStatus, newStatus) in statusChanges {
+            // Only notify on forward progress
+            let isSignificant = (oldStatus == .notStarted && newStatus == .partial) ||
+                               (oldStatus == .partial && newStatus == .covered) ||
+                               (oldStatus == .notStarted && newStatus == .covered)
+
+            guard isSignificant else { continue }
+
+            let feedItem = FeedItem(
+                itemType: .agendaUpdate,
+                content: "\(item.topic): \(newStatus.displayName)",
+                rationale: item.evidence ?? "Status updated",
+                timestamp: item.timeRange?.end ?? item.agreedAt,
+                agendaTopic: item.topic,
+                agendaStatus: newStatus
             )
             state.feedItems.append(feedItem)
         }
     }
 
-    private func processTheme(_ aiTheme: AITheme) {
-        // De-redact AI response text
-        let name = deRedact(aiTheme.name)
-        let newMentions = aiTheme.mentions.map {
-            ThemeMention(timestamp: $0.timestamp, context: deRedact($0.context))
+    // MARK: - Theme Reconciliation
+
+    /// Reconcile AI's complete theme state with local state
+    private func reconcileThemes(_ aiThemes: [AITheme]) {
+        var existingByStableId: [String: Theme] = [:]
+        for theme in state.themes {
+            existingByStableId[theme.stableId] = theme
         }
 
-        // Check if existing theme
-        if let index = state.themes.firstIndex(where: {
-            $0.name.lowercased() == name.lowercased()
-        }) {
-            // Add new mentions to existing
-            state.themes[index].mentions.append(contentsOf: newMentions)
-            state.themes[index].explored = aiTheme.explored || state.themes[index].manuallyMarkedExplored
-        } else {
-            // New theme
-            let theme = Theme(
-                name: name,
-                mentions: newMentions,
-                explored: aiTheme.explored
-            )
-            state.themes.append(theme)
+        var returnedStableIds: Set<String> = []
+        var newThemes: [Theme] = []
 
-            // Add to feed if unexplored
-            if !theme.explored {
-                let feedItem = FeedItem(
-                    itemType: .themeAlert,
-                    content: "Theme: \(theme.name) (\(theme.mentionCount) mentions)",
-                    rationale: "Not yet explored — consider addressing",
-                    timestamp: newMentions.first?.timestamp ?? 0,
-                    themeName: theme.name
-                )
-                state.feedItems.append(feedItem)
+        var reconciled: [Theme] = []
+
+        for aiTheme in aiThemes {
+            let name = deRedact(aiTheme.name)
+            let description = aiTheme.description.map { deRedact($0) }
+            let newMentions = aiTheme.mentions.map {
+                ThemeMention(timestamp: $0.timestamp, context: deRedact($0.context))
             }
+
+            returnedStableIds.insert(aiTheme.stableId)
+
+            if let existing = existingByStableId[aiTheme.stableId] {
+                // Update existing theme
+                var updated = existing
+                updated.name = name
+                updated.description = description
+                updated.relatedThemeIds = aiTheme.relatedThemeIds
+
+                // Merge mentions (avoid duplicates by timestamp proximity)
+                let existingTimestamps = Set(existing.mentions.map { Int($0.timestamp) })
+                let trulyNewMentions = newMentions.filter { mention in
+                    !existingTimestamps.contains(Int(mention.timestamp))
+                }
+                updated.mentions.append(contentsOf: trulyNewMentions)
+
+                // Update explored (preserve manual marking)
+                updated.explored = aiTheme.explored || existing.manuallyMarkedExplored
+
+                reconciled.append(updated)
+
+            } else {
+                // New theme
+                let newTheme = Theme(
+                    stableId: aiTheme.stableId,
+                    name: name,
+                    mentions: newMentions,
+                    explored: aiTheme.explored,
+                    manuallyMarkedExplored: false,
+                    relatedThemeIds: aiTheme.relatedThemeIds,
+                    description: description
+                )
+                reconciled.append(newTheme)
+                newThemes.append(newTheme)
+            }
+        }
+
+        // Preserve manual themes that AI didn't return
+        for (stableId, existing) in existingByStableId {
+            if !returnedStableIds.contains(stableId) &&
+               (existing.stableId.hasPrefix("manual_") || existing.manuallyMarkedExplored) {
+                reconciled.append(existing)
+                print("SessionAssistant: Preserved manual theme: \(existing.name)")
+            }
+        }
+
+        state.themes = reconciled
+
+        // Generate feed items for new unexplored themes
+        for theme in newThemes where !theme.explored {
+            let feedItem = FeedItem(
+                itemType: .themeAlert,
+                content: "Theme: \(theme.name)",
+                rationale: theme.description ?? "New pattern detected — consider exploring",
+                timestamp: theme.mentions.first?.timestamp ?? 0,
+                themeName: theme.name
+            )
+            state.feedItems.append(feedItem)
         }
     }
 

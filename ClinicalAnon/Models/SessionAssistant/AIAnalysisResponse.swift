@@ -106,24 +106,35 @@ struct AIQuote: Codable {
 }
 
 struct AIAgendaItem: Codable {
+    var stableId: String              // AI-assigned ID for continuity
     var topic: String
     var agreedAt: Double
     var status: String
     var evidence: String?
     var timeRange: AITimeRange?
+    var parentId: String?             // For sub-items
+    var progressNote: String?         // New progress observation this analysis
 
     enum CodingKeys: String, CodingKey {
         case topic, status, evidence
+        case stableId = "stable_id"
         case agreedAt = "agreed_at"
         case timeRange = "time_range"
+        case parentId = "parent_id"
+        case progressNote = "progress_note"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // stableId is required but fallback to topic-based ID if missing
+        stableId = (try? container.decode(String.self, forKey: .stableId))
+            ?? "auto_\(UUID().uuidString.prefix(8))"
         topic = try container.decode(String.self, forKey: .topic)
         status = (try? container.decode(String.self, forKey: .status)) ?? "not_started"
         evidence = try? container.decode(String.self, forKey: .evidence)
         timeRange = try? container.decode(AITimeRange.self, forKey: .timeRange)
+        parentId = try? container.decode(String.self, forKey: .parentId)
+        progressNote = try? container.decode(String.self, forKey: .progressNote)
         agreedAt = Self.decodeTimestamp(from: container, forKey: .agreedAt)
     }
 
@@ -140,9 +151,30 @@ struct AITimeRange: Codable {
 }
 
 struct AITheme: Codable {
+    var stableId: String              // AI-assigned ID for continuity
     var name: String
     var mentions: [AIThemeMention]
     var explored: Bool
+    var relatedThemeIds: [String]?    // Links to related themes
+    var description: String?          // AI explanation of the theme
+
+    enum CodingKeys: String, CodingKey {
+        case name, mentions, explored, description
+        case stableId = "stable_id"
+        case relatedThemeIds = "related_theme_ids"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // stableId is required but fallback if missing
+        stableId = (try? container.decode(String.self, forKey: .stableId))
+            ?? "auto_\(UUID().uuidString.prefix(8))"
+        name = try container.decode(String.self, forKey: .name)
+        mentions = (try? container.decode([AIThemeMention].self, forKey: .mentions)) ?? []
+        explored = (try? container.decode(Bool.self, forKey: .explored)) ?? false
+        relatedThemeIds = try? container.decode([String].self, forKey: .relatedThemeIds)
+        description = try? container.decode(String.self, forKey: .description)
+    }
 }
 
 struct AIThemeMention: Codable {
