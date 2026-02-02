@@ -2,154 +2,194 @@
 //  AECBridge.mm
 //  ClinicalAnon
 //
-//  Purpose: Lightweight echo cancellation using simple spectral subtraction
-//  Designed for minimal CPU impact during real-time recording
+//  Purpose: WebRTC AEC3 echo cancellation bridge for Objective-C/Swift
+//  Uses the WebRTC AudioProcessing module for high-quality acoustic echo cancellation
 //
 
 #import "AECBridge.h"
-#import <Accelerate/Accelerate.h>
-#import <atomic>
 
-// Simple ring buffer for reference audio
-static const int kRingBufferSize = 48000;  // 1 second at 48kHz
+// WebRTC headers
+#include "webrtc/api/audio/audio_processing.h"
+#include "webrtc/api/scoped_refptr.h"
+#include <pthread.h>
+#include <os/lock.h>
+
+// WebRTC requires 10ms frames
+static const int kFrameSizeMs = 10;
 
 @implementation AECBridge {
+    rtc::scoped_refptr<webrtc::AudioProcessing> _apm;
     int _sampleRate;
     int _streamDelayMs;
-    int _delaySamples;
-
-    // Lock-free ring buffer for reference signal
-    float _referenceRing[kRingBufferSize];
-    std::atomic<int> _refWriteIdx;
-    std::atomic<int> _refAvailable;
-
-    // Simple echo estimation
-    float _refPowerEstimate;
-    float _echoAttenuation;
-
+    int _expectedFrameSize;  // Samples per 10ms frame
     BOOL _isActive;
+    os_unfair_lock _lock;  // Fast spinlock for serializing APM access
+    BOOL _hasReceivedReference;  // Track if we've received reference audio
+    int _referenceFramesPending;  // Count reference frames to process before capture
 }
 
 - (instancetype)initWithSampleRate:(int)sampleRate {
     self = [super init];
     if (self) {
         _sampleRate = sampleRate;
-        _streamDelayMs = 50;
-        _delaySamples = (sampleRate * _streamDelayMs) / 1000;
+        _streamDelayMs = 50;  // Default 50ms delay estimate
+        _expectedFrameSize = sampleRate / (1000 / kFrameSizeMs);  // 480 at 48kHz
+        _lock = OS_UNFAIR_LOCK_INIT;  // Initialize spinlock
+        _hasReceivedReference = NO;  // Wait for reference before processing capture
+        _referenceFramesPending = 5;  // Process 5 reference frames before enabling capture
 
-        // Initialize ring buffer
-        memset(_referenceRing, 0, sizeof(_referenceRing));
-        _refWriteIdx = 0;
-        _refAvailable = 0;
+        // Create AudioProcessing with AEC3 enabled
+        webrtc::AudioProcessing::Config config;
+        config.echo_canceller.enabled = true;
+        config.echo_canceller.mobile_mode = false;  // Use full AEC3 (not mobile)
+        config.echo_canceller.enforce_high_pass_filtering = true;
 
-        _refPowerEstimate = 0.0f;
-        _echoAttenuation = 0.8f;  // Strong attenuation to suppress speaker bleed
+        // Disable other processing - we only want AEC
+        config.gain_controller1.enabled = false;
+        config.gain_controller2.enabled = false;
+        config.noise_suppression.enabled = false;
+        config.high_pass_filter.enabled = false;
 
-        _isActive = YES;
+        _apm = webrtc::AudioProcessingBuilder()
+            .SetConfig(config)
+            .Create();
 
-        NSLog(@"AECBridge: Lightweight AEC initialized at %d Hz", sampleRate);
+        if (_apm) {
+            _isActive = YES;
+            NSLog(@"AECBridge: WebRTC AEC3 initialized at %d Hz, frame size %d samples",
+                  sampleRate, _expectedFrameSize);
+        } else {
+            _isActive = NO;
+            NSLog(@"AECBridge: Failed to create WebRTC AudioProcessing");
+        }
     }
     return self;
 }
 
+- (void)dealloc {
+    _apm = nullptr;
+    NSLog(@"AECBridge: Deallocated");
+}
+
+- (BOOL)isActive {
+    return _isActive && _apm != nullptr;
+}
+
 - (void)processReferenceFrame:(const float *)samples count:(int)count {
-    if (!samples || count <= 0) return;
+    if (!_apm || !samples || count <= 0) return;
 
-    // Lock-free write to ring buffer
-    int writeIdx = _refWriteIdx.load(std::memory_order_relaxed);
+    // Only process if we have at least one full 10ms frame
+    if (count < _expectedFrameSize) return;
 
-    for (int i = 0; i < count; i++) {
-        _referenceRing[writeIdx] = samples[i];
-        writeIdx = (writeIdx + 1) % kRingBufferSize;
+    static int refCallCount = 0;
+    refCallCount++;
+    if (refCallCount <= 5 || refCallCount % 100 == 0) {
+        NSLog(@"AECBridge: processReferenceFrame called, count=%d, call#%d, hasRef=%d",
+              count, refCallCount, _hasReceivedReference);
     }
 
-    _refWriteIdx.store(writeIdx, std::memory_order_release);
+    // Configure stream for mono audio at our sample rate
+    webrtc::StreamConfig streamConfig(_sampleRate, 1);  // 1 channel (mono)
 
-    // Update reference power estimate (simple exponential moving average)
-    float framePower = 0.0f;
-    int sampleCount = MIN(count, 256);  // Only check first 256 samples
-    for (int i = 0; i < sampleCount; i++) {
-        framePower += samples[i] * samples[i];
+    // Process ALL complete 10ms frames to ensure AEC has full reference data
+    int framesToProcess = count / _expectedFrameSize;
+
+    if (refCallCount <= 5) {
+        NSLog(@"AECBridge: Processing %d reference frames (of %d samples)", framesToProcess, count);
     }
-    framePower /= sampleCount;
 
-    // Smooth power estimate
-    _refPowerEstimate = 0.95f * _refPowerEstimate + 0.05f * framePower;
+    // Lock to prevent concurrent access with ProcessStream
+    os_unfair_lock_lock(&_lock);
+
+    for (int frame = 0; frame < framesToProcess; frame++) {
+        const float* channelPtr = samples + (frame * _expectedFrameSize);
+        const float* const* channelPtrs = &channelPtr;
+
+        // Use AnalyzeReverseStream for reference-only analysis (no output needed)
+        _apm->AnalyzeReverseStream(channelPtrs, streamConfig);
+    }
+
+    os_unfair_lock_unlock(&_lock);
+
+    // After processing enough reference frames, enable capture processing
+    if (!_hasReceivedReference) {
+        _referenceFramesPending--;
+        if (_referenceFramesPending <= 0) {
+            _hasReceivedReference = YES;
+            NSLog(@"AECBridge: Reference audio established - enabling AEC on capture");
+        }
+    }
+
+    if (refCallCount <= 5) {
+        NSLog(@"AECBridge: processReferenceFrame done");
+    }
 }
 
 - (void)processCaptureFrame:(float *)samples count:(int)count {
-    if (!samples || count <= 0 || !_isActive) return;
+    if (!_apm || !samples || count <= 0) return;
 
-    // Skip processing if no reference audio (nothing playing through speakers)
-    if (_refPowerEstimate < 0.00001f) {
-        return;  // No modification needed - no echo expected
-    }
+    // Only process if we have at least one full 10ms frame
+    if (count < _expectedFrameSize) return;
 
-    // Calculate mic frame power to detect if clinician is speaking
-    float micFramePower = 0.0f;
-    int sampleCount = MIN(count, 256);
-    for (int i = 0; i < sampleCount; i++) {
-        micFramePower += samples[i] * samples[i];
-    }
-    micFramePower /= sampleCount;
-
-    // When system audio is significantly louder than expected clinician voice,
-    // assume the mic is picking up mostly speaker bleed and attenuate heavily
-    int writeIdx = _refWriteIdx.load(std::memory_order_acquire);
-
-    for (int i = 0; i < count; i++) {
-        // Get delayed reference sample (try multiple delays to catch varying acoustic paths)
-        int refIdx = (writeIdx - _delaySamples - (count - i) + kRingBufferSize * 2) % kRingBufferSize;
-        float refSample = _referenceRing[refIdx];
-
-        // Also check slightly earlier and later delays
-        int refIdxEarly = (refIdx + 480 + kRingBufferSize) % kRingBufferSize;  // +10ms
-        int refIdxLate = (refIdx - 480 + kRingBufferSize) % kRingBufferSize;   // -10ms
-        float refSampleEarly = _referenceRing[refIdxEarly];
-        float refSampleLate = _referenceRing[refIdxLate];
-
-        // Use the maximum reference energy across delay range
-        float maxRef = fmaxf(fabsf(refSample), fmaxf(fabsf(refSampleEarly), fabsf(refSampleLate)));
-
-        float micSample = samples[i];
-
-        // Only attenuate if reference has significant energy
-        if (maxRef > 0.001f) {
-            // Subtract estimated echo (scaled reference)
-            // Use the reference sample closest in time
-            float echoEstimate = refSample * _echoAttenuation;
-            samples[i] = micSample - echoEstimate;
-
-            // Additionally attenuate mic when system audio is loud
-            // This helps when the delay estimation is off
-            if (_refPowerEstimate > 0.001f) {
-                float suppressionFactor = fminf(1.0f, 0.3f / sqrtf(_refPowerEstimate + 0.0001f));
-                samples[i] *= suppressionFactor;
-            }
-
-            // Soft clip to prevent artifacts
-            if (samples[i] > 1.0f) samples[i] = 1.0f;
-            if (samples[i] < -1.0f) samples[i] = -1.0f;
+    // Skip AEC processing until we've received reference audio
+    // This prevents calling ProcessStream before ProcessReverseStream
+    if (!_hasReceivedReference) {
+        static int skipCount = 0;
+        skipCount++;
+        if (skipCount <= 3 || skipCount % 100 == 0) {
+            NSLog(@"AECBridge: Skipping capture frame (waiting for reference), skip#%d", skipCount);
         }
+        return;  // Pass audio through unchanged
+    }
+
+    static int capCallCount = 0;
+    capCallCount++;
+    if (capCallCount <= 3 || capCallCount % 100 == 0) {
+        NSLog(@"AECBridge: processCaptureFrame called, count=%d, call#%d", count, capCallCount);
+    }
+
+    webrtc::StreamConfig streamConfig(_sampleRate, 1);  // mono
+
+    // Process ALL complete 10ms frames to apply AEC to entire buffer
+    // This is critical - only processed samples have echo removed!
+    int framesToProcess = count / _expectedFrameSize;
+
+    if (capCallCount <= 3) {
+        NSLog(@"AECBridge: Processing %d capture frames (of %d samples)", framesToProcess, count);
+    }
+
+    // Lock to prevent concurrent access with AnalyzeReverseStream
+    os_unfair_lock_lock(&_lock);
+
+    // Set stream delay before processing
+    _apm->set_stream_delay_ms(_streamDelayMs);
+
+    for (int frame = 0; frame < framesToProcess; frame++) {
+        float* channelPtr = samples + (frame * _expectedFrameSize);
+        float* const* channelPtrs = &channelPtr;
+
+        // ProcessStream modifies samples in-place with echo removed
+        _apm->ProcessStream(channelPtrs, streamConfig, streamConfig, channelPtrs);
+    }
+
+    os_unfair_lock_unlock(&_lock);
+
+    if (capCallCount <= 3) {
+        NSLog(@"AECBridge: processCaptureFrame done");
     }
 }
 
 - (void)setStreamDelayMs:(int)delayMs {
-    _streamDelayMs = MAX(0, MIN(delayMs, 200));
-    _delaySamples = (_sampleRate * _streamDelayMs) / 1000;
-    NSLog(@"AECBridge: Delay set to %d ms", _streamDelayMs);
-}
-
-- (BOOL)isActive {
-    return _isActive;
+    _streamDelayMs = MAX(0, MIN(delayMs, 500));  // Clamp to 0-500ms
+    NSLog(@"AECBridge: Stream delay set to %d ms", _streamDelayMs);
 }
 
 - (void)reset {
-    memset(_referenceRing, 0, sizeof(_referenceRing));
-    _refWriteIdx = 0;
-    _refAvailable = 0;
-    _refPowerEstimate = 0.0f;
-    NSLog(@"AECBridge: Reset");
+    if (_apm) {
+        // Re-initialize APM for fresh state
+        _apm->Initialize();
+        NSLog(@"AECBridge: Reset - AEC state cleared");
+    }
 }
 
 @end

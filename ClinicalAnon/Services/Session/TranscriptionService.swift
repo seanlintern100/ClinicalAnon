@@ -569,8 +569,8 @@ class TranscriptionService: ObservableObject {
             sysPath = audioDir.appendingPathComponent("sys_\(String(format: "%03d", chunkIndex)).m4a")
         }
 
-        // Estimate chunk start time (chunk duration is 180 seconds)
-        let chunkStartTime = TimeInterval(chunkIndex) * 180.0
+        // Estimate chunk start time (chunk duration is 60 seconds)
+        let chunkStartTime = TimeInterval(chunkIndex) * 60.0
 
         return try await transcribeChunk(
             sessionId: session.id,

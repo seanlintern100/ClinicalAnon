@@ -84,6 +84,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 5N8GXZGSZ5
         CODE_SIGN_ENTITLEMENTS: Redactor.entitlements
         ENABLE_HARDENED_RUNTIME: true
         COMBINE_HIDPI_IMAGES: true
@@ -94,6 +95,57 @@ targets:
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
         MARKETING_VERSION: 1.0
         SWIFT_EMIT_LOC_STRINGS: true
+        # C++17 required by abseil
+        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        # WebRTC Audio Processing library configuration
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include"
+          - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include/webrtc"
+          - "/opt/homebrew/include"
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/lib"
+          - "/opt/homebrew/lib"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-lc++"
+          # WebRTC audio processing libraries
+          - "-lwebrtc-audio-processing-2"
+          - "-lcommon_audio"
+          - "-llibbase"
+          - "-llibapi"
+          - "-lsystem_wrappers"
+          - "-llibpffft"
+          - "-llibrnnoise"
+          - "-llibfft"
+          # Abseil libraries (WebRTC dependency)
+          - "-labsl_base"
+          - "-labsl_raw_logging_internal"
+          - "-labsl_log_severity"
+          - "-labsl_spinlock_wait"
+          - "-labsl_synchronization"
+          - "-labsl_graphcycles_internal"
+          - "-labsl_kernel_timeout_internal"
+          - "-labsl_malloc_internal"
+          - "-labsl_time"
+          - "-labsl_civil_time"
+          - "-labsl_time_zone"
+          - "-labsl_strings"
+          - "-labsl_strings_internal"
+          - "-labsl_int128"
+          - "-labsl_throw_delegate"
+          # System frameworks
+          - "-framework CoreFoundation"
+        # WebRTC macros for proper compilation
+        OTHER_CPLUSPLUSFLAGS:
+          - "$(inherited)"
+          - "-std=c++17"
+          - "-DWEBRTC_MAC"
+          - "-DWEBRTC_POSIX"
+          - "-DWEBRTC_APM_DEBUG_DUMP=0"
+        # Bridging header for Objective-C++ to Swift
+        SWIFT_OBJC_BRIDGING_HEADER: "ClinicalAnon/ClinicalAnon-Bridging-Header.h"
     scheme:
       testTargets:
         - RedactorTests

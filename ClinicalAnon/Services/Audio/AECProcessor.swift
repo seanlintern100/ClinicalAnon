@@ -2,21 +2,24 @@
 //  AECProcessor.swift
 //  ClinicalAnon
 //
-//  Purpose: Swift wrapper for software echo cancellation
+//  Purpose: Swift wrapper for WebRTC AEC3 echo cancellation
 //  Coordinates feeding reference audio (system audio) and processing microphone audio
 //
 
 import Foundation
 import AVFoundation
 
-/// Software echo cancellation using adaptive filtering
-/// Removes echo from microphone input by subtracting the system audio reference signal
+/// WebRTC AEC3 echo cancellation processor
+/// Removes echo from microphone input using the reference signal (system audio)
 final class AECProcessor {
 
     // MARK: - Properties
 
     private let bridge: AECBridge
     private let processingQueue = DispatchQueue(label: "com.redactor.aec", qos: .userInteractive)
+
+    /// Expose bridge for direct thread-safe access from background queues
+    var underlyingBridge: AECBridge { bridge }
 
     /// Sample rate for processing
     let sampleRate: Int
@@ -39,8 +42,12 @@ final class AECProcessor {
         // Set default stream delay estimate (50ms is typical for laptop speakers/mic)
         bridge.setStreamDelayMs(50)
 
-        isInitialized = true
-        print("AECProcessor: Initialized at \(sampleRate) Hz")
+        isInitialized = bridge.isActive
+        if isInitialized {
+            print("AECProcessor: WebRTC AEC3 initialized at \(sampleRate) Hz")
+        } else {
+            print("AECProcessor: Failed to initialize WebRTC AEC3")
+        }
     }
 
     // MARK: - Public Methods

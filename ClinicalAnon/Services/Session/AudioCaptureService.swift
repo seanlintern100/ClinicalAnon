@@ -69,8 +69,8 @@ class AudioCaptureService: NSObject, ObservableObject {
 
     // MARK: - Configuration
 
-    /// Duration of each audio chunk in seconds (3 minutes)
-    private let chunkDuration: TimeInterval = 180
+    /// Duration of each audio chunk in seconds (1 minute for faster transcription)
+    private let chunkDuration: TimeInterval = 60
 
     /// Overlap between chunks for better transcription continuity (30 seconds)
     private let overlapDuration: TimeInterval = 30
@@ -111,6 +111,9 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Software Echo Cancellation
 
     private var aecProcessor: AECProcessor?
+
+    /// Direct bridge reference for background thread access (thread-safe Obj-C++)
+    private nonisolated(unsafe) var aecBridge: AECBridge?
 
     // MARK: - File Writers (for system audio)
 
@@ -402,6 +405,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Reset AEC processor
         aecProcessor?.reset()
         aecProcessor = nil
+        aecBridge = nil
 
         // Close audio file
         if let url = currentMicURL {
@@ -485,6 +489,9 @@ class AudioCaptureService: NSObject, ObservableObject {
             // Use 48kHz for best quality - will resample system audio to match
             aecProcessor = AECProcessor(sampleRate: 48000)
 
+            // Store bridge reference for background thread access
+            aecBridge = aecProcessor?.underlyingBridge
+
             // Get stream delay from settings (default 50ms)
             let streamDelayMs = UserDefaults.standard.integer(forKey: SettingsKeys.aecStreamDelayMs)
             if streamDelayMs > 0 {
@@ -495,6 +502,7 @@ class AudioCaptureService: NSObject, ObservableObject {
         } else {
             print("AudioCaptureService: Echo cancellation disabled by user setting")
             aecProcessor = nil
+            aecBridge = nil
         }
 
         // Use standard AVAudioEngine for mic capture
@@ -922,9 +930,9 @@ extension AudioCaptureService: SCStreamOutput {
 
         let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
 
-        // Feed AEC reference directly on this thread (lock-free in AECBridge)
-        // Copy samples to array for AEC
-        let samples = Array(UnsafeBufferPointer(start: floatPointer, count: floatCount))
+        // Feed AEC reference directly on this background thread
+        // Using try_lock to avoid blocking if capture is processing
+        aecBridge?.processReferenceFrame(floatPointer, count: Int32(floatCount))
 
         // Copy sample buffer for writing (must happen before callback returns)
         var copiedBuffer: CMSampleBuffer?
@@ -940,14 +948,11 @@ extension AudioCaptureService: SCStreamOutput {
         }
         let avgLevel = sum / Float(max(sampleCount, 1)) * 10
 
-        // Dispatch minimal work to main thread
-        Task { @MainActor [weak self, samples, bufferCopy, avgLevel, numSamples] in
+        // Dispatch UI updates and file writing to main thread
+        Task { @MainActor [weak self, bufferCopy, avgLevel, numSamples] in
             guard let self = self else { return }
 
             self.systemAudioFrameCount += 1
-
-            // Feed AEC reference
-            self.aecProcessor?.feedReference(samples: samples)
 
             // Update UI level (throttled)
             if self.systemAudioFrameCount % 5 == 0 {
