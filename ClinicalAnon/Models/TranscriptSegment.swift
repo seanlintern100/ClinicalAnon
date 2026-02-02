@@ -71,6 +71,12 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
     /// Whisper confidence score (0-1), if available
     let confidence: Double?
 
+    /// Whether this segment overlaps with speech from another speaker
+    var hasOverlap: Bool
+
+    /// IDs of segments that overlap with this one
+    var overlappingSegmentIds: [UUID]
+
     // MARK: - Initialization
 
     init(
@@ -80,7 +86,9 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
         startTime: TimeInterval,
         endTime: TimeInterval,
         chunkIndex: Int,
-        confidence: Double? = nil
+        confidence: Double? = nil,
+        hasOverlap: Bool = false,
+        overlappingSegmentIds: [UUID] = []
     ) {
         self.id = id
         self.speaker = speaker
@@ -89,6 +97,8 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
         self.endTime = endTime
         self.chunkIndex = chunkIndex
         self.confidence = confidence
+        self.hasOverlap = hasOverlap
+        self.overlappingSegmentIds = overlappingSegmentIds
     }
 
     // MARK: - Computed Properties
@@ -117,6 +127,11 @@ struct TranscriptSegment: Identifiable, Codable, Hashable {
     var isLowConfidence: Bool {
         guard let conf = confidence else { return false }
         return conf < 0.7
+    }
+
+    /// Whether this segment may have transcription issues (overlap or low confidence)
+    var mayHaveIssues: Bool {
+        hasOverlap || isLowConfidence
     }
 
     /// Word count for this segment

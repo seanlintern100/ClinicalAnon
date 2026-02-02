@@ -29,10 +29,21 @@ final class AECProcessor {
     // MARK: - Initialization
 
     /// Initialize AEC processor
-    /// - Parameter sampleRate: Audio sample rate in Hz (should match both mic and system audio)
-    init(sampleRate: Int = 48000) {
+    /// - Parameters:
+    ///   - sampleRate: Audio sample rate in Hz (should match both mic and system audio)
+    ///   - noiseSuppressionEnabled: Whether to enable WebRTC noise suppression (default: reads from UserDefaults)
+    init(sampleRate: Int = 48000, noiseSuppressionEnabled: Bool? = nil) {
         self.sampleRate = sampleRate
-        self.bridge = AECBridge(sampleRate: Int32(sampleRate))
+
+        // Read noise suppression setting from UserDefaults if not explicitly provided
+        let nsEnabled = noiseSuppressionEnabled ?? UserDefaults.standard.bool(forKey: SettingsKeys.noiseSuppressionEnabled)
+
+        // Register default value if not set
+        if UserDefaults.standard.object(forKey: SettingsKeys.noiseSuppressionEnabled) == nil {
+            UserDefaults.standard.set(true, forKey: SettingsKeys.noiseSuppressionEnabled)
+        }
+
+        self.bridge = AECBridge(sampleRate: Int32(sampleRate), noiseSuppressionEnabled: nsEnabled)
 
         // Set default stream delay estimate (50ms is typical for laptop speakers/mic)
         bridge.setStreamDelayMs(50)
@@ -40,7 +51,7 @@ final class AECProcessor {
         isInitialized = bridge.isActive
 #if DEBUG
         if isInitialized {
-            print("AECProcessor: WebRTC AEC3 initialized at \(sampleRate) Hz")
+            print("AECProcessor: WebRTC AEC3 initialized at \(sampleRate) Hz, noise suppression: \(nsEnabled ? "ON" : "OFF")")
         } else {
             print("AECProcessor: Failed to initialize WebRTC AEC3")
         }
@@ -112,5 +123,17 @@ final class AECProcessor {
     /// Whether the AEC is actively processing
     var isActive: Bool {
         return bridge.isActive
+    }
+
+    // MARK: - Voice Activity Detection
+
+    /// Whether voice was detected in the last processed frame
+    var hasVoice: Bool {
+        return bridge.hasVoice
+    }
+
+    /// Voice probability from last processed frame (0.0 = silence, 1.0 = speech)
+    var voiceProbability: Float {
+        return bridge.voiceProbability
     }
 }

@@ -25,9 +25,16 @@ static const int kFrameSizeMs = 10;
     os_unfair_lock _lock;  // Fast spinlock for serializing APM access
     BOOL _hasReceivedReference;  // Track if we've received reference audio
     int _referenceFramesPending;  // Count reference frames to process before capture
+    BOOL _hasVoice;  // Voice activity detection result
+    float _voiceProbability;  // Voice probability 0.0-1.0
 }
 
 - (instancetype)initWithSampleRate:(int)sampleRate {
+    // Default to noise suppression enabled
+    return [self initWithSampleRate:sampleRate noiseSuppressionEnabled:YES];
+}
+
+- (instancetype)initWithSampleRate:(int)sampleRate noiseSuppressionEnabled:(BOOL)noiseSuppressionEnabled {
     self = [super init];
     if (self) {
         _sampleRate = sampleRate;
@@ -36,6 +43,8 @@ static const int kFrameSizeMs = 10;
         _lock = OS_UNFAIR_LOCK_INIT;
         _hasReceivedReference = NO;
         _referenceFramesPending = 5;  // Process 5 reference frames before enabling capture
+        _hasVoice = NO;
+        _voiceProbability = 0.0f;
 
         // Create AudioProcessing with AEC3 enabled
         webrtc::AudioProcessing::Config config;
@@ -43,10 +52,16 @@ static const int kFrameSizeMs = 10;
         config.echo_canceller.mobile_mode = false;  // Use full AEC3 (not mobile)
         config.echo_canceller.enforce_high_pass_filtering = true;
 
-        // Disable other processing - we only want AEC
+        // Disable gain controllers
         config.gain_controller1.enabled = false;
         config.gain_controller2.enabled = false;
-        config.noise_suppression.enabled = false;
+
+        // Enable noise suppression if requested (moderate level for balanced quality)
+        config.noise_suppression.enabled = noiseSuppressionEnabled;
+        if (noiseSuppressionEnabled) {
+            config.noise_suppression.level = webrtc::AudioProcessing::Config::NoiseSuppression::kModerate;
+        }
+
         config.high_pass_filter.enabled = false;
 
         _apm = webrtc::AudioProcessingBuilder()
@@ -56,8 +71,8 @@ static const int kFrameSizeMs = 10;
         if (_apm) {
             _isActive = YES;
 #ifdef DEBUG
-            NSLog(@"AECBridge: WebRTC AEC3 initialized at %d Hz, frame size %d samples",
-                  sampleRate, _expectedFrameSize);
+            NSLog(@"AECBridge: WebRTC AEC3 initialized at %d Hz, frame size %d samples, noise suppression: %@",
+                  sampleRate, _expectedFrameSize, noiseSuppressionEnabled ? @"ON" : @"OFF");
 #endif
         } else {
             _isActive = NO;
@@ -73,6 +88,14 @@ static const int kFrameSizeMs = 10;
 
 - (BOOL)isActive {
     return _isActive && _apm != nullptr;
+}
+
+- (BOOL)hasVoice {
+    return _hasVoice;
+}
+
+- (float)voiceProbability {
+    return _voiceProbability;
 }
 
 - (void)processReferenceFrame:(const float *)samples count:(int)count {
@@ -120,6 +143,15 @@ static const int kFrameSizeMs = 10;
 
     // Skip AEC processing until we've received reference audio
     if (!_hasReceivedReference) {
+        // Still do simple energy-based VAD even without AEC
+        float energy = 0.0f;
+        int sampleCount = MIN(count, 480);  // Analyze first 10ms
+        for (int i = 0; i < sampleCount; i++) {
+            energy += samples[i] * samples[i];
+        }
+        energy = sqrtf(energy / sampleCount);
+        _voiceProbability = MIN(energy * 10.0f, 1.0f);  // Scale to 0-1
+        _hasVoice = _voiceProbability > 0.02f;  // Simple threshold
         return;  // Pass audio through unchanged
     }
 
@@ -141,6 +173,20 @@ static const int kFrameSizeMs = 10;
         // ProcessStream modifies samples in-place with echo removed
         _apm->ProcessStream(channelPtrs, streamConfig, streamConfig, channelPtrs);
     }
+
+    // Get VAD statistics from WebRTC APM
+    // WebRTC uses internal VAD for noise suppression decisions
+    // We can estimate voice activity from the processed audio energy
+    float processedEnergy = 0.0f;
+    int sampleCount = MIN(count, 480);  // Analyze first 10ms of processed audio
+    for (int i = 0; i < sampleCount; i++) {
+        processedEnergy += samples[i] * samples[i];
+    }
+    processedEnergy = sqrtf(processedEnergy / sampleCount);
+
+    // After noise suppression, cleaner signal means energy threshold can be lower
+    _voiceProbability = MIN(processedEnergy * 15.0f, 1.0f);  // Scale to 0-1
+    _hasVoice = _voiceProbability > 0.015f;  // Lower threshold for cleaned audio
 
     os_unfair_lock_unlock(&_lock);
 }

@@ -477,6 +477,9 @@ class TranscriptionService: ObservableObject {
         // Sort by start time
         allSegments.sort { $0.startTime < $1.startTime }
 
+        // Detect overlapping speech between speakers
+        allSegments = annotateOverlaps(allSegments)
+
         currentProgress = TranscriptionProgress(
             sessionId: sessionId,
             chunkIndex: chunkIndex,
@@ -621,6 +624,17 @@ class TranscriptionService: ObservableObject {
         isProcessingQueue = false
         isProcessing = false
         currentProgress = nil
+    }
+
+    // MARK: - Overlap Detection
+
+    private let overlapDetector = OverlapDetector()
+
+    /// Detect and annotate overlapping speech in segments
+    /// - Parameter segments: Segments from transcription
+    /// - Returns: Segments with overlap annotations
+    func annotateOverlaps(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
+        return overlapDetector.annotateOverlaps(segments: segments)
     }
 }
 

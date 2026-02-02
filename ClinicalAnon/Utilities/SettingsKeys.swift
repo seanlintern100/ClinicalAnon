@@ -71,4 +71,18 @@ enum SettingsKeys {
 
     /// Stream delay for AEC in milliseconds (default 50ms)
     static let aecStreamDelayMs = "aecStreamDelayMs"
+
+    // MARK: - Noise Suppression Settings
+
+    /// Enable WebRTC noise suppression (default: true)
+    static let noiseSuppressionEnabled = "noiseSuppressionEnabled"
+
+    // MARK: - Voice Activity Detection Settings
+
+    /// Enable voice activity detection (default: true)
+    static let vadEnabled = "vadEnabled"
+
+    /// VAD sensitivity threshold (0.0-1.0, default: 0.5)
+    /// Lower = more sensitive (more speech detected), Higher = less sensitive (stricter filtering)
+    static let vadSensitivity = "vadSensitivity"
 }

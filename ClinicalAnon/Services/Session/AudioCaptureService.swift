@@ -95,6 +95,8 @@ class AudioCaptureService: NSObject, ObservableObject {
     @Published private(set) var microphoneLevel: Float = 0
     @Published private(set) var systemLevel: Float = 0
     @Published private(set) var currentChunkIndex: Int = 0
+    @Published private(set) var hasVoiceActivity: Bool = false
+    @Published private(set) var voiceProbability: Float = 0
 
     // MARK: - Audio Device Selection
 
@@ -634,8 +636,15 @@ class AudioCaptureService: NSObject, ObservableObject {
                 sum += abs(monoSamples[i])
             }
             let average = sum / Float(max(sampleCount, 1))
-            Task { @MainActor [weak self, average] in
+
+            // Get voice activity from AEC processor (VAD is built into audio processing)
+            let hasVoice = aecProcessor?.hasVoice ?? false
+            let voiceProb = aecProcessor?.voiceProbability ?? 0
+
+            Task { @MainActor [weak self, average, hasVoice, voiceProb] in
                 self?.microphoneLevel = average
+                self?.hasVoiceActivity = hasVoice
+                self?.voiceProbability = voiceProb
             }
         }
 

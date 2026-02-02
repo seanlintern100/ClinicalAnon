@@ -70,10 +70,32 @@ struct TranscriptionSettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+
+                Toggle(isOn: $noiseSuppressionEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Noise Suppression")
+                            .font(.body)
+                        Text("Reduce background noise (fan, typing, HVAC)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $vadEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Voice Activity Detection")
+                            .font(.body)
+                        Text("Skip transcription during silence to reduce hallucinations")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
             } header: {
                 Text("Audio Capture")
             } footer: {
-                Text("Uses software echo cancellation to filter audio playing through your speakers from your microphone, preventing doubled audio in transcription. Works with all microphones including external USB mics.")
+                Text("Echo cancellation removes speaker audio from your microphone. Noise suppression filters background noise. Voice activity detection helps prevent phantom words during silence. All settings require restarting a session to take effect.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -85,6 +107,8 @@ struct TranscriptionSettingsView: View {
     // MARK: - Audio Settings
 
     @AppStorage(SettingsKeys.voiceProcessingEnabled) private var voiceProcessingEnabled: Bool = true
+    @AppStorage(SettingsKeys.noiseSuppressionEnabled) private var noiseSuppressionEnabled: Bool = true
+    @AppStorage(SettingsKeys.vadEnabled) private var vadEnabled: Bool = true
 
     // MARK: - Status Helpers
 

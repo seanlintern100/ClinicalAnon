@@ -194,14 +194,28 @@ struct TranscriptSegmentRow: View {
                 .font(DesignSystem.Typography.body)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-                if segment.isLowConfidence {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption2)
-                        Text("Low confidence")
-                            .font(DesignSystem.Typography.caption)
+                // Warning indicators
+                HStack(spacing: DesignSystem.Spacing.small) {
+                    if segment.hasOverlap {
+                        HStack(spacing: 4) {
+                            Image(systemName: "waveform.path.ecg")
+                                .font(.caption2)
+                            Text("Overlapping speech")
+                                .font(DesignSystem.Typography.caption)
+                        }
+                        .foregroundStyle(.yellow)
+                        .help("Both speakers were talking at the same time - transcription may be less accurate")
                     }
-                    .foregroundStyle(.orange)
+
+                    if segment.isLowConfidence {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                            Text("Low confidence")
+                                .font(DesignSystem.Typography.caption)
+                        }
+                        .foregroundStyle(.orange)
+                    }
                 }
             }
         }

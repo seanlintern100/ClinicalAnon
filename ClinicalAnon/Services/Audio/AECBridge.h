@@ -20,6 +20,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// - Parameter sampleRate: Audio sample rate in Hz (e.g., 48000)
 - (instancetype)initWithSampleRate:(int)sampleRate;
 
+/// Initialize with sample rate and noise suppression setting
+/// - Parameters:
+///   - sampleRate: Audio sample rate in Hz (e.g., 48000)
+///   - noiseSuppressionEnabled: Whether to enable WebRTC noise suppression
+- (instancetype)initWithSampleRate:(int)sampleRate noiseSuppressionEnabled:(BOOL)noiseSuppressionEnabled;
+
 /// Process reference signal (system audio / far-end)
 /// Call this with system audio samples to establish the echo reference
 /// - Parameters:
@@ -40,6 +46,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Whether echo cancellation is currently active
 @property (nonatomic, readonly) BOOL isActive;
+
+/// Whether the last processed capture frame contained voice
+/// Updated after each call to processCaptureFrame
+@property (nonatomic, readonly) BOOL hasVoice;
+
+/// Get the voice probability (0.0-1.0) from the last processed frame
+/// Only valid if VAD is enabled
+@property (nonatomic, readonly) float voiceProbability;
 
 /// Reset the AEC state (call when starting a new session)
 - (void)reset;
