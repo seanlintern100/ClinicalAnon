@@ -7,10 +7,12 @@
 //
 
 import SwiftUI
+import AppKit
 
 // MARK: - Live Highlighted Segment
 
 /// Displays transcript text with detected entities highlighted
+/// Uses the same NSRange-based approach as HighlightedTextView for consistency
 struct LiveHighlightedSegment: View {
 
     // MARK: - Properties
@@ -25,31 +27,39 @@ struct LiveHighlightedSegment: View {
             .textSelection(.enabled)
     }
 
-    // MARK: - Private Methods
+    // MARK: - Attributed Text
 
-    /// Build attributed string with entity highlighting
+    /// Build attributed string with entity highlighting using NSRange (same as HighlightedTextView)
     private var attributedText: AttributedString {
         var attributed = AttributedString(text)
 
-        // Highlight each entity found in this text
+        // Apply default styling
+        attributed.foregroundColor = Color(nsColor: .labelColor)
+
+        // Use NSString for consistent position handling
+        let nsText = text as NSString
+
+        // Find and highlight each entity by string matching
         for entity in entities {
-            highlightEntity(entity, in: &attributed)
+            var searchRange = NSRange(location: 0, length: nsText.length)
+
+            while searchRange.location < nsText.length {
+                let foundRange = nsText.range(of: entity.originalText, options: .caseInsensitive, range: searchRange)
+
+                guard foundRange.location != NSNotFound else { break }
+
+                // Convert NSRange to AttributedString range
+                if let range = Range<AttributedString.Index>(foundRange, in: attributed) {
+                    attributed[range].backgroundColor = entity.type.highlightColor.opacity(0.3)
+                }
+
+                // Move search past this match
+                searchRange.location = foundRange.location + foundRange.length
+                searchRange.length = nsText.length - searchRange.location
+            }
         }
 
         return attributed
-    }
-
-    /// Highlight all occurrences of an entity in the attributed string
-    private func highlightEntity(_ entity: Entity, in attributed: inout AttributedString) {
-        let searchText = entity.originalText
-
-        // Search directly in the AttributedString (avoids String/AttributedString index conversion issues)
-        var searchStart = attributed.startIndex
-        while searchStart < attributed.endIndex,
-              let range = attributed[searchStart...].range(of: searchText, options: .caseInsensitive) {
-            attributed[range].backgroundColor = entity.type.highlightColor.opacity(0.3)
-            searchStart = range.upperBound
-        }
     }
 }
 

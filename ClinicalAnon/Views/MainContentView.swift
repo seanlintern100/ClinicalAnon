@@ -54,6 +54,18 @@ struct MainContentView: View {
             )
         }
 
+        // Add detected entities to the Redact phase so they appear immediately
+        // These go into customEntities since there's no detection result yet
+        for entity in payload.detectedEntities {
+            // Skip if already exists (by original text)
+            let alreadyExists = viewModel.redactState.customEntities.contains {
+                $0.originalText.lowercased() == entity.originalText.lowercased()
+            }
+            guard !alreadyExists else { continue }
+
+            viewModel.redactState.customEntities.append(entity)
+        }
+
         viewModel.currentPhase = .redact
     }
 

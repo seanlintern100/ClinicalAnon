@@ -347,11 +347,14 @@ class TranscriptionService: ObservableObject {
                 }
             }
 
+            print("TranscriptionService: [DEBUG] Starting queue processing, \(processingQueue.count) items in queue")
             while !processingQueue.isEmpty {
                 let item = processingQueue.removeFirst()
+                print("TranscriptionService: [DEBUG] Queue now has \(processingQueue.count) items remaining")
 
                 do {
                     print("TranscriptionService: Processing chunk \(item.chunkIndex) for session \(item.sessionId) (startTime: \(item.chunkStartTime)s)")
+                    let chunkStart = CFAbsoluteTimeGetCurrent()
                     let segments = try await transcribeChunk(
                         sessionId: item.sessionId,
                         chunkIndex: item.chunkIndex,
@@ -360,7 +363,8 @@ class TranscriptionService: ObservableObject {
                         systemAudioPath: item.sysPath
                     )
 
-                    print("TranscriptionService: Transcription complete - \(segments.count) segments")
+                    let chunkElapsed = CFAbsoluteTimeGetCurrent() - chunkStart
+                    print("TranscriptionService: [DEBUG] Chunk \(item.chunkIndex) completed in \(String(format: "%.2f", chunkElapsed))s - \(segments.count) segments")
                     for segment in segments.prefix(3) {
                         print("TranscriptionService:   [\(segment.speaker.label)] \(segment.text.prefix(50))...")
                     }
@@ -376,6 +380,7 @@ class TranscriptionService: ObservableObject {
                     )
                     print("TranscriptionService: Posted transcriptionComplete notification")
                 } catch {
+                    print("TranscriptionService: [DEBUG] Chunk \(item.chunkIndex) FAILED: \(error)")
                     // Post failure notification
                     NotificationCenter.default.post(
                         name: .transcriptionFailed,
@@ -388,6 +393,7 @@ class TranscriptionService: ObservableObject {
                 }
             }
 
+            print("TranscriptionService: [DEBUG] Queue processing complete, isProcessingQueue = false")
             isProcessingQueue = false
         }
     }
@@ -495,7 +501,11 @@ class TranscriptionService: ObservableObject {
 
         do {
             // Transcribe with WhisperKit
+            print("TranscriptionService: [DEBUG] Starting whisper.transcribe() for \(speaker.label) at \(audioPath.lastPathComponent)")
+            let transcribeStart = CFAbsoluteTimeGetCurrent()
             let results = try await whisper.transcribe(audioPath: audioPath.path)
+            let transcribeElapsed = CFAbsoluteTimeGetCurrent() - transcribeStart
+            print("TranscriptionService: [DEBUG] whisper.transcribe() completed in \(String(format: "%.2f", transcribeElapsed))s - \(results.count) results")
 
             // Convert WhisperKit results to TranscriptSegments
             var segments: [TranscriptSegment] = []

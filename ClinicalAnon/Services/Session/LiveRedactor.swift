@@ -59,17 +59,23 @@ class LiveRedactor: ObservableObject {
         #endif
 
         // Run BOTH detection services in parallel
+        print("LiveRedactor: [DEBUG] Starting NER detection for \(combinedText.count) chars")
+        let nerStart = CFAbsoluteTimeGetCurrent()
         async let patternEntities = runSwiftNER(text: combinedText)
         async let xlmrFindings = runXLMRNER(text: combinedText, existingEntities: session.detectedEntities)
 
         // Process pattern-based entities
+        print("LiveRedactor: [DEBUG] Awaiting SwiftNER results...")
         let patterns = await patternEntities
+        print("LiveRedactor: [DEBUG] SwiftNER returned \(patterns.count) entities")
         for entity in patterns {
             addEntityToSession(entity, session: session)
         }
 
         // Process XLM-RoBERTa findings
+        print("LiveRedactor: [DEBUG] Awaiting XLM-RoBERTa results...")
         let findings = await xlmrFindings
+        print("LiveRedactor: [DEBUG] XLM-RoBERTa returned \(findings.count) findings")
         for finding in findings {
             let entity = Entity(
                 originalText: finding.text,
@@ -83,6 +89,9 @@ class LiveRedactor: ObservableObject {
 
         // Mark segments as processed
         markSegmentsProcessed(sessionId: session.id, segmentIds: newSegments.map { $0.id })
+
+        let nerElapsed = CFAbsoluteTimeGetCurrent() - nerStart
+        print("LiveRedactor: [DEBUG] NER processing completed in \(String(format: "%.2f", nerElapsed))s")
 
         #if DEBUG
         print("LiveRedactor: Session now has \(session.detectedEntities.count) entities")

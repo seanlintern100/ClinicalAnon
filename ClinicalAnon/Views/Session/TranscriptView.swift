@@ -40,7 +40,8 @@ struct TranscriptView: View {
                                     segment: segment,
                                     entities: session.detectedEntities
                                 )
-                                .id(segment.id)
+                                // Force refresh when entities change by including count in ID
+                                .id("\(segment.id)-\(session.detectedEntities.count)")
 
                             case .gap(let gap):
                                 TranscriptionGapRow(gap: gap)

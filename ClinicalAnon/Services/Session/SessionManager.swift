@@ -265,6 +265,8 @@ class SessionManager: ObservableObject {
 
     /// Delete a session and all associated data
     func deleteSession(_ session: LiveSession) async {
+        print("SessionManager: [DEBUG] deleteSession called for \(session.id) (\(session.name ?? "unnamed"))")
+
         // Stop if active
         if activeSession?.id == session.id {
             audioCaptureService.stopCapture()
@@ -274,15 +276,23 @@ class SessionManager: ObservableObject {
         // Clear LiveRedactor tracking for this session
         LiveRedactor.shared.clearSession(session.id)
 
+        print("SessionManager: [DEBUG] Removing session from list (was \(sessions.count) sessions)")
         sessions.removeAll { $0.id == session.id }
+        print("SessionManager: [DEBUG] Session removed (now \(sessions.count) sessions)")
 
         try? await storageService.deleteSession(session)
     }
 
     // MARK: - Recovery
 
+    private var hasRestoredSessions = false
+
     /// Restore sessions from disk on app launch
     func restoreSessionsOnLaunch() async {
+        // Prevent duplicate restoration (SwiftUI can call .task multiple times)
+        guard !hasRestoredSessions else { return }
+        hasRestoredSessions = true
+
         isRestoring = true
         defer { isRestoring = false }
 
@@ -294,6 +304,8 @@ class SessionManager: ObservableObject {
                 if session.state == .recording || session.state == .paused {
                     session.state = .complete
                 }
+                // Only add if not already present (safety check)
+                guard !sessions.contains(where: { $0.id == session.id }) else { continue }
                 sessions.append(session)
             }
 
@@ -315,12 +327,14 @@ class SessionManager: ObservableObject {
     // MARK: - Transcription Handlers
 
     private func handleTranscriptionResult(_ result: TranscriptionResult) {
-        print("SessionManager: Received transcription result - \(result.segments.count) segments for chunk \(result.chunkIndex)")
+        print("SessionManager: [DEBUG] Received transcription result - \(result.segments.count) segments for chunk \(result.chunkIndex)")
+        print("SessionManager: [DEBUG] Looking for session \(result.sessionId) in \(sessions.count) sessions")
 
         guard let session = sessions.first(where: { $0.id == result.sessionId }) else {
-            print("SessionManager: Session not found for id \(result.sessionId)")
+            print("SessionManager: [DEBUG] Session NOT FOUND for id \(result.sessionId) - results will be LOST")
             return
         }
+        print("SessionManager: [DEBUG] Found session '\(session.name ?? "unnamed")'")
 
         // Add segments to session
         session.transcriptSegments.append(contentsOf: result.segments)
@@ -336,8 +350,11 @@ class SessionManager: ObservableObject {
         }
 
         // Trigger incremental entity detection
+        print("SessionManager: [DEBUG] Spawning LiveRedactor task for \(result.segments.count) segments")
         Task {
+            print("SessionManager: [DEBUG] LiveRedactor task starting...")
             await LiveRedactor.shared.processNewSegments(for: session, segments: result.segments)
+            print("SessionManager: [DEBUG] LiveRedactor task completed")
         }
 
         // Auto-save
