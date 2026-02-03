@@ -829,7 +829,12 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Notify that chunk is ready for transcription
         NotificationCenter.default.post(
             name: .audioChunkReady,
-            object: AudioChunkReadyInfo(sessionId: session.id, chunkIndex: chunkIndex, chunkStartTime: sessionOffset)
+            object: AudioChunkReadyInfo(
+                sessionId: session.id,
+                chunkIndex: chunkIndex,
+                chunkStartTime: sessionOffset,
+                hasMultipleParticipants: session.hasMultipleParticipants
+            )
         )
 
         currentChunkIndex += 1
@@ -1027,6 +1032,8 @@ struct AudioChunkReadyInfo {
     let chunkIndex: Int
     /// Start time of this chunk relative to session start (in seconds)
     let chunkStartTime: TimeInterval
+    /// Whether speaker diarization should be applied (multiple remote participants)
+    let hasMultipleParticipants: Bool
 }
 
 extension Notification.Name {

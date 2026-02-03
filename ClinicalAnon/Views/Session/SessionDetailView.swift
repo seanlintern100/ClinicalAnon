@@ -131,6 +131,11 @@ struct SessionDetailView: View {
                 audioLevelMeters
             }
 
+            // Multiple participants toggle (only visible during recording/paused)
+            if session.state == .recording || session.state == .paused {
+                multipleParticipantsToggle
+            }
+
             // Chat controls
             chatControls
 
@@ -212,6 +217,28 @@ struct SessionDetailView: View {
                 AudioLevelMeter(level: sessionManager.systemLevel)
             }
         }
+    }
+
+    // MARK: - Multiple Participants Toggle
+
+    private var multipleParticipantsToggle: some View {
+        Button {
+            session.hasMultipleParticipants.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: session.hasMultipleParticipants ? "person.2.fill" : "person.2")
+                    .font(.caption)
+                Text(session.hasMultipleParticipants ? "Multiple" : "Single")
+                    .font(DesignSystem.Typography.caption)
+            }
+            .foregroundStyle(session.hasMultipleParticipants
+                ? DesignSystem.Colors.primaryTeal
+                : DesignSystem.Colors.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .help(session.hasMultipleParticipants
+            ? "Multiple remote participants: Speaker diarization enabled (Other A, Other B)"
+            : "Single remote participant: All remote audio labeled as \"Other\"")
     }
 
     // MARK: - Chat Controls

@@ -151,7 +151,7 @@ class TranscriptionService: ObservableObject {
 
     // MARK: - Processing Queue
 
-    private var processingQueue: [(sessionId: UUID, chunkIndex: Int, chunkStartTime: TimeInterval, micPath: URL, sysPath: URL)] = []
+    private var processingQueue: [(sessionId: UUID, chunkIndex: Int, chunkStartTime: TimeInterval, micPath: URL, sysPath: URL, hasMultipleParticipants: Bool)] = []
     private var isProcessingQueue = false
 
     // MARK: - Cancellation
@@ -172,9 +172,9 @@ class TranscriptionService: ObservableObject {
                 print("TranscriptionService: Invalid notification object")
                 return
             }
-            print("TranscriptionService: Queuing chunk \(info.chunkIndex) for session \(info.sessionId) (startTime: \(info.chunkStartTime)s)")
+            print("TranscriptionService: Queuing chunk \(info.chunkIndex) for session \(info.sessionId) (startTime: \(info.chunkStartTime)s, multipleParticipants: \(info.hasMultipleParticipants))")
             Task { @MainActor in
-                self?.queueChunkForProcessing(sessionId: info.sessionId, chunkIndex: info.chunkIndex, chunkStartTime: info.chunkStartTime)
+                self?.queueChunkForProcessing(sessionId: info.sessionId, chunkIndex: info.chunkIndex, chunkStartTime: info.chunkStartTime, hasMultipleParticipants: info.hasMultipleParticipants)
             }
         }
         print("TranscriptionService: Initialized and listening for audio chunks")
@@ -302,7 +302,7 @@ class TranscriptionService: ObservableObject {
     // MARK: - Queue Management
 
     /// Queue a chunk for transcription processing
-    private func queueChunkForProcessing(sessionId: UUID, chunkIndex: Int, chunkStartTime: TimeInterval) {
+    private func queueChunkForProcessing(sessionId: UUID, chunkIndex: Int, chunkStartTime: TimeInterval, hasMultipleParticipants: Bool) {
         // Get session and audio paths
         let sessionDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Redactor/Sessions/\(sessionId.uuidString)")
@@ -319,7 +319,7 @@ class TranscriptionService: ObservableObject {
         }
 
         // Add to queue
-        processingQueue.append((sessionId: sessionId, chunkIndex: chunkIndex, chunkStartTime: chunkStartTime, micPath: micPath, sysPath: sysPath))
+        processingQueue.append((sessionId: sessionId, chunkIndex: chunkIndex, chunkStartTime: chunkStartTime, micPath: micPath, sysPath: sysPath, hasMultipleParticipants: hasMultipleParticipants))
 
         // Start processing if not already running
         processNextInQueue()
@@ -354,14 +354,15 @@ class TranscriptionService: ObservableObject {
                 print("TranscriptionService: [DEBUG] Queue now has \(processingQueue.count) items remaining")
 
                 do {
-                    print("TranscriptionService: Processing chunk \(item.chunkIndex) for session \(item.sessionId) (startTime: \(item.chunkStartTime)s)")
+                    print("TranscriptionService: Processing chunk \(item.chunkIndex) for session \(item.sessionId) (startTime: \(item.chunkStartTime)s, multipleParticipants: \(item.hasMultipleParticipants))")
                     let chunkStart = CFAbsoluteTimeGetCurrent()
                     let segments = try await transcribeChunk(
                         sessionId: item.sessionId,
                         chunkIndex: item.chunkIndex,
                         chunkStartTime: item.chunkStartTime,
                         microphonePath: item.micPath,
-                        systemAudioPath: item.sysPath
+                        systemAudioPath: item.sysPath,
+                        hasMultipleParticipants: item.hasMultipleParticipants
                     )
 
                     let chunkElapsed = CFAbsoluteTimeGetCurrent() - chunkStart
@@ -407,7 +408,8 @@ class TranscriptionService: ObservableObject {
         chunkIndex: Int,
         chunkStartTime: TimeInterval = 0,
         microphonePath: URL,
-        systemAudioPath: URL
+        systemAudioPath: URL,
+        hasMultipleParticipants: Bool = false
     ) async throws -> [TranscriptSegment] {
         guard isModelLoaded, let whisper = whisperKit else {
             throw TranscriptionError.modelNotLoaded
@@ -466,11 +468,13 @@ class TranscriptionService: ObservableObject {
                         chunkStartTime: chunkStartTime
                     )
 
-                    // Apply speaker diarization if enabled (identifies multiple remote speakers)
-                    if SpeakerDiarizationService.isEnabled {
+                    // Apply speaker diarization if enabled AND session has multiple participants
+                    // Global setting must be ON (enables the feature) AND session toggle must be ON (user indicated multiple participants)
+                    if SpeakerDiarizationService.isEnabled && hasMultipleParticipants {
                         sysSegments = await applySpeakerDiarization(
                             segments: sysSegments,
-                            audioPath: systemAudioPath
+                            audioPath: systemAudioPath,
+                            chunkStartTime: chunkStartTime
                         )
                     }
 
@@ -716,19 +720,36 @@ class TranscriptionService: ObservableObject {
     /// - Parameters:
     ///   - segments: Transcript segments from system audio (speaker = .other)
     ///   - audioPath: Path to the system audio file
+    ///   - chunkStartTime: Global start time of this chunk (for timestamp alignment)
     /// - Returns: Segments with speaker IDs assigned based on voice analysis
     private func applySpeakerDiarization(
         segments: [TranscriptSegment],
-        audioPath: URL
+        audioPath: URL,
+        chunkStartTime: TimeInterval
     ) async -> [TranscriptSegment] {
         do {
             let diarizationService = SpeakerDiarizationService.shared
             let speakerSegments = try await diarizationService.diarize(audioURL: audioPath)
 
+            // Offset diarization timestamps to global session time
+            // Diarization returns chunk-relative timestamps (0-60s), but transcript has global timestamps
+#if DEBUG
+            print("TranscriptionService: [DIARIZATION] Offsetting \(speakerSegments.count) diarization segments by chunkStartTime=\(String(format: "%.2f", chunkStartTime))s")
+#endif
+            let offsetSegments = speakerSegments.map { segment in
+                SpeakerSegment(
+                    speakerId: segment.speakerId,
+                    startTime: segment.startTime + chunkStartTime,
+                    endTime: segment.endTime + chunkStartTime,
+                    confidence: segment.confidence,
+                    embedding: segment.embedding
+                )
+            }
+
             // Merge diarization results with transcript
             let enhancedSegments = diarizationService.mergeWithTranscript(
                 transcriptSegments: segments,
-                speakerSegments: speakerSegments
+                speakerSegments: offsetSegments
             )
 
             // Log results

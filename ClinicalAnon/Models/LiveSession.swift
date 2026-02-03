@@ -68,6 +68,7 @@ struct LiveSessionData: Codable {
     var audioChunkPaths: [AudioChunkReference]
     var assistantStateData: SessionAssistantStateData?  // AI assistant state (parking lot + feed)
     var chatMessages: [ChatMessage]?  // AI assistant chat history
+    var hasMultipleParticipants: Bool?  // Speaker diarization toggle
 
     /// Initialize with explicit values (used for decoding)
     init(
@@ -84,7 +85,8 @@ struct LiveSessionData: Codable {
         detectedEntities: [Entity],
         audioChunkPaths: [AudioChunkReference],
         assistantStateData: SessionAssistantStateData? = nil,
-        chatMessages: [ChatMessage]? = nil
+        chatMessages: [ChatMessage]? = nil,
+        hasMultipleParticipants: Bool? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -100,6 +102,7 @@ struct LiveSessionData: Codable {
         self.audioChunkPaths = audioChunkPaths
         self.assistantStateData = assistantStateData
         self.chatMessages = chatMessages
+        self.hasMultipleParticipants = hasMultipleParticipants
     }
 
     /// Initialize from a LiveSession (must be called on MainActor)
@@ -119,6 +122,7 @@ struct LiveSessionData: Codable {
         self.audioChunkPaths = session.audioChunkPaths
         self.assistantStateData = assistantState
         self.chatMessages = session.chatMessages
+        self.hasMultipleParticipants = session.hasMultipleParticipants
     }
 }
 
@@ -164,6 +168,12 @@ class LiveSession: ObservableObject, Identifiable {
     @Published var chatMessages: [ChatMessage] = []
     let conversationContext: ConversationContext
 
+    // MARK: - Speaker Diarization
+
+    /// When enabled, speaker diarization identifies multiple remote participants as "Other A", "Other B", etc.
+    /// When disabled, all remote audio is labeled simply as "Other".
+    @Published var hasMultipleParticipants: Bool = false
+
     // MARK: - Initialization
 
     init(id: UUID = UUID(), createdAt: Date = Date()) {
@@ -190,6 +200,7 @@ class LiveSession: ObservableObject, Identifiable {
         self.detectedEntities = data.detectedEntities
         self.audioChunkPaths = data.audioChunkPaths
         self.chatMessages = data.chatMessages ?? []
+        self.hasMultipleParticipants = data.hasMultipleParticipants ?? false
     }
 
     // MARK: - Data Export

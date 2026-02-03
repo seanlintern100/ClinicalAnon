@@ -245,14 +245,19 @@ struct TranscriptSegmentRow: View {
         return segment.speaker.label
     }
 
-    /// Convert speaker ID like "SPEAKER_00" to letter suffix "A", "B", etc.
+    /// Convert speaker ID like "1", "2" to letter suffix "A", "B", etc.
     private func speakerIdToLetter(_ speakerId: String) -> String {
-        // Extract number from speaker ID (e.g., "SPEAKER_00" -> 0)
+        // Extract number from speaker ID (e.g., "1" -> 1, "SPEAKER_00" -> 0)
         let number = speakerId
             .components(separatedBy: CharacterSet.decimalDigits.inverted)
             .joined()
-        if let index = Int(number), index < 26 {
-            return String(UnicodeScalar(65 + index)!) // A=65, B=66, etc.
+        if let index = Int(number) {
+            // SpeakerManager uses 1-based IDs, so subtract 1 for 0-based letter index
+            // "1" -> A, "2" -> B, "3" -> C
+            let letterIndex = index > 0 ? index - 1 : index
+            if letterIndex < 26 {
+                return String(UnicodeScalar(65 + letterIndex)!) // A=65, B=66, etc.
+            }
         }
         return speakerId
     }

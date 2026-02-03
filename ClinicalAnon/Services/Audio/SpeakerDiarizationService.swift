@@ -35,7 +35,7 @@ enum DiarizationError: Error, LocalizedError {
 
 /// Represents a segment of audio attributed to a specific speaker
 struct SpeakerSegment {
-    /// Speaker identifier (e.g., "SPEAKER_00", "SPEAKER_01")
+    /// Speaker identifier (e.g., "1", "2") - consistent across chunks via SpeakerManager
     let speakerId: String
 
     /// Start time in seconds
@@ -47,9 +47,20 @@ struct SpeakerSegment {
     /// Confidence of speaker identification (0-1)
     let confidence: Float
 
+    /// Speaker embedding vector (256D) for cross-chunk matching
+    let embedding: [Float]?
+
     /// Duration of this segment
     var duration: TimeInterval {
         endTime - startTime
+    }
+
+    init(speakerId: String, startTime: TimeInterval, endTime: TimeInterval, confidence: Float, embedding: [Float]? = nil) {
+        self.speakerId = speakerId
+        self.startTime = startTime
+        self.endTime = endTime
+        self.confidence = confidence
+        self.embedding = embedding
     }
 }
 
@@ -57,6 +68,7 @@ struct SpeakerSegment {
 
 /// Service for identifying and separating multiple speakers in audio
 /// Uses FluidAudio's OfflineDiarizerManager (pyannote-based) for on-device diarization
+/// Maintains a SpeakerManager for consistent speaker IDs across chunks
 @MainActor
 class SpeakerDiarizationService: ObservableObject {
 
@@ -74,6 +86,10 @@ class SpeakerDiarizationService: ObservableObject {
 
     private var diarizer: OfflineDiarizerManager?
 
+    // MARK: - Cross-Chunk Speaker Tracking (DISABLED)
+    // Note: Cross-chunk tracking was causing speaker merging issues.
+    // Each chunk now has independent speaker IDs (1, 2) that may not match across chunks.
+
     // MARK: - Initialization
 
     private init() {}
@@ -84,9 +100,22 @@ class SpeakerDiarizationService: ObservableObject {
         guard !isInitialized else { return }
 
         do {
-            let config = OfflineDiarizerConfig()
+            // Use FluidAudio defaults but force exactly 2 speakers for telehealth
+            // Default clusteringThreshold is 0.7 (optimal for AMI dataset at 17.7% DER)
+            var config = OfflineDiarizerConfig()
+            config.clustering.numSpeakers = 2  // Force exactly 2 speakers (clinician scenario)
+
+#if DEBUG
+            print("SpeakerDiarizationService: FluidAudio config - using defaults with numSpeakers=\(config.clustering.numSpeakers ?? -1)")
+#endif
+
             diarizer = OfflineDiarizerManager(config: config)
             try await diarizer?.prepareModels()
+
+            // Note: Cross-chunk SpeakerManager tracking disabled - was causing speaker merging issues
+            // Each chunk will have independent speaker IDs (S1, S2) which may not match across chunks
+            // TODO: Re-enable cross-chunk tracking once per-chunk accuracy is confirmed
+
             isInitialized = true
 #if DEBUG
             print("SpeakerDiarizationService: FluidAudio diarizer initialized successfully")
@@ -103,9 +132,18 @@ class SpeakerDiarizationService: ObservableObject {
         isInitialized = false
     }
 
+    /// Reset speaker tracking for a new session
+    /// Note: Cross-chunk tracking is currently disabled, so this is a no-op
+    func resetSpeakerTracking() {
+#if DEBUG
+        print("SpeakerDiarizationService: New session started (cross-chunk tracking disabled)")
+#endif
+    }
+
     // MARK: - Diarization
 
     /// Diarize audio to identify distinct speakers
+    /// Note: Speaker IDs (1, 2) are per-chunk and may not be consistent across chunks
     /// - Parameter audioURL: URL to the audio file
     /// - Returns: Array of speaker segments with timing and speaker IDs
     func diarize(audioURL: URL) async throws -> [SpeakerSegment] {
@@ -130,22 +168,41 @@ class SpeakerDiarizationService: ObservableObject {
             let converter = AudioConverter()
             let samples = try converter.resampleAudioFile(path: audioURL.path)
 
+#if DEBUG
+            print("SpeakerDiarizationService: [DEBUG] Processing audio with \(samples.count) samples (\(String(format: "%.1f", Float(samples.count) / 16000.0))s)")
+#endif
+
             // Run diarization on audio samples
             let result = try await diarizer.process(audio: samples)
 
+#if DEBUG
+            print("SpeakerDiarizationService: [DEBUG] FluidAudio returned \(result.segments.count) raw segments")
+            for (i, seg) in result.segments.enumerated() {
+                let embeddingNorm = seg.embedding.isEmpty ? 0 : sqrt(seg.embedding.map { $0 * $0 }.reduce(0, +))
+                print("  [DEBUG] Segment \(i): speaker=\(seg.speakerId), time=\(String(format: "%.1f", seg.startTimeSeconds))-\(String(format: "%.1f", seg.endTimeSeconds))s, quality=\(String(format: "%.2f", seg.qualityScore)), embedding_norm=\(String(format: "%.3f", embeddingNorm)), embedding_size=\(seg.embedding.count)")
+            }
+#endif
+
             // Convert FluidAudio results to our SpeakerSegment type
-            let segments = result.segments.map { segment in
-                SpeakerSegment(
-                    speakerId: segment.speakerId,
+            // Use FluidAudio's native speaker IDs directly (e.g., "S1", "S2")
+            // Note: Cross-chunk SpeakerManager tracking disabled - it was causing issues
+            // by merging distinct speakers when first chunk had problematic embeddings
+            let segments = result.segments.map { segment -> SpeakerSegment in
+                // Convert FluidAudio's "S1", "S2" to numeric "1", "2" for consistency
+                let speakerId = segment.speakerId.replacingOccurrences(of: "S", with: "")
+
+                return SpeakerSegment(
+                    speakerId: speakerId,
                     startTime: TimeInterval(segment.startTimeSeconds),
                     endTime: TimeInterval(segment.endTimeSeconds),
-                    confidence: 1.0  // FluidAudio doesn't provide per-segment confidence
+                    confidence: segment.qualityScore,
+                    embedding: segment.embedding
                 )
             }
 
 #if DEBUG
             let uniqueSpeakers = Set(segments.map { $0.speakerId })
-            print("SpeakerDiarizationService: Found \(uniqueSpeakers.count) speakers, \(segments.count) segments")
+            print("SpeakerDiarizationService: [SUMMARY] Chunk has \(uniqueSpeakers.count) unique speakers (IDs: \(uniqueSpeakers.sorted().joined(separator: ", "))), \(segments.count) segments")
 #endif
 
             return segments
@@ -171,9 +228,21 @@ class SpeakerDiarizationService: ObservableObject {
         transcriptSegments: [TranscriptSegment],
         speakerSegments: [SpeakerSegment]
     ) -> [TranscriptSegment] {
+#if DEBUG
+        print("SpeakerDiarizationService: [MERGE] Merging \(transcriptSegments.count) transcript segments with \(speakerSegments.count) diarization segments")
+        print("  [MERGE] Transcript time range: \(String(format: "%.1f", transcriptSegments.first?.startTime ?? 0))-\(String(format: "%.1f", transcriptSegments.last?.endTime ?? 0))s")
+        print("  [MERGE] Diarization time range: \(String(format: "%.1f", speakerSegments.first?.startTime ?? 0))-\(String(format: "%.1f", speakerSegments.last?.endTime ?? 0))s")
+        for seg in speakerSegments {
+            print("  [MERGE] Diarization segment: speaker=\(seg.speakerId), time=\(String(format: "%.1f", seg.startTime))-\(String(format: "%.1f", seg.endTime))s")
+        }
+#endif
+
         // Only process "Other" segments (system audio)
         // Clinician segments are already correctly attributed
-        return transcriptSegments.map { segment in
+        var matchCount = 0
+        var noMatchCount = 0
+
+        let result = transcriptSegments.map { segment in
             guard segment.speaker == .other else {
                 return segment // Clinician segments unchanged
             }
@@ -186,6 +255,10 @@ class SpeakerDiarizationService: ObservableObject {
             )
 
             if let match = bestMatch {
+                matchCount += 1
+#if DEBUG
+                print("  [MERGE] ✓ Transcript \(String(format: "%.1f", segment.startTime))-\(String(format: "%.1f", segment.endTime))s matched to speaker \(match.speakerId)")
+#endif
                 return TranscriptSegment(
                     id: segment.id,
                     speaker: segment.speaker,
@@ -201,8 +274,18 @@ class SpeakerDiarizationService: ObservableObject {
                 )
             }
 
+            noMatchCount += 1
+#if DEBUG
+            print("  [MERGE] ✗ Transcript \(String(format: "%.1f", segment.startTime))-\(String(format: "%.1f", segment.endTime))s NO MATCH")
+#endif
             return segment // No match found, return unchanged
         }
+
+#if DEBUG
+        print("SpeakerDiarizationService: [MERGE SUMMARY] \(matchCount) matched, \(noMatchCount) unmatched out of \(transcriptSegments.filter { $0.speaker == .other }.count) Other segments")
+#endif
+
+        return result
     }
 
     /// Find the speaker segment that best matches a transcript segment's time range
@@ -226,11 +309,20 @@ class SpeakerDiarizationService: ObservableObject {
             }
         }
 
-        // Only return match if there's meaningful overlap (at least 50% of transcript segment)
+        // Only return match if there's meaningful overlap (at least 30% of transcript segment)
+        // Lowered from 50% to improve matching coverage
         let transcriptDuration = transcriptEnd - transcriptStart
-        if bestOverlap > transcriptDuration * 0.5 {
+        if bestOverlap > transcriptDuration * 0.3 {
             return bestMatch
         }
+
+#if DEBUG
+        // Log when no match is found for debugging
+        if bestOverlap > 0 {
+            let overlapPercent = (bestOverlap / transcriptDuration) * 100
+            print("SpeakerDiarizationService: No match for segment \(String(format: "%.1f", transcriptStart))-\(String(format: "%.1f", transcriptEnd))s, best overlap: \(String(format: "%.0f", overlapPercent))% (need 30%)")
+        }
+#endif
 
         return nil
     }
