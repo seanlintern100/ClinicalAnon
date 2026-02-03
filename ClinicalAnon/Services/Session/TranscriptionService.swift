@@ -575,11 +575,50 @@ class TranscriptionService: ObservableObject {
                         options: [.regularExpression, .caseInsensitive]
                     )
 
+                    // Additional Whisper hallucination patterns
+                    let hallucinationPatterns = [
+                        #"\[\s*unintelligible\s*\]"#,
+                        #"\[\s*crosstalk\s*\]"#,
+                        #"\[\s*background\s*(noise)?\s*\]"#,
+                        #"\[\s*pause\s*\]"#,
+                        #"\[\s*applause\s*\]"#,
+                        #"\[\s*laughter\s*\]"#,
+                        #"^\s*(um\s*)+$"#,           // Only "um" repeated
+                        #"^\s*(uh\s*)+$"#,           // Only "uh" repeated
+                        #"^\s*\.+\s*$"#,             // Only dots/ellipsis
+                        #"^\s*>+\s*$"#,              // Only >> markers
+                        #"^\s*-+\s*$"#,              // Only dashes
+                    ]
+                    for pattern in hallucinationPatterns {
+                        cleanText = cleanText.replacingOccurrences(
+                            of: pattern,
+                            with: "",
+                            options: [.regularExpression, .caseInsensitive]
+                        )
+                    }
+
                     // Clean up whitespace
                     cleanText = cleanText.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     // Skip empty or whitespace-only segments
                     guard !cleanText.isEmpty else { continue }
+
+                    // MARK: - Hallucination Filtering (Confidence-based)
+
+                    // Skip low-confidence segments (likely Whisper hallucinations)
+                    // avgLogprob typically ranges -0.1 (high confidence) to -1.0+ (low confidence)
+                    let confidenceThreshold: Float = -0.7
+                    if segment.avgLogprob < confidenceThreshold {
+                        print("TranscriptionService: [HALLUCINATION] Skipping low-confidence segment (avgLogprob=\(String(format: "%.2f", segment.avgLogprob))): \(cleanText.prefix(50))...")
+                        continue
+                    }
+
+                    // For borderline confidence, require minimum text length
+                    let borderlineThreshold: Float = -0.5
+                    if segment.avgLogprob < borderlineThreshold && cleanText.count < 10 {
+                        print("TranscriptionService: [HALLUCINATION] Skipping short low-confidence segment: \(cleanText)")
+                        continue
+                    }
 
                     // Add chunk start time offset to get absolute session timestamp
                     // Convert avgLogprob (negative log probability) to 0-1 probability scale
