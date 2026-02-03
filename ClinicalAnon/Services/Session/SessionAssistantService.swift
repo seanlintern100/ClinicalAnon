@@ -94,15 +94,33 @@ class SessionAssistantService: ObservableObject {
     // MARK: - De-redaction
 
     /// De-redact text using current session's entity mapping
-    /// Converts codes like [PERSON_A] back to original names for display
+    /// Converts codes like [PERSON_A] or PERSON_A back to original names for display
     private func deRedact(_ text: String) -> String {
         guard let session = currentSession else {
             print("SessionAssistant: [DE-REDACT] No session - returning unchanged: \(text.prefix(100))")
             return text
         }
 
-        let reidentifier = TextReidentifier()
-        let result = reidentifier.restore(text: text, using: session.entityMapping, normalizeDates: false)
+        var result = text
+
+        // Get all mappings and sort by length (longest first to avoid partial replacements)
+        let allMappings = session.entityMapping.allMappings.sorted {
+            $0.replacement.count > $1.replacement.count
+        }
+
+        for mapping in allMappings where !mapping.original.isEmpty {
+            // Replace bracketed version: [PERSON_A] → "John"
+            result = result.replacingOccurrences(of: mapping.replacement, with: mapping.original)
+
+            // Also replace unbracketed version: PERSON_A → "John"
+            // AI sometimes drops brackets in its response
+            let unbracketed = mapping.replacement
+                .replacingOccurrences(of: "[", with: "")
+                .replacingOccurrences(of: "]", with: "")
+            if !unbracketed.isEmpty && unbracketed != mapping.replacement {
+                result = result.replacingOccurrences(of: unbracketed, with: mapping.original)
+            }
+        }
 
         // Log if text changed (redaction codes were replaced)
         if result != text {
