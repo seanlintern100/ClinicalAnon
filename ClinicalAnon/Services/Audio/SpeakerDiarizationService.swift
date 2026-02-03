@@ -299,40 +299,48 @@ class SpeakerDiarizationService: ObservableObject {
         return result
     }
 
-    /// Find the speaker segment that best matches a transcript segment's time range
+    /// Find the speaker segment that contains the midpoint of a transcript segment
+    /// Using midpoint is more robust than overlap when diarization has boundary lag
     private func findBestSpeakerMatch(
         transcriptStart: TimeInterval,
         transcriptEnd: TimeInterval,
         speakerSegments: [SpeakerSegment]
     ) -> SpeakerSegment? {
-        var bestMatch: SpeakerSegment?
-        var bestOverlap: TimeInterval = 0
+        // Use the midpoint of the transcript segment
+        let midpoint = (transcriptStart + transcriptEnd) / 2.0
 
+        // Find which speaker segment contains this midpoint
         for speakerSeg in speakerSegments {
-            // Calculate overlap
-            let overlapStart = max(transcriptStart, speakerSeg.startTime)
-            let overlapEnd = min(transcriptEnd, speakerSeg.endTime)
-            let overlap = max(0, overlapEnd - overlapStart)
-
-            if overlap > bestOverlap {
-                bestOverlap = overlap
-                bestMatch = speakerSeg
+            if midpoint >= speakerSeg.startTime && midpoint <= speakerSeg.endTime {
+                return speakerSeg
             }
         }
 
-        // Only return match if there's meaningful overlap (at least 30% of transcript segment)
-        // Lowered from 50% to improve matching coverage
-        let transcriptDuration = transcriptEnd - transcriptStart
-        if bestOverlap > transcriptDuration * 0.3 {
-            return bestMatch
+        // Fallback: find closest speaker segment if midpoint falls in a gap
+        var closestMatch: SpeakerSegment?
+        var closestDistance: TimeInterval = .infinity
+
+        for speakerSeg in speakerSegments {
+            let distanceToStart = abs(midpoint - speakerSeg.startTime)
+            let distanceToEnd = abs(midpoint - speakerSeg.endTime)
+            let minDistance = min(distanceToStart, distanceToEnd)
+
+            if minDistance < closestDistance {
+                closestDistance = minDistance
+                closestMatch = speakerSeg
+            }
+        }
+
+        // Only use fallback if within 2 seconds of a segment
+        if closestDistance <= 2.0 {
+#if DEBUG
+            print("SpeakerDiarizationService: Midpoint \(String(format: "%.1f", midpoint))s in gap, using closest segment (distance: \(String(format: "%.1f", closestDistance))s)")
+#endif
+            return closestMatch
         }
 
 #if DEBUG
-        // Log when no match is found for debugging
-        if bestOverlap > 0 {
-            let overlapPercent = (bestOverlap / transcriptDuration) * 100
-            print("SpeakerDiarizationService: No match for segment \(String(format: "%.1f", transcriptStart))-\(String(format: "%.1f", transcriptEnd))s, best overlap: \(String(format: "%.0f", overlapPercent))% (need 30%)")
-        }
+        print("SpeakerDiarizationService: No match for segment \(String(format: "%.1f", transcriptStart))-\(String(format: "%.1f", transcriptEnd))s, midpoint \(String(format: "%.1f", midpoint))s not in any speaker segment")
 #endif
 
         return nil
