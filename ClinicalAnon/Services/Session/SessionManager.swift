@@ -102,15 +102,6 @@ class SessionManager: ObservableObject {
         // Reset assistant for new session
         assistantService.reset()
 
-        // Start speaker diarization session if enabled (for cross-chunk speaker tracking)
-        if SpeakerDiarizationService.isEnabled {
-            do {
-                try await SpeakerDiarizationService.shared.startSession()
-            } catch {
-                print("SessionManager: Failed to start diarization session (non-fatal): \(error)")
-            }
-        }
-
         let session = LiveSession()
         sessions.insert(session, at: 0)  // Add to beginning (most recent)
         activeSession = session
@@ -239,11 +230,6 @@ class SessionManager: ObservableObject {
 
         // Stop audio capture
         audioCaptureService.stopCapture()
-
-        // End speaker diarization session (clears cross-chunk speaker state)
-        if SpeakerDiarizationService.isEnabled {
-            SpeakerDiarizationService.shared.endSession()
-        }
 
         // Save assistant learnings from this session
         Task {

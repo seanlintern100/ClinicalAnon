@@ -16,7 +16,6 @@ enum DiarizationError: Error, LocalizedError {
     case modelLoadFailed(String)
     case diarizationFailed(String)
     case audioFileNotFound(String)
-    case sessionNotActive
 
     var errorDescription: String? {
         switch self {
@@ -28,8 +27,6 @@ enum DiarizationError: Error, LocalizedError {
             return "Diarization failed: \(reason)"
         case .audioFileNotFound(let path):
             return "Audio file not found at: \(path)"
-        case .sessionNotActive:
-            return "No active diarization session. Call startSession() first."
         }
     }
 }
@@ -59,7 +56,7 @@ struct SpeakerSegment {
 // MARK: - Speaker Diarization Service
 
 /// Service for identifying and separating multiple speakers in audio
-/// Uses FluidAudio's DiarizerManager for on-device diarization with cross-chunk speaker tracking
+/// Uses FluidAudio's OfflineDiarizerManager (pyannote-based) for on-device diarization
 @MainActor
 class SpeakerDiarizationService: ObservableObject {
 
@@ -71,150 +68,53 @@ class SpeakerDiarizationService: ObservableObject {
 
     @Published private(set) var isInitialized: Bool = false
     @Published private(set) var isProcessing: Bool = false
-    @Published private(set) var sessionActive: Bool = false
     @Published private(set) var error: DiarizationError?
 
-    // MARK: - FluidAudio Diarizer (Streaming with cross-chunk tracking)
+    // MARK: - FluidAudio Diarizer
 
-    private var diarizer: DiarizerManager?
-    private var models: DiarizerModels?
-
-    /// Cumulative time offset for cross-chunk timestamp tracking
-    private var cumulativeTimeOffset: TimeInterval = 0
+    private var diarizer: OfflineDiarizerManager?
 
     // MARK: - Initialization
 
     private init() {}
 
-    /// Load diarization models (call once during app startup)
-    func loadModels() async throws {
+    /// Initialize the diarization model
+    /// Call this before first use (can be called during app startup or lazily)
+    func initialize() async throws {
         guard !isInitialized else { return }
 
         do {
-            print("SpeakerDiarizationService: Loading FluidAudio models...")
-            models = try await DiarizerModels.download()
+            let config = OfflineDiarizerConfig()
+            diarizer = OfflineDiarizerManager(config: config)
+            try await diarizer?.prepareModels()
             isInitialized = true
-            print("SpeakerDiarizationService: Models loaded successfully")
+#if DEBUG
+            print("SpeakerDiarizationService: FluidAudio diarizer initialized successfully")
+#endif
         } catch {
             self.error = .modelLoadFailed(error.localizedDescription)
             throw DiarizationError.modelLoadFailed(error.localizedDescription)
         }
     }
 
-    // MARK: - Session Lifecycle
-
-    /// Start a new diarization session (call when recording starts)
-    /// This creates a new DiarizerManager that will track speakers across chunks
-    func startSession() async throws {
-        // Load models if not already initialized
-        if !isInitialized {
-            try await loadModels()
-        }
-
-        guard let models = self.models else {
-            throw DiarizationError.notInitialized
-        }
-
-        // Create fresh diarizer for this session with speaker tracking
-        let config = DiarizerConfig(
-            clusteringThreshold: 0.7,     // Optimal for speaker grouping
-            minSpeechDuration: 1.0,       // Minimum 1 second speech
-            minEmbeddingUpdateDuration: 2.0,
-            minSilenceGap: 0.5,
-            numClusters: -1,              // Auto-detect speaker count
-            minActiveFramesCount: 10.0,
-            debugMode: false
-        )
-
-        diarizer = DiarizerManager(config: config)
-        diarizer?.initialize(models: models)
-
-        cumulativeTimeOffset = 0
-        sessionActive = true
-
-        print("SpeakerDiarizationService: Session started - cross-chunk speaker tracking enabled")
-    }
-
-    /// End the diarization session (call when recording stops)
-    func endSession() {
-        diarizer?.cleanup()
+    /// Unload the model to free memory
+    func unload() {
         diarizer = nil
-        sessionActive = false
-        cumulativeTimeOffset = 0
-        print("SpeakerDiarizationService: Session ended - speaker state cleared")
+        isInitialized = false
     }
 
     // MARK: - Diarization
 
-    /// Process audio samples for the current session
-    /// Speaker IDs are maintained across calls within the same session
-    /// - Parameters:
-    ///   - samples: Audio samples (16kHz mono)
-    ///   - chunkDuration: Duration of this chunk in seconds (for time offset tracking)
+    /// Diarize audio to identify distinct speakers
+    /// - Parameter audioURL: URL to the audio file
     /// - Returns: Array of speaker segments with timing and speaker IDs
-    func processSamples(_ samples: [Float], chunkDuration: TimeInterval) async throws -> [SpeakerSegment] {
-        guard sessionActive, let diarizer = diarizer else {
-            throw DiarizationError.sessionNotActive
-        }
-
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            // Process samples with time offset for session-level timestamps
-            let result = try diarizer.performCompleteDiarization(
-                samples,
-                sampleRate: 16000,
-                atTime: cumulativeTimeOffset
-            )
-
-            // Update cumulative time offset for next chunk
-            cumulativeTimeOffset += chunkDuration
-
-            // Convert FluidAudio results to our SpeakerSegment type
-            let segments = result.segments.map { segment in
-                SpeakerSegment(
-                    speakerId: segment.speakerId,
-                    startTime: TimeInterval(segment.startTimeSeconds),
-                    endTime: TimeInterval(segment.endTimeSeconds),
-                    confidence: segment.qualityScore
-                )
-            }
-
-#if DEBUG
-            let uniqueSpeakers = Set(segments.map { $0.speakerId })
-            print("SpeakerDiarizationService: Found \(uniqueSpeakers.count) speakers, \(segments.count) segments (time offset: \(String(format: "%.1f", cumulativeTimeOffset))s)")
-#endif
-
-            return segments
-        } catch let error as DiarizerError {
-            self.error = .diarizationFailed(error.localizedDescription)
-            throw DiarizationError.diarizationFailed(error.localizedDescription)
-        } catch {
-            let diarizationError = DiarizationError.diarizationFailed(error.localizedDescription)
-            self.error = diarizationError
-            throw diarizationError
-        }
-    }
-
-    /// Legacy method: Diarize from file URL (for backwards compatibility)
-    /// Note: This creates a one-off diarization without session tracking
     func diarize(audioURL: URL) async throws -> [SpeakerSegment] {
-        // If session is active, use session-aware processing
-        if sessionActive {
-            let converter = AudioConverter()
-            let samples = try converter.resampleAudioFile(path: audioURL.path)
-            let duration = TimeInterval(samples.count) / 16000.0
-            return try await processSamples(samples, chunkDuration: duration)
-        }
-
-        // Fallback: one-off diarization without session tracking
-        // Load models if not already initialized
+        // Initialize if needed
         if !isInitialized {
-            try await loadModels()
+            try await initialize()
         }
 
-        guard let models = self.models else {
+        guard let diarizer = diarizer else {
             throw DiarizationError.notInitialized
         }
 
@@ -226,30 +126,26 @@ class SpeakerDiarizationService: ObservableObject {
         defer { isProcessing = false }
 
         do {
-            // Create temporary diarizer for one-off processing
-            let config = DiarizerConfig()
-            let tempDiarizer = DiarizerManager(config: config)
-            tempDiarizer.initialize(models: models)
-
+            // Load and resample audio to 16kHz mono (required by FluidAudio)
             let converter = AudioConverter()
             let samples = try converter.resampleAudioFile(path: audioURL.path)
 
-            let result = try tempDiarizer.performCompleteDiarization(samples, sampleRate: 16000)
+            // Run diarization on audio samples
+            let result = try await diarizer.process(audio: samples)
 
-            tempDiarizer.cleanup()
-
+            // Convert FluidAudio results to our SpeakerSegment type
             let segments = result.segments.map { segment in
                 SpeakerSegment(
                     speakerId: segment.speakerId,
                     startTime: TimeInterval(segment.startTimeSeconds),
                     endTime: TimeInterval(segment.endTimeSeconds),
-                    confidence: segment.qualityScore
+                    confidence: 1.0  // FluidAudio doesn't provide per-segment confidence
                 )
             }
 
 #if DEBUG
             let uniqueSpeakers = Set(segments.map { $0.speakerId })
-            print("SpeakerDiarizationService: Found \(uniqueSpeakers.count) speakers, \(segments.count) segments (one-off)")
+            print("SpeakerDiarizationService: Found \(uniqueSpeakers.count) speakers, \(segments.count) segments")
 #endif
 
             return segments
