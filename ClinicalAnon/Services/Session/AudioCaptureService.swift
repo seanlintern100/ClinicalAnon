@@ -333,8 +333,11 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Start system audio capture for remote participants
         // With voice processing enabled on mic, this gives us clean separation
         do {
-            try await setupSystemAudioCapture()
+            // IMPORTANT: Initialize system audio writer BEFORE starting the stream
+            // Otherwise audio frames arrive before writer is ready and are dropped
             try startNewChunk()
+
+            try await setupSystemAudioCapture()
             print("AudioCaptureService: System audio capture started")
         } catch {
             print("AudioCaptureService: System audio capture failed (optional): \(error)")
@@ -1003,7 +1006,13 @@ extension AudioCaptureService: SCStreamOutput {
             guard let writer = self.systemWriter,
                   let input = self.systemWriterInput,
                   writer.status == .writing,
-                  input.isReadyForMoreMediaData else { return }
+                  input.isReadyForMoreMediaData else {
+                // Debug: Log when frames are dropped
+                if self.systemAudioFrameCount <= 5 {
+                    print("AudioCaptureService: [DEBUG] System audio frame \(self.systemAudioFrameCount) dropped - writer not ready (writer: \(self.systemWriter != nil), status: \(self.systemWriter?.status.rawValue ?? -1))")
+                }
+                return
+            }
 
             input.append(bufferCopy)
         }
