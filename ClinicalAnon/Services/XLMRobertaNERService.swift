@@ -229,14 +229,10 @@ class XLMRobertaNERService: ObservableObject {
         let startTime = Date()
 
         // Normalize Unicode (NFC)
-        print("XLMRobertaNERService: Normalizing text...")
         let normalizedText = text.precomposedStringWithCanonicalMapping
-        print("XLMRobertaNERService: Text normalized")
 
         // Split into chunks for long documents
-        print("XLMRobertaNERService: Splitting into chunks...")
         let chunks = splitIntoChunks(normalizedText)
-        print("XLMRobertaNERService: Split into \(chunks.count) chunk(s)")
 
         // Process each chunk and collect entities
         var allRawEntities: [XLMREntity] = []
@@ -399,8 +395,6 @@ class XLMRobertaNERService: ObservableObject {
         padId: Int
     ) async throws -> [XLMREntity] {
 
-        print("XLMRobertaNERService: Processing chunk \(chunkIndex + 1)/\(totalChunks) (chars \(chunk.startOffset)-\(chunk.endOffset))")
-
         // Tokenize the chunk
         let (inputIds, attentionMask, tokenToChar) = tokenizer.tokenize(
             text: chunk.text,
@@ -420,14 +414,10 @@ class XLMRobertaNERService: ObservableObject {
             "attention_mask": attentionMaskArray
         ])
 
-        print("XLMRobertaNERService: Running inference for chunk \(chunkIndex + 1)...")
-
         // Run inference on background thread to avoid blocking
         let output = try await Task.detached(priority: .userInitiated) {
             try model.prediction(from: input)
         }.value
-
-        print("XLMRobertaNERService: Inference complete for chunk \(chunkIndex + 1)")
 
         // Extract logits
         guard let logitsValue = output.featureValue(for: "logits"),
@@ -458,7 +448,6 @@ class XLMRobertaNERService: ObservableObject {
             )
         }
 
-        print("XLMRobertaNERService: Chunk \(chunkIndex + 1) found \(globalEntities.count) entities")
         return globalEntities
     }
 
@@ -492,7 +481,6 @@ class XLMRobertaNERService: ObservableObject {
             lastEnd = max(lastEnd, entity.end)
         }
 
-        print("XLMRobertaNERService: Deduplicated \(entities.count) → \(result.count) entities")
         return result
     }
 
@@ -520,7 +508,6 @@ class XLMRobertaNERService: ObservableObject {
         // Sort by position for consistent ordering
         result.sort { $0.start < $1.start }
 
-        print("XLMRobertaNERService: Removed subsumed entities \(entities.count) → \(result.count)")
         return result
     }
 

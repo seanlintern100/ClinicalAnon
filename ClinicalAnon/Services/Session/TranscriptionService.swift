@@ -558,18 +558,19 @@ class TranscriptionService: ObservableObject {
                         options: .regularExpression
                     )
                     // Remove [inaudible], [no audio], [silence] markers - these don't add value
+                    // Note: Whisper may output these with spaces inside brackets: [ Silence ]
                     cleanText = cleanText.replacingOccurrences(
-                        of: #"\[inaudible\]"#,
+                        of: #"\[\s*inaudible\s*\]"#,
                         with: "",
                         options: [.regularExpression, .caseInsensitive]
                     )
                     cleanText = cleanText.replacingOccurrences(
-                        of: #"\[no audio\]"#,
+                        of: #"\[\s*no audio\s*\]"#,
                         with: "",
                         options: [.regularExpression, .caseInsensitive]
                     )
                     cleanText = cleanText.replacingOccurrences(
-                        of: #"\[silence\]"#,
+                        of: #"\[\s*silence\s*\]"#,
                         with: "",
                         options: [.regularExpression, .caseInsensitive]
                     )

@@ -998,10 +998,6 @@ extension AudioCaptureService: SCStreamOutput {
                 self.systemLevel = avgLevel
             }
 
-            // Log only first few and then every 500 frames
-            if self.systemAudioFrameCount <= 3 || self.systemAudioFrameCount % 500 == 0 {
-                print("AudioCaptureService: System audio frame \(self.systemAudioFrameCount), \(numSamples) samples")
-            }
 
             // Write to file
             guard let writer = self.systemWriter,

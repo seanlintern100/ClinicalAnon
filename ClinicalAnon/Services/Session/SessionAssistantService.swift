@@ -96,9 +96,44 @@ class SessionAssistantService: ObservableObject {
     /// De-redact text using current session's entity mapping
     /// Converts codes like [PERSON_A] back to original names for display
     private func deRedact(_ text: String) -> String {
-        guard let session = currentSession else { return text }
+        guard let session = currentSession else {
+            print("SessionAssistant: [DE-REDACT] No session - returning unchanged: \(text.prefix(100))")
+            return text
+        }
+
         let reidentifier = TextReidentifier()
-        return reidentifier.restore(text: text, using: session.entityMapping, normalizeDates: false)
+        let result = reidentifier.restore(text: text, using: session.entityMapping, normalizeDates: false)
+
+        // Log if text changed (redaction codes were replaced)
+        if result != text {
+            print("SessionAssistant: [DE-REDACT] Transformed:")
+            print("  Input:  \(text.prefix(150))")
+            print("  Output: \(result.prefix(150))")
+        }
+
+        return result
+    }
+
+    /// Log entity mapping state for debugging
+    private func logEntityMappingState(for session: LiveSession) {
+        let mapping = session.entityMapping
+        print("SessionAssistant: [ENTITY-MAPPING] State:")
+        print("  Total mappings: \(mapping.totalMappings)")
+
+        // Show sample mappings (first 5)
+        let samples = Array(mapping.allMappings.prefix(5))
+        for entry in samples {
+            print("    \(entry.replacement) → \"\(entry.original)\"")
+        }
+
+        if mapping.totalMappings > 5 {
+            print("    ... and \(mapping.totalMappings - 5) more")
+        }
+
+        // Check if mapping is empty
+        if mapping.totalMappings == 0 {
+            print("  ⚠️ WARNING: EntityMapping is EMPTY - no de-redaction will occur!")
+        }
     }
 
     // MARK: - AI Analysis
@@ -108,9 +143,41 @@ class SessionAssistantService: ObservableObject {
         // Store session for de-redaction of AI responses
         currentSession = session
 
-        let redactedTranscript = truncateTranscript(session.redactedTranscript)
         print("SessionAssistant: [START] Running analysis...")
-        print("SessionAssistant: Redacted transcript length: \(redactedTranscript.count) chars")
+
+        // Log detected entities
+        print("SessionAssistant: [ENTITIES] Detected: \(session.detectedEntities.count) entities")
+        for entity in session.detectedEntities.prefix(10) {
+            print("  \(entity.replacementCode) ← \"\(entity.originalText)\" (\(entity.type))")
+        }
+        if session.detectedEntities.count > 10 {
+            print("  ... and \(session.detectedEntities.count - 10) more")
+        }
+
+        // Log entity mapping state
+        logEntityMappingState(for: session)
+
+        // Get redacted transcript
+        let redactedTranscript = truncateTranscript(session.redactedTranscript)
+
+        // Log what we're sending (check for redaction codes)
+        print("SessionAssistant: [SENDING] Transcript length: \(redactedTranscript.count) chars")
+        print("SessionAssistant: [SENDING] Transcript preview (first 800 chars):")
+        print("---TRANSCRIPT START---")
+        print(redactedTranscript.prefix(800))
+        print("---TRANSCRIPT END---")
+
+        // Check if redaction codes are present
+        let hasPersonCodes = redactedTranscript.contains("[PERSON_")
+        let hasDateCodes = redactedTranscript.contains("[DATE_")
+        let hasOrgCodes = redactedTranscript.contains("[ORG_")
+        let hasLocationCodes = redactedTranscript.contains("[LOCATION_")
+        print("SessionAssistant: [REDACTION CHECK] Contains codes: PERSON=\(hasPersonCodes), DATE=\(hasDateCodes), ORG=\(hasOrgCodes), LOCATION=\(hasLocationCodes)")
+
+        // Also check for raw transcript to compare
+        let rawPreview = session.rawTranscript.prefix(300)
+        print("SessionAssistant: [RAW COMPARE] Raw transcript preview (first 300):")
+        print(rawPreview)
 
         guard bedrockService.isConfigured else {
             state.lastAnalysisError = "AI service not configured"
@@ -141,11 +208,17 @@ class SessionAssistantService: ObservableObject {
                     systemPrompt: systemPrompt,
                     messages: [ChatMessage.user(userMessage)],
                     model: preferencesManager.selectedModel,
-                    maxTokens: 2048
+                    maxTokens: 4096
                 )
 
                 print("SessionAssistant: [RECEIVED] Response length: \(response.count) chars")
-                print("SessionAssistant: Response preview: \(String(response.prefix(200)))...")
+
+                // Check if AI response contains redaction codes (it should)
+                let responseHasPersonCodes = response.contains("[PERSON_")
+                let responseHasDateCodes = response.contains("[DATE_")
+                print("SessionAssistant: [AI RESPONSE] Contains codes: PERSON=\(responseHasPersonCodes), DATE=\(responseHasDateCodes)")
+                print("SessionAssistant: [AI RESPONSE] Preview (first 500):")
+                print(String(response.prefix(500)))
 
                 // Parse and process response
                 if let analysisResponse = parseAIResponse(response) {
