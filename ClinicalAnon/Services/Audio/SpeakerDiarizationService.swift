@@ -106,7 +106,8 @@ class SpeakerDiarizationService: ObservableObject {
     /// Start a new diarization session (call when recording starts)
     /// This creates a new DiarizerManager that will track speakers across chunks
     func startSession() async throws {
-        guard isInitialized, let models = models else {
+        // Load models if not already initialized
+        if !isInitialized {
             try await loadModels()
         }
 
@@ -208,7 +209,8 @@ class SpeakerDiarizationService: ObservableObject {
         }
 
         // Fallback: one-off diarization without session tracking
-        guard isInitialized, let models = models else {
+        // Load models if not already initialized
+        if !isInitialized {
             try await loadModels()
         }
 
