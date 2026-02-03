@@ -86,9 +86,11 @@ class SpeakerDiarizationService: ObservableObject {
 
     private var diarizer: OfflineDiarizerManager?
 
-    // MARK: - Cross-Chunk Speaker Tracking (DISABLED)
-    // Note: Cross-chunk tracking was causing speaker merging issues.
-    // Each chunk now has independent speaker IDs (1, 2) that may not match across chunks.
+    // MARK: - Cross-Chunk Speaker Tracking
+
+    /// Reference embeddings from first chunk, keyed by consistent speaker ID ("1", "2")
+    /// Used to re-map subsequent chunks' speaker IDs for consistency
+    private var referenceEmbeddings: [String: [Float]] = [:]
 
     // MARK: - Initialization
 
@@ -129,14 +131,16 @@ class SpeakerDiarizationService: ObservableObject {
     /// Unload the model to free memory
     func unload() {
         diarizer = nil
+        referenceEmbeddings = [:]
         isInitialized = false
     }
 
     /// Reset speaker tracking for a new session
-    /// Note: Cross-chunk tracking is currently disabled, so this is a no-op
+    /// Clears reference embeddings so the next chunk establishes new speaker identities
     func resetSpeakerTracking() {
+        referenceEmbeddings = [:]
 #if DEBUG
-        print("SpeakerDiarizationService: New session started (cross-chunk tracking disabled)")
+        print("SpeakerDiarizationService: Speaker tracking reset - reference embeddings cleared")
 #endif
     }
 
@@ -183,16 +187,23 @@ class SpeakerDiarizationService: ObservableObject {
             }
 #endif
 
+            // Build speaker ID mapping for cross-chunk consistency
+            // Extract speaker data for mapping
+            let speakerData = result.segments.map { (
+                id: $0.speakerId.replacingOccurrences(of: "S", with: ""),
+                embedding: $0.embedding
+            )}
+            let speakerIdMapping = buildSpeakerIdMapping(from: speakerData)
+
             // Convert FluidAudio results to our SpeakerSegment type
-            // Use FluidAudio's native speaker IDs directly (e.g., "S1", "S2")
-            // Note: Cross-chunk SpeakerManager tracking disabled - it was causing issues
-            // by merging distinct speakers when first chunk had problematic embeddings
+            // Apply speaker ID mapping for cross-chunk consistency
             let segments = result.segments.map { segment -> SpeakerSegment in
-                // Convert FluidAudio's "S1", "S2" to numeric "1", "2" for consistency
-                let speakerId = segment.speakerId.replacingOccurrences(of: "S", with: "")
+                // Convert FluidAudio's "S1", "S2" to numeric and apply mapping
+                let rawId = segment.speakerId.replacingOccurrences(of: "S", with: "")
+                let mappedId = speakerIdMapping[rawId] ?? rawId
 
                 return SpeakerSegment(
-                    speakerId: speakerId,
+                    speakerId: mappedId,
                     startTime: TimeInterval(segment.startTimeSeconds),
                     endTime: TimeInterval(segment.endTimeSeconds),
                     confidence: segment.qualityScore,
@@ -332,5 +343,116 @@ class SpeakerDiarizationService: ObservableObject {
     /// Check if enhanced diarization is enabled in settings
     static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: SettingsKeys.enhancedDiarizationEnabled)
+    }
+
+    // MARK: - Cross-Chunk Speaker Mapping
+
+    /// Build a mapping from FluidAudio's chunk-local speaker IDs to consistent session-wide IDs
+    /// On first chunk, stores reference embeddings. On subsequent chunks, maps based on embedding similarity.
+    private func buildSpeakerIdMapping(from speakerData: [(id: String, embedding: [Float])]) -> [String: String] {
+        // Collect unique speakers and their average embeddings from this chunk
+        var chunkSpeakerEmbeddings: [String: [Float]] = [:]
+        var chunkSpeakerCounts: [String: Int] = [:]
+
+        for speaker in speakerData {
+            let rawId = speaker.id
+            guard !speaker.embedding.isEmpty else { continue }
+
+            if chunkSpeakerEmbeddings[rawId] == nil {
+                chunkSpeakerEmbeddings[rawId] = speaker.embedding
+                chunkSpeakerCounts[rawId] = 1
+            } else {
+                // Average the embeddings for this speaker
+                var existing = chunkSpeakerEmbeddings[rawId]!
+                for i in 0..<min(existing.count, speaker.embedding.count) {
+                    existing[i] += speaker.embedding[i]
+                }
+                chunkSpeakerEmbeddings[rawId] = existing
+                chunkSpeakerCounts[rawId] = (chunkSpeakerCounts[rawId] ?? 0) + 1
+            }
+        }
+
+        // Normalize averaged embeddings
+        for (speakerId, count) in chunkSpeakerCounts {
+            if var embedding = chunkSpeakerEmbeddings[speakerId], count > 1 {
+                for i in 0..<embedding.count {
+                    embedding[i] /= Float(count)
+                }
+                chunkSpeakerEmbeddings[speakerId] = embedding
+            }
+        }
+
+        // First chunk: store as reference and use IDs as-is
+        if referenceEmbeddings.isEmpty {
+            referenceEmbeddings = chunkSpeakerEmbeddings
+#if DEBUG
+            print("SpeakerDiarizationService: [TRACKING] First chunk - stored \(referenceEmbeddings.count) reference embeddings (IDs: \(referenceEmbeddings.keys.sorted().joined(separator: ", ")))")
+#endif
+            // Return identity mapping
+            return Dictionary(uniqueKeysWithValues: chunkSpeakerEmbeddings.keys.map { ($0, $0) })
+        }
+
+        // Subsequent chunks: find best mapping based on embedding distance
+        var mapping: [String: String] = [:]
+        var usedReferenceIds: Set<String> = []
+
+        // Sort chunk speakers by total speech duration (process longer speakers first for better matching)
+        let sortedChunkSpeakers = chunkSpeakerEmbeddings.keys.sorted { a, b in
+            (chunkSpeakerCounts[a] ?? 0) > (chunkSpeakerCounts[b] ?? 0)
+        }
+
+        for chunkSpeakerId in sortedChunkSpeakers {
+            guard let chunkEmbedding = chunkSpeakerEmbeddings[chunkSpeakerId] else { continue }
+
+            var bestRefId: String?
+            var bestDistance: Float = Float.infinity
+
+            for (refId, refEmbedding) in referenceEmbeddings {
+                guard !usedReferenceIds.contains(refId) else { continue }
+
+                let distance = cosineDistance(chunkEmbedding, refEmbedding)
+                if distance < bestDistance {
+                    bestDistance = distance
+                    bestRefId = refId
+                }
+            }
+
+            if let refId = bestRefId {
+                mapping[chunkSpeakerId] = refId
+                usedReferenceIds.insert(refId)
+#if DEBUG
+                print("SpeakerDiarizationService: [TRACKING] Mapped chunk speaker \(chunkSpeakerId) → reference \(refId) (distance: \(String(format: "%.3f", bestDistance)))")
+#endif
+            } else {
+                // No available reference speaker, keep original ID
+                mapping[chunkSpeakerId] = chunkSpeakerId
+#if DEBUG
+                print("SpeakerDiarizationService: [TRACKING] No reference match for chunk speaker \(chunkSpeakerId), keeping original ID")
+#endif
+            }
+        }
+
+        return mapping
+    }
+
+    /// Compute cosine distance between two embeddings (0 = identical, 2 = opposite)
+    private func cosineDistance(_ a: [Float], _ b: [Float]) -> Float {
+        guard a.count == b.count, !a.isEmpty else { return Float.infinity }
+
+        var dotProduct: Float = 0
+        var normA: Float = 0
+        var normB: Float = 0
+
+        for i in 0..<a.count {
+            dotProduct += a[i] * b[i]
+            normA += a[i] * a[i]
+            normB += b[i] * b[i]
+        }
+
+        let denominator = sqrt(normA) * sqrt(normB)
+        guard denominator > 0 else { return Float.infinity }
+
+        let cosineSimilarity = dotProduct / denominator
+        return 1.0 - cosineSimilarity  // Convert to distance
     }
 }
