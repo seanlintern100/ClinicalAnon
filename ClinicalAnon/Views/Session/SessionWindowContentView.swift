@@ -18,6 +18,8 @@ struct SessionWindowContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @State private var selectedSession: LiveSession?
     @State private var sessionToName: LiveSession?
+    @State private var showExpiredSessionsAlert = false
+    @State private var expiredSessions: [LiveSession] = []
 
     // MARK: - Body
 
@@ -57,6 +59,37 @@ struct SessionWindowContentView: View {
                     name: .sessionTranscriptReadyForRedact,
                     object: payload
                 )
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .expiredSessionsFound)) { notification in
+            if let sessions = notification.object as? [LiveSession] {
+                expiredSessions = sessions
+                showExpiredSessionsAlert = true
+            }
+        }
+        .alert("Old Sessions Found", isPresented: $showExpiredSessionsAlert) {
+            Button("Delete All", role: .destructive) {
+                Task {
+                    for session in expiredSessions {
+                        await sessionManager.deleteSession(session)
+                    }
+                    expiredSessions = []
+                }
+            }
+            Button("Keep All", role: .cancel) {
+                expiredSessions = []
+            }
+        } message: {
+            Text("\(expiredSessions.count) session\(expiredSessions.count == 1 ? " is" : "s are") older than 24 hours. Would you like to delete them?")
+        }
+        .onChange(of: selectedSession) { oldSession, newSession in
+            // Save current assistant state before switching
+            if let old = oldSession {
+                sessionManager.saveCurrentAssistantState(for: old.id)
+            }
+            // Restore assistant state for newly selected session
+            if let new = newSession {
+                sessionManager.restoreAssistantState(for: new)
             }
         }
     }

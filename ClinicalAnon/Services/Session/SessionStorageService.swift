@@ -123,7 +123,10 @@ class SessionStorageService {
     // MARK: - Session Persistence
 
     /// Save session metadata to disk
-    func saveSession(_ session: LiveSession) async throws {
+    /// - Parameters:
+    ///   - session: The session to save
+    ///   - assistantState: Optional AI assistant state (parking lot) to persist with session
+    func saveSession(_ session: LiveSession, assistantState: SessionAssistantStateData? = nil) async throws {
         let sessionDir = Self.sessionDirectory(for: session)
         let metadataURL = sessionDir.appendingPathComponent(sessionMetadataFilename)
 
@@ -137,8 +140,8 @@ class SessionStorageService {
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-            // Use LiveSessionData for encoding
-            let sessionData = session.sessionData
+            // Use LiveSessionData for encoding, including assistant state
+            let sessionData = LiveSessionData(from: session, assistantState: assistantState)
             let data = try encoder.encode(sessionData)
             try data.write(to: metadataURL, options: .atomic)
         } catch {
@@ -171,7 +174,20 @@ class SessionStorageService {
 
     /// Load all sessions from disk
     func loadAllSessions() async throws -> [LiveSession] {
+        let result = try await loadAllSessionsWithState()
+        return result.sessions
+    }
+
+    /// Result type for loading sessions with their assistant state
+    struct SessionLoadResult {
+        let sessions: [LiveSession]
+        let assistantStates: [UUID: SessionAssistantStateData]
+    }
+
+    /// Load all sessions from disk, including their assistant state data
+    func loadAllSessionsWithState() async throws -> SessionLoadResult {
         var sessions: [LiveSession] = []
+        var assistantStates: [UUID: SessionAssistantStateData] = [:]
 
         let contents = try FileManager.default.contentsOfDirectory(
             at: sessionsBaseDirectory,
@@ -201,6 +217,11 @@ class SessionStorageService {
                 let sessionData = try decoder.decode(LiveSessionData.self, from: data)
                 let session = LiveSession(from: sessionData)
                 sessions.append(session)
+
+                // Cache the assistant state if present
+                if let assistantState = sessionData.assistantStateData {
+                    assistantStates[session.id] = assistantState
+                }
             } catch {
                 // Log error but continue loading other sessions
                 print("SessionStorageService: Failed to load session at \(item.path): \(error)")
@@ -209,7 +230,8 @@ class SessionStorageService {
         }
 
         // Sort by creation date (newest first)
-        return sessions.sorted { $0.createdAt > $1.createdAt }
+        let sortedSessions = sessions.sorted { $0.createdAt > $1.createdAt }
+        return SessionLoadResult(sessions: sortedSessions, assistantStates: assistantStates)
     }
 
     // MARK: - Session Deletion

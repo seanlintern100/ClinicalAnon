@@ -130,4 +130,42 @@ class SessionAssistantState: ObservableObject {
         lastAnalysisTime = nil
         lastAnalysisError = nil
     }
+
+    // MARK: - Persistence
+
+    /// Export assistant state for persistence
+    var stateData: SessionAssistantStateData {
+        SessionAssistantStateData(
+            details: details,
+            quotes: quotes,
+            agendaItems: agendaItems,
+            themes: themes,
+            feedItems: feedItems
+        )
+    }
+
+    /// Restore assistant state from persisted data
+    func restore(from data: SessionAssistantStateData) {
+        self.details = data.details
+        self.quotes = data.quotes
+        self.agendaItems = data.agendaItems
+        self.themes = data.themes
+        self.feedItems = data.feedItems
+    }
+}
+
+// MARK: - Persistence Data
+
+/// Codable container for persisting assistant state
+struct SessionAssistantStateData: Codable {
+    var details: [ClientDetail]
+    var quotes: [Quote]
+    var agendaItems: [AgendaItem]
+    var themes: [Theme]
+    var feedItems: [FeedItem]
+
+    /// Empty state for initialization
+    static var empty: SessionAssistantStateData {
+        SessionAssistantStateData(details: [], quotes: [], agendaItems: [], themes: [], feedItems: [])
+    }
 }

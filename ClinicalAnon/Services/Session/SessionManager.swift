@@ -40,6 +40,9 @@ class SessionManager: ObservableObject {
         return SessionAssistantService(bedrockService: bedrockService, preferencesManager: preferencesManager)
     }()
 
+    /// Cache of assistant state per session (for restoring when switching sessions)
+    private var assistantStateCache: [UUID: SessionAssistantStateData] = [:]
+
     // MARK: - Duration Timer
 
     private var durationTimer: Timer?
@@ -101,6 +104,9 @@ class SessionManager: ObservableObject {
 
         // Reset assistant for new session
         assistantService.reset()
+
+        // Reset speaker tracking for new session (ensures consistent speaker IDs within session)
+        SpeakerDiarizationService.shared.resetSpeakerTracking()
 
         let session = LiveSession()
         sessions.insert(session, at: 0)  // Add to beginning (most recent)
@@ -239,8 +245,12 @@ class SessionManager: ObservableObject {
         // Mark session complete
         session.state = .complete
 
-        // Save final state
-        try? await storageService.saveSession(session)
+        // Save final state with AI assistant content (parking lot)
+        let assistantState = assistantService.state.stateData
+        try? await storageService.saveSession(session, assistantState: assistantState)
+
+        // Cache the assistant state for this session
+        assistantStateCache[session.id] = assistantState
 
         if activeSession?.id == session.id {
             activeSession = nil
@@ -299,6 +309,28 @@ class SessionManager: ObservableObject {
         try? await storageService.deleteSession(session)
     }
 
+    // MARK: - Assistant State Management
+
+    /// Restore assistant state for a session (called when session is selected in UI)
+    func restoreAssistantState(for session: LiveSession) {
+        // If this session has cached assistant state, restore it
+        if let cachedState = assistantStateCache[session.id] {
+            assistantService.state.restore(from: cachedState)
+            print("SessionManager: Restored assistant state for session \(session.id)")
+        } else {
+            // No cached state - reset to empty
+            assistantService.reset()
+            print("SessionManager: No cached assistant state for session \(session.id)")
+        }
+    }
+
+    /// Save current assistant state for a session (called before switching sessions)
+    func saveCurrentAssistantState(for sessionId: UUID) {
+        let currentState = assistantService.state.stateData
+        assistantStateCache[sessionId] = currentState
+        print("SessionManager: Cached assistant state for session \(sessionId)")
+    }
+
     // MARK: - Recovery
 
     private var hasRestoredSessions = false
@@ -313,9 +345,10 @@ class SessionManager: ObservableObject {
         defer { isRestoring = false }
 
         do {
-            let restoredSessions = try await storageService.loadAllSessions()
+            // Load sessions with their assistant state data
+            let loadResult = try await storageService.loadAllSessionsWithState()
 
-            for session in restoredSessions {
+            for session in loadResult.sessions {
                 // Sessions that were recording when app crashed become complete
                 if session.state == .recording || session.state == .paused {
                     session.state = .complete
@@ -325,14 +358,33 @@ class SessionManager: ObservableObject {
                 sessions.append(session)
             }
 
+            // Cache the assistant states for later restoration
+            for (sessionId, assistantState) in loadResult.assistantStates {
+                assistantStateCache[sessionId] = assistantState
+            }
+
             // Sort by creation date (newest first)
             sessions.sort { $0.createdAt > $1.createdAt }
 
-            if !restoredSessions.isEmpty {
+            if !loadResult.sessions.isEmpty {
                 // Notify user of recovered sessions
                 NotificationCenter.default.post(
                     name: .sessionsRecovered,
-                    object: restoredSessions.count
+                    object: loadResult.sessions.count
+                )
+            }
+
+            // Check for expired sessions (older than 24 hours)
+            let expirationThreshold: TimeInterval = 24 * 60 * 60  // 24 hours in seconds
+            let expiredSessions = sessions.filter {
+                Date().timeIntervalSince($0.createdAt) > expirationThreshold
+            }
+
+            if !expiredSessions.isEmpty {
+                // Notify UI to prompt user about expired sessions
+                NotificationCenter.default.post(
+                    name: .expiredSessionsFound,
+                    object: expiredSessions
                 )
             }
         } catch {
@@ -376,11 +428,10 @@ class SessionManager: ObservableObject {
             // Step 2: SessionAssistant runs AFTER entities detected
             // This ensures session.redactedTranscript includes all detected entities
             await assistantService.processNewSegments(result.segments, for: session)
-        }
 
-        // Auto-save
-        Task {
-            try? await storageService.saveSession(session)
+            // Auto-save with current AI state (parking lot)
+            let assistantState = self.assistantService.state.stateData
+            try? await self.storageService.saveSession(session, assistantState: assistantState)
         }
     }
 
@@ -452,6 +503,7 @@ class SessionManager: ObservableObject {
 extension Notification.Name {
     static let sessionsRecovered = Notification.Name("sessionsRecovered")
     static let sessionNeedsNaming = Notification.Name("sessionNeedsNaming")
+    static let expiredSessionsFound = Notification.Name("expiredSessionsFound")
 }
 
 // MARK: - Preview Helpers

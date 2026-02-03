@@ -66,6 +66,8 @@ struct LiveSessionData: Codable {
     var lastTranscriptUpdate: Date?
     var detectedEntities: [Entity]
     var audioChunkPaths: [AudioChunkReference]
+    var assistantStateData: SessionAssistantStateData?  // AI assistant state (parking lot + feed)
+    var chatMessages: [ChatMessage]?  // AI assistant chat history
 
     /// Initialize with explicit values (used for decoding)
     init(
@@ -80,7 +82,9 @@ struct LiveSessionData: Codable {
         transcriptionGaps: [TranscriptionGap],
         lastTranscriptUpdate: Date?,
         detectedEntities: [Entity],
-        audioChunkPaths: [AudioChunkReference]
+        audioChunkPaths: [AudioChunkReference],
+        assistantStateData: SessionAssistantStateData? = nil,
+        chatMessages: [ChatMessage]? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -94,11 +98,13 @@ struct LiveSessionData: Codable {
         self.lastTranscriptUpdate = lastTranscriptUpdate
         self.detectedEntities = detectedEntities
         self.audioChunkPaths = audioChunkPaths
+        self.assistantStateData = assistantStateData
+        self.chatMessages = chatMessages
     }
 
     /// Initialize from a LiveSession (must be called on MainActor)
     @MainActor
-    init(from session: LiveSession) {
+    init(from session: LiveSession, assistantState: SessionAssistantStateData? = nil) {
         self.id = session.id
         self.createdAt = session.createdAt
         self.state = session.state
@@ -111,6 +117,8 @@ struct LiveSessionData: Codable {
         self.lastTranscriptUpdate = session.lastTranscriptUpdate
         self.detectedEntities = session.detectedEntities
         self.audioChunkPaths = session.audioChunkPaths
+        self.assistantStateData = assistantState
+        self.chatMessages = session.chatMessages
     }
 }
 
@@ -181,6 +189,7 @@ class LiveSession: ObservableObject, Identifiable {
         self.lastTranscriptUpdate = data.lastTranscriptUpdate
         self.detectedEntities = data.detectedEntities
         self.audioChunkPaths = data.audioChunkPaths
+        self.chatMessages = data.chatMessages ?? []
     }
 
     // MARK: - Data Export
