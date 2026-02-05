@@ -105,6 +105,10 @@ class AudioCaptureService: NSObject, ObservableObject {
     private var systemAudioRestartAttempts: Int = 0
     private let maxRestartAttempts: Int = 3
 
+    /// Track when system audio last worked to reset restart counter
+    private var lastSuccessfulSystemAudioTime: Date?
+    private let restartCounterResetInterval: TimeInterval = 30  // Reset counter after 30s of good audio
+
     // MARK: - Audio Device Selection
 
     @Published var availableInputDevices: [AudioDevice] = []
@@ -141,6 +145,11 @@ class AudioCaptureService: NSObject, ObservableObject {
     // MARK: - Chunk Rotation
 
     private var chunkRotationTimer: Timer?
+
+    // MARK: - Process Activity (prevent App Nap during recording)
+
+    /// Activity token to prevent macOS from throttling or suspending the app during recording
+    private var processActivity: NSObjectProtocol?
 
     // MARK: - Audio Device Enumeration
 
@@ -321,6 +330,13 @@ class AudioCaptureService: NSObject, ObservableObject {
         currentSession = session
         currentChunkIndex = 0
 
+        // Begin activity to prevent App Nap from throttling audio capture
+        processActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled, .latencyCritical],
+            reason: "Recording live session audio"
+        )
+        print("AudioCaptureService: Started process activity to prevent App Nap")
+
         // Request permissions first
         try await requestMicrophonePermission()
 
@@ -431,11 +447,19 @@ class AudioCaptureService: NSObject, ObservableObject {
             systemAudioStream = nil
         }
 
+        // End process activity
+        if let activity = processActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            processActivity = nil
+            print("AudioCaptureService: Ended process activity")
+        }
+
         currentSession = nil
         sessionStartTime = nil
         isCapturing = false
         systemAudioHealthy = true  // Reset for next session
         systemAudioRestartAttempts = 0
+        lastSuccessfulSystemAudioTime = nil
     }
 
     // MARK: - Permission Handling
@@ -812,6 +836,16 @@ class AudioCaptureService: NSObject, ObservableObject {
             print("AudioCaptureService: Added mic chunk \(chunkIndex), size: \(micSize) bytes")
         }
 
+        // Check if system audio stream died silently (no frames received this chunk)
+        let frameCountThisChunk = systemAudioFrameCount
+        if frameCountThisChunk == 0 && systemAudioHealthy {
+            print("AudioCaptureService: ⚠️ System audio stream appears dead (0 frames in chunk \(chunkIndex)) - triggering restart")
+            systemAudioHealthy = false
+            Task { @MainActor in
+                await self.attemptSystemAudioRestart()
+            }
+        }
+
         // Finish writing system audio (if active)
         if let writer = systemWriter, let input = systemWriterInput {
             input.markAsFinished()
@@ -956,14 +990,20 @@ class AudioCaptureService: NSObject, ObservableObject {
 extension AudioCaptureService: SCStreamDelegate {
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
         let nsError = error as NSError
+        // Log detailed error info to help diagnose -3821 "Stream was stopped by the system"
         print("AudioCaptureService: System audio stream stopped with error: \(error) (code: \(nsError.code))")
+        if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            print("AudioCaptureService: Underlying error: \(underlyingError)")
+        }
+        print("AudioCaptureService: Error domain: \(nsError.domain), userInfo: \(nsError.userInfo)")
 
         // Dispatch to main actor for state updates and restart attempt
         Task { @MainActor [weak self] in
             guard let self = self else { return }
 
-            // Mark system audio as unhealthy
+            // Mark system audio as unhealthy and reset success tracking
             self.systemAudioHealthy = false
+            self.lastSuccessfulSystemAudioTime = nil
 
             // Error -3821 = "Stream was stopped by the system"
             // This can happen due to audio driver conflicts, display changes, etc.
@@ -976,21 +1016,34 @@ extension AudioCaptureService: SCStreamDelegate {
     /// Attempt to restart system audio capture after an error
     @MainActor
     private func attemptSystemAudioRestart() async {
-        guard systemAudioRestartAttempts < maxRestartAttempts else {
-            print("AudioCaptureService: ⚠️ System audio restart failed after \(maxRestartAttempts) attempts - giving up")
+        // Use exponential backoff: 1s, 2s, 4s, then cap at 5s
+        let backoffSeconds = min(pow(2.0, Double(systemAudioRestartAttempts)), 5.0)
+
+        if systemAudioRestartAttempts >= maxRestartAttempts {
+            // Don't give up permanently - schedule a delayed retry
+            print("AudioCaptureService: ⚠️ System audio restart failed \(maxRestartAttempts) times consecutively - will retry in 10s")
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                guard self.isCapturing && !self.systemAudioHealthy else { return }
+                // Reset counter to allow more attempts
+                self.systemAudioRestartAttempts = 0
+                await self.attemptSystemAudioRestart()
+            }
             return
         }
 
         systemAudioRestartAttempts += 1
-        print("AudioCaptureService: Attempting system audio restart (attempt \(systemAudioRestartAttempts)/\(maxRestartAttempts))...")
+        print("AudioCaptureService: Attempting system audio restart (attempt \(systemAudioRestartAttempts)/\(maxRestartAttempts), backoff: \(Int(backoffSeconds))s)...")
 
         // Clean up old stream
         systemAudioStream = nil
         systemWriter = nil
         systemWriterInput = nil
+        lastSuccessfulSystemAudioTime = nil  // Reset success tracking
 
-        // Wait a moment before restarting (helps with driver conflicts)
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        // Wait with exponential backoff before restarting
+        let sleepNanos = UInt64(backoffSeconds * 1_000_000_000)
+        try? await Task.sleep(nanoseconds: sleepNanos)
 
         guard isCapturing else {
             print("AudioCaptureService: Capture stopped during restart wait - aborting restart")
@@ -1005,10 +1058,14 @@ extension AudioCaptureService: SCStreamDelegate {
             try await setupSystemAudioCapture()
 
             systemAudioHealthy = true
-            print("AudioCaptureService: ✓ System audio restart successful")
+            print("AudioCaptureService: ✓ System audio restart successful (attempt \(systemAudioRestartAttempts))")
         } catch {
             print("AudioCaptureService: System audio restart failed: \(error)")
             systemAudioHealthy = false
+            // Trigger another attempt (will use backoff)
+            if systemAudioRestartAttempts < maxRestartAttempts {
+                await attemptSystemAudioRestart()
+            }
         }
     }
 }
@@ -1071,6 +1128,19 @@ extension AudioCaptureService: SCStreamOutput {
             if self.systemAudioFrameCount % 5 == 0 {
                 self.systemLevel = avgLevel
             }
+
+            // Track successful audio reception - reset restart counter after stable period
+            let now = Date()
+            if self.lastSuccessfulSystemAudioTime == nil {
+                self.lastSuccessfulSystemAudioTime = now
+            }
+            if let lastSuccess = self.lastSuccessfulSystemAudioTime,
+               now.timeIntervalSince(lastSuccess) >= self.restartCounterResetInterval,
+               self.systemAudioRestartAttempts > 0 {
+                print("AudioCaptureService: System audio stable for \(Int(self.restartCounterResetInterval))s - resetting restart counter")
+                self.systemAudioRestartAttempts = 0
+            }
+            self.lastSuccessfulSystemAudioTime = now
 
 
             // Write to file

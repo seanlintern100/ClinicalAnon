@@ -17,6 +17,9 @@ struct AgendaListView: View {
 
     @ObservedObject var assistantService: SessionAssistantService
 
+    /// Track which items are expanded
+    @State private var expandedItems: Set<UUID> = []
+
     // MARK: - Body
 
     var body: some View {
@@ -81,8 +84,11 @@ struct AgendaListView: View {
     // MARK: - Agenda Row
 
     private func agendaRow(_ item: AgendaItem, depth: Int) -> some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            // Topic with status icon
+        let isExpanded = expandedItems.contains(item.id)
+        let hasExpandableContent = (item.evidence != nil && !item.evidence!.isEmpty) || !item.progressNotes.isEmpty
+
+        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            // Topic with status icon - tappable header
             HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
                 // Indentation for sub-items
                 if depth > 0 {
@@ -98,28 +104,53 @@ struct AgendaListView: View {
                     .foregroundStyle(item.statusColor)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    // Topic
-                    Text(item.topic)
-                        .font(depth > 0 ? DesignSystem.Typography.caption : DesignSystem.Typography.body)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                    // Topic with expand indicator
+                    HStack(spacing: 4) {
+                        Text(item.topic)
+                            .font(depth > 0 ? DesignSystem.Typography.caption : DesignSystem.Typography.body)
+                            .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-                    // Evidence
-                    if let evidence = item.evidence, !evidence.isEmpty {
-                        Text(evidence)
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.textSecondary)
-                            .lineLimit(2)
+                        if hasExpandableContent {
+                            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        }
                     }
 
-                    // Time range
+                    // Time range (always visible)
                     if let timeRange = item.timeRange {
                         Text(timeRange.formatted)
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
+
+                    // Collapsed preview (when not expanded, show truncated evidence)
+                    if !isExpanded, let evidence = item.evidence, !evidence.isEmpty {
+                        Text(evidence)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if hasExpandableContent {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isExpanded {
+                            expandedItems.remove(item.id)
+                        } else {
+                            expandedItems.insert(item.id)
+                        }
+                    }
+                }
+            }
+
+            // Expanded content
+            if isExpanded {
+                expandedContent(for: item)
             }
 
             // Status controls (compact for sub-items)
@@ -142,6 +173,69 @@ struct AgendaListView: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+    }
+
+    // MARK: - Expanded Content
+
+    private func expandedContent(for item: AgendaItem) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+            // Full evidence
+            if let evidence = item.evidence, !evidence.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Summary")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .textCase(.uppercase)
+
+                    Text(evidence)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(DesignSystem.Spacing.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DesignSystem.Colors.background)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            // Progress notes
+            if !item.progressNotes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Discussion Points")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .textCase(.uppercase)
+
+                    ForEach(item.progressNotes) { note in
+                        HStack(alignment: .top, spacing: 8) {
+                            // Timestamp
+                            Text(formatTimestamp(note.timestamp))
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                                .frame(width: 40, alignment: .leading)
+
+                            // Note content
+                            Text(note.note)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .padding(DesignSystem.Spacing.small)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DesignSystem.Colors.background)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(.leading, 28) // Align with topic text
+    }
+
+    private func formatTimestamp(_ seconds: TimeInterval) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 
     // MARK: - Compact Status Controls (for sub-items)

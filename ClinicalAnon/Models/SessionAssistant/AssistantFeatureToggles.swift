@@ -11,7 +11,6 @@ import Foundation
 /// Feature toggles for modularity and gradual rollout
 struct AssistantFeatureToggles: Codable {
     var detailsEnabled: Bool = true
-    var quotesEnabled: Bool = true
     var agendaEnabled: Bool = true
     var themesEnabled: Bool = true
     var flagsEnabled: Bool = true
@@ -21,7 +20,6 @@ struct AssistantFeatureToggles: Codable {
 
     static let flagsOnly = AssistantFeatureToggles(
         detailsEnabled: false,
-        quotesEnabled: false,
         agendaEnabled: false,
         themesEnabled: false,
         flagsEnabled: true,

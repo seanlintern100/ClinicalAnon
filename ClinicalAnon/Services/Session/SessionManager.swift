@@ -470,6 +470,11 @@ class SessionManager: ObservableObject {
         audioCaptureService.systemLevel
     }
 
+    /// Whether system audio capture is healthy (receiving frames from ScreenCaptureKit)
+    var systemAudioHealthy: Bool {
+        audioCaptureService.systemAudioHealthy
+    }
+
     /// Whether audio capture is active
     var isCapturing: Bool {
         audioCaptureService.isCapturing

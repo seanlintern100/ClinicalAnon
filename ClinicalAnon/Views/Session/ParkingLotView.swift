@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - Parking Lot View
 
-/// Tabbed panel with Details, Quotes, Agenda, and Themes tabs
+/// Tabbed panel with Details, Agenda, and Themes tabs
 struct ParkingLotView: View {
 
     // MARK: - Properties
@@ -20,7 +20,6 @@ struct ParkingLotView: View {
 
     // Sheets
     @State private var showAddDetail = false
-    @State private var showAddQuote = false
     @State private var showAddAgenda = false
 
     // MARK: - Body
@@ -37,9 +36,6 @@ struct ParkingLotView: View {
         }
         .sheet(isPresented: $showAddDetail) {
             AddDetailSheet(assistantService: assistantService)
-        }
-        .sheet(isPresented: $showAddQuote) {
-            AddQuoteSheet(assistantService: assistantService)
         }
         .sheet(isPresented: $showAddAgenda) {
             AddAgendaSheet(assistantService: assistantService)
@@ -114,8 +110,6 @@ struct ParkingLotView: View {
             switch selectedTab {
             case .details:
                 showAddDetail = true
-            case .quotes:
-                showAddQuote = true
             case .agenda:
                 showAddAgenda = true
             case .themes:
@@ -143,8 +137,6 @@ struct ParkingLotView: View {
         switch selectedTab {
         case .details:
             DetailsListView(assistantService: assistantService)
-        case .quotes:
-            QuotesListView(assistantService: assistantService)
         case .agenda:
             AgendaListView(assistantService: assistantService)
         case .themes:
@@ -158,8 +150,6 @@ struct ParkingLotView: View {
         switch tab {
         case .details:
             return assistantService.state.details.count
-        case .quotes:
-            return assistantService.state.quotes.count
         case .agenda:
             return assistantService.state.agendaItems.count
         case .themes:
@@ -172,7 +162,6 @@ struct ParkingLotView: View {
 
 enum ParkingLotTab: String, CaseIterable, Identifiable {
     case details
-    case quotes
     case agenda
     case themes
 
@@ -185,7 +174,6 @@ enum ParkingLotTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .details: return "person.text.rectangle"
-        case .quotes: return "quote.bubble"
         case .agenda: return "checklist"
         case .themes: return "lightbulb"
         }

@@ -211,11 +211,16 @@ struct SessionDetailView: View {
 
             // System audio level
             VStack(spacing: 2) {
-                Image(systemName: "speaker.wave.2.fill")
+                Image(systemName: sessionManager.systemAudioHealthy ? "speaker.wave.2.fill" : "speaker.slash.fill")
                     .font(.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .foregroundStyle(sessionManager.systemAudioHealthy
+                        ? DesignSystem.Colors.textSecondary
+                        : .orange)
                 AudioLevelMeter(level: sessionManager.systemLevel)
             }
+            .help(sessionManager.systemAudioHealthy
+                ? "System audio (remote participants)"
+                : "⚠️ System audio capture lost - remote audio recording via microphone only")
         }
     }
 
