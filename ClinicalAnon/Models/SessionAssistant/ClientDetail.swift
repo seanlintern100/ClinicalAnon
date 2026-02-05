@@ -35,11 +35,9 @@ struct ClientDetail: Identifiable, Codable, Equatable {
         self.isManuallyAdded = isManuallyAdded
     }
 
-    // Custom decoder for backward compatibility with old sessions missing stableId
+    // Custom decoder for backward compatibility
     enum CodingKeys: String, CodingKey {
         case id, stableId, content, category, timestamp, addedAt, isManuallyAdded
-        // Legacy key names
-        case sourceQuote
     }
 
     init(from decoder: Decoder) throws {
@@ -50,7 +48,6 @@ struct ClientDetail: Identifiable, Codable, Equatable {
         timestamp = (try? container.decode(TimeInterval.self, forKey: .timestamp)) ?? 0
         addedAt = (try? container.decode(Date.self, forKey: .addedAt)) ?? Date()
         isManuallyAdded = (try? container.decode(Bool.self, forKey: .isManuallyAdded)) ?? false
-        // Backward compatibility: generate stableId if missing
         stableId = (try? container.decode(String.self, forKey: .stableId)) ?? "legacy_\(id.uuidString.prefix(8))"
     }
 

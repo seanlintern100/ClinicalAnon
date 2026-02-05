@@ -194,6 +194,8 @@ class TranscriptionService: ObservableObject {
         isLoading = true
         error = nil
 
+        defer { isLoading = false }  // Always reset on exit
+
         do {
             // Initialize WhisperKit with the specified model
             whisperKit = try await WhisperKit(
@@ -206,8 +208,6 @@ class TranscriptionService: ObservableObject {
             self.error = .modelLoadFailed(error.localizedDescription)
             throw TranscriptionError.modelLoadFailed(error.localizedDescription)
         }
-
-        isLoading = false
     }
 
     /// Unload the model to free memory
