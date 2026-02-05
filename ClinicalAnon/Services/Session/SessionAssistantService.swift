@@ -91,6 +91,30 @@ class SessionAssistantService: ObservableObject {
         return "[Earlier transcript truncated for context limits]\n\n" + truncated
     }
 
+    /// Format transcript segments as redacted text (applies entity replacements)
+    private func formatSegmentsAsRedactedTranscript(_ segments: [TranscriptSegment], entities: [Entity]) -> String {
+        guard !segments.isEmpty else {
+            return "[No new transcript segments since last analysis]"
+        }
+
+        // Format segments as transcript text
+        let sortedSegments = segments.sorted { $0.startTime < $1.startTime }
+        var transcript = sortedSegments
+            .map { "[\($0.speaker.label)] \($0.text)" }
+            .joined(separator: "\n\n")
+
+        // Apply entity replacements (case-insensitive)
+        for entity in entities {
+            transcript = transcript.replacingOccurrences(
+                of: entity.originalText,
+                with: entity.replacementCode,
+                options: .caseInsensitive
+            )
+        }
+
+        return truncateTranscript(transcript)
+    }
+
     // MARK: - De-redaction
 
     /// De-redact text using current session's entity mapping
@@ -175,8 +199,14 @@ class SessionAssistantService: ObservableObject {
         // Log entity mapping state
         logEntityMappingState(for: session)
 
-        // Get redacted transcript
-        let redactedTranscript = truncateTranscript(session.redactedTranscript)
+        // Get ONLY NEW segments since last analysis (prevents unbounded transcript growth)
+        let newSegments = session.transcriptSegments.filter { $0.chunkIndex > lastAnalysedChunkIndex }
+        let redactedTranscript = formatSegmentsAsRedactedTranscript(newSegments, entities: session.detectedEntities)
+
+        // Update lastAnalysedChunkIndex for next analysis
+        let maxChunkIndex = session.transcriptSegments.map { $0.chunkIndex }.max() ?? -1
+        lastAnalysedChunkIndex = maxChunkIndex
+        print("SessionAssistant: [CHUNKS] Analysing \(newSegments.count) new segments (chunks > \(lastAnalysedChunkIndex - (maxChunkIndex - lastAnalysedChunkIndex)), now at \(lastAnalysedChunkIndex))")
 
         // Log what we're sending (check for redaction codes)
         print("SessionAssistant: [SENDING] Transcript length: \(redactedTranscript.count) chars")
@@ -222,11 +252,12 @@ class SessionAssistantService: ObservableObject {
         for attempt in 0..<maxRetries {
             do {
                 // BedrockService uses [ChatMessage]
+                // Use 8192 max_tokens as safety net (response is typically ~4K)
                 let response = try await bedrockService.invoke(
                     systemPrompt: systemPrompt,
                     messages: [ChatMessage.user(userMessage)],
                     model: preferencesManager.selectedModel,
-                    maxTokens: 4096
+                    maxTokens: 8192
                 )
 
                 print("SessionAssistant: [RECEIVED] Response length: \(response.count) chars")
@@ -436,15 +467,16 @@ class SessionAssistantService: ObservableObject {
 
         \(state.parkingLotJSON)
 
-        ## TRANSCRIPT TO ANALYSE
+        ## NEW TRANSCRIPT (since last analysis)
 
         \(transcript)
 
         ---
 
-        Analyse this transcript and return structured JSON.
+        Analyse this NEW transcript and return structured JSON.
         - Details/Quotes: Only report NEW items not already in Parking Lot
         - Agenda/Themes: Return COMPLETE updated lists (you own these - update existing, add new)
+        - Keep quote extracts brief (max ~20 words) to avoid response truncation
         """
     }
 

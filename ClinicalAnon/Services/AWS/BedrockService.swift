@@ -366,6 +366,9 @@ class BedrockService: ObservableObject {
             switch httpResponse.statusCode {
             case 429:
                 throw AppError.aiThrottled
+            case 502:
+                // 502 Bad Gateway - transient server error, should retry
+                throw AppError.aiThrottled
             case 403:
                 await fetchApiKey()
                 throw AppError.aiAccessDenied
@@ -484,6 +487,9 @@ class BedrockService: ObservableObject {
         if let error = json["error"] as? String {
             switch httpResponse.statusCode {
             case 429:
+                throw AppError.aiThrottled
+            case 502:
+                // 502 Bad Gateway - transient server error, should retry
                 throw AppError.aiThrottled
             case 403:
                 // API key might have rotated - try refreshing

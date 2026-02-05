@@ -98,6 +98,13 @@ class AudioCaptureService: NSObject, ObservableObject {
     @Published private(set) var hasVoiceActivity: Bool = false
     @Published private(set) var voiceProbability: Float = 0
 
+    /// Indicates whether system audio capture is healthy (receiving frames)
+    @Published private(set) var systemAudioHealthy: Bool = true
+
+    /// Number of consecutive system audio restart attempts
+    private var systemAudioRestartAttempts: Int = 0
+    private let maxRestartAttempts: Int = 3
+
     // MARK: - Audio Device Selection
 
     @Published var availableInputDevices: [AudioDevice] = []
@@ -339,8 +346,11 @@ class AudioCaptureService: NSObject, ObservableObject {
 
             try await setupSystemAudioCapture()
             print("AudioCaptureService: System audio capture started")
+            systemAudioHealthy = true
+            systemAudioRestartAttempts = 0  // Reset restart counter on success
         } catch {
             print("AudioCaptureService: System audio capture failed (optional): \(error)")
+            systemAudioHealthy = false
             // Continue without system audio - mic is more important
         }
 
@@ -424,6 +434,8 @@ class AudioCaptureService: NSObject, ObservableObject {
         currentSession = nil
         sessionStartTime = nil
         isCapturing = false
+        systemAudioHealthy = true  // Reset for next session
+        systemAudioRestartAttempts = 0
     }
 
     // MARK: - Permission Handling
@@ -943,7 +955,61 @@ class AudioCaptureService: NSObject, ObservableObject {
 
 extension AudioCaptureService: SCStreamDelegate {
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        print("AudioCaptureService: System audio stream stopped with error: \(error)")
+        let nsError = error as NSError
+        print("AudioCaptureService: System audio stream stopped with error: \(error) (code: \(nsError.code))")
+
+        // Dispatch to main actor for state updates and restart attempt
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+
+            // Mark system audio as unhealthy
+            self.systemAudioHealthy = false
+
+            // Error -3821 = "Stream was stopped by the system"
+            // This can happen due to audio driver conflicts, display changes, etc.
+            if nsError.code == -3821 && self.isCapturing {
+                await self.attemptSystemAudioRestart()
+            }
+        }
+    }
+
+    /// Attempt to restart system audio capture after an error
+    @MainActor
+    private func attemptSystemAudioRestart() async {
+        guard systemAudioRestartAttempts < maxRestartAttempts else {
+            print("AudioCaptureService: ⚠️ System audio restart failed after \(maxRestartAttempts) attempts - giving up")
+            return
+        }
+
+        systemAudioRestartAttempts += 1
+        print("AudioCaptureService: Attempting system audio restart (attempt \(systemAudioRestartAttempts)/\(maxRestartAttempts))...")
+
+        // Clean up old stream
+        systemAudioStream = nil
+        systemWriter = nil
+        systemWriterInput = nil
+
+        // Wait a moment before restarting (helps with driver conflicts)
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+
+        guard isCapturing else {
+            print("AudioCaptureService: Capture stopped during restart wait - aborting restart")
+            return
+        }
+
+        do {
+            // Initialize new system audio writer
+            try startNewChunk()
+
+            // Restart system audio capture
+            try await setupSystemAudioCapture()
+
+            systemAudioHealthy = true
+            print("AudioCaptureService: ✓ System audio restart successful")
+        } catch {
+            print("AudioCaptureService: System audio restart failed: \(error)")
+            systemAudioHealthy = false
+        }
     }
 }
 
