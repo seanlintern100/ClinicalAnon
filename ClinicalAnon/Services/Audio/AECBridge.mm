@@ -56,10 +56,10 @@ static const int kFrameSizeMs = 10;
         config.gain_controller1.enabled = false;
         config.gain_controller2.enabled = false;
 
-        // Enable noise suppression if requested (moderate level for balanced quality)
+        // Enable noise suppression if requested (high level to filter transient clicks/typing)
         config.noise_suppression.enabled = noiseSuppressionEnabled;
         if (noiseSuppressionEnabled) {
-            config.noise_suppression.level = webrtc::AudioProcessing::Config::NoiseSuppression::kModerate;
+            config.noise_suppression.level = webrtc::AudioProcessing::Config::NoiseSuppression::kHigh;
         }
 
         config.high_pass_filter.enabled = false;

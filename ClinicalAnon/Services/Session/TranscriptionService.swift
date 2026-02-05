@@ -526,10 +526,21 @@ class TranscriptionService: ObservableObject {
         }
 
         do {
+            // Configure decoding options to reduce hallucinations from noise
+            let decodingOptions = DecodingOptions(
+                task: .transcribe,
+                language: "en",
+                temperature: 0.0,                      // Greedy decoding for consistency
+                suppressBlank: true,                   // Prevent blank token hallucinations
+                compressionRatioThreshold: 2.0,        // Default 2.4 — stricter catches repetitive hallucinations
+                logProbThreshold: -0.8,                // Default -1.0 — stricter confidence requirement
+                noSpeechThreshold: 0.5                 // Default 0.6 — more sensitive to silence
+            )
+
             // Transcribe with WhisperKit
             print("TranscriptionService: [DEBUG] Starting whisper.transcribe() for \(speaker.label) at \(audioPath.lastPathComponent)")
             let transcribeStart = CFAbsoluteTimeGetCurrent()
-            let results = try await whisper.transcribe(audioPath: audioPath.path)
+            let results = try await whisper.transcribe(audioPath: audioPath.path, decodeOptions: decodingOptions)
             let transcribeElapsed = CFAbsoluteTimeGetCurrent() - transcribeStart
             print("TranscriptionService: [DEBUG] whisper.transcribe() completed in \(String(format: "%.2f", transcribeElapsed))s - \(results.count) results")
 
@@ -607,9 +618,23 @@ class TranscriptionService: ObservableObject {
                     // Skip empty or whitespace-only segments
                     guard !cleanText.isEmpty else { continue }
 
-                    // MARK: - Hallucination Filtering (Confidence-based)
+                    // MARK: - Hallucination Filtering
 
-                    // Skip low-confidence segments (likely Whisper hallucinations)
+                    // Filter 1: Minimum duration for short segments
+                    // Very short bursts (< 0.3s) with minimal text are likely noise hallucinations
+                    let segmentDuration = segment.end - segment.start
+                    if segmentDuration < 0.3 && cleanText.count < 15 {
+                        print("TranscriptionService: [HALLUCINATION] Skipping short segment (\(String(format: "%.2f", segmentDuration))s, \(cleanText.count) chars): \(cleanText)")
+                        continue
+                    }
+
+                    // Filter 2: Repetition detection (Whisper often loops on noise)
+                    if hasExcessiveRepetition(cleanText) {
+                        print("TranscriptionService: [HALLUCINATION] Skipping repetitive segment: \(cleanText.prefix(50))...")
+                        continue
+                    }
+
+                    // Filter 3: Low-confidence segments (likely Whisper hallucinations)
                     // avgLogprob typically ranges -0.1 (high confidence) to -1.0+ (low confidence)
                     let confidenceThreshold: Float = -0.7
                     if segment.avgLogprob < confidenceThreshold {
@@ -617,7 +642,7 @@ class TranscriptionService: ObservableObject {
                         continue
                     }
 
-                    // For borderline confidence, require minimum text length
+                    // Filter 4: Borderline confidence requires minimum text length
                     let borderlineThreshold: Float = -0.5
                     if segment.avgLogprob < borderlineThreshold && cleanText.count < 10 {
                         print("TranscriptionService: [HALLUCINATION] Skipping short low-confidence segment: \(cleanText)")
@@ -814,6 +839,10 @@ class TranscriptionService: ObservableObject {
             // sensitivity 1.0 -> threshold ~0.1 (strict)
             let energyThreshold = pow(10, -3 + sensitivity * 2)  // 0.001 to 0.1 range
 
+            // Track consecutive speech frames to filter transient noise spikes (typing, clicks)
+            var maxConsecutiveSpeechFrames = 0
+            var currentConsecutive = 0
+
             for frameIdx in 0..<frameCount_int {
                 let startSample = frameIdx * frameSize
                 var frameEnergy: Float = 0.0
@@ -827,9 +856,13 @@ class TranscriptionService: ObservableObject {
                 totalEnergy += rms
                 peakEnergy = max(peakEnergy, rms)
 
-                // Count frames with speech-level energy
+                // Count frames with speech-level energy and track consecutive runs
                 if rms > energyThreshold {
                     speechFrameCount += 1
+                    currentConsecutive += 1
+                    maxConsecutiveSpeechFrames = max(maxConsecutiveSpeechFrames, currentConsecutive)
+                } else {
+                    currentConsecutive = 0
                 }
             }
 
@@ -840,12 +873,15 @@ class TranscriptionService: ObservableObject {
             let avgEnergy = totalEnergy / Float(frameCount_int)
             let speechRatio = Float(speechFrameCount) / Float(frameCount_int)
 
-            // Require at least 5% of frames to have speech-level energy
+            // Require at least 15% of frames to have speech-level energy (was 5%)
             // AND average energy above a minimum threshold
-            let minSpeechRatio: Float = 0.05
+            // AND at least 50ms of consecutive speech (5 frames at 10ms each)
+            let minSpeechRatio: Float = 0.15
             let minAvgEnergy = energyThreshold * 0.5
+            let minConsecutiveFrames = 5  // 50ms sustained energy
 
-            let hasSpeech = speechRatio >= minSpeechRatio && avgEnergy >= minAvgEnergy
+            let hasConsecutiveSpeech = maxConsecutiveSpeechFrames >= minConsecutiveFrames
+            let hasSpeech = speechRatio >= minSpeechRatio && avgEnergy >= minAvgEnergy && hasConsecutiveSpeech
 
             #if DEBUG
             print("TranscriptionService: VAD analysis - avgEnergy=\(String(format: "%.4f", avgEnergy)), peakEnergy=\(String(format: "%.4f", peakEnergy)), speechRatio=\(String(format: "%.2f", speechRatio)), threshold=\(String(format: "%.4f", energyThreshold)), hasSpeech=\(hasSpeech)")
@@ -856,6 +892,36 @@ class TranscriptionService: ObservableObject {
             print("TranscriptionService: VAD analysis failed: \(error)")
             return true  // Fail open - transcribe if we can't analyze
         }
+    }
+
+    // MARK: - Repetition Detection
+
+    /// Detect excessive repetition in text (common Whisper hallucination pattern)
+    /// Returns true if text contains 3+ consecutive identical words or repeated 2-word phrases
+    private func hasExcessiveRepetition(_ text: String) -> Bool {
+        let words = text.lowercased().split(separator: " ").map(String.init)
+        guard words.count >= 4 else { return false }
+
+        // Check for 3+ consecutive identical words (e.g., "Thank you. Thank you. Thank you.")
+        var consecutive = 1
+        for i in 1..<words.count {
+            if words[i] == words[i-1] {
+                consecutive += 1
+                if consecutive >= 3 { return true }
+            } else {
+                consecutive = 1
+            }
+        }
+
+        // Check for repeated 2-word phrases (e.g., "Thank you. Thank you.")
+        guard words.count >= 4 else { return false }
+        for i in 0...(words.count - 4) {
+            let phrase1 = words[i..<(i + 2)].joined(separator: " ")
+            let phrase2 = words[(i + 2)..<(i + 4)].joined(separator: " ")
+            if phrase1 == phrase2 { return true }
+        }
+
+        return false
     }
 }
 
