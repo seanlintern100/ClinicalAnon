@@ -98,11 +98,7 @@ class ClinicianPreferencesManager: ObservableObject {
     private func describeItemPattern(_ item: FeedItem) -> String {
         switch item.itemType {
         case .detail:
-            return "detail:\(item.detailCategory?.rawValue ?? "unknown")"
-        case .quote:
-            return "quote"
-        case .themeAlert:
-            return "theme_alert"
+            return "detail:\(item.detailCategory ?? "unknown")"
         case .flag:
             return "flag:\(item.flagSeverity?.rawValue ?? "unknown")"
         case .suggestion:

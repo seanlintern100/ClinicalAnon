@@ -19,9 +19,8 @@ struct FeedItem: Identifiable, Codable, Equatable {
     var status: FeedItemStatus
 
     // Optional associated data for specific types
-    var detailCategory: DetailCategory?
+    var detailCategory: String?       // AI-determined category string
     var flagSeverity: FlagSeverity?
-    var themeName: String?
     var agendaTopic: String?
     var agendaStatus: AgendaStatus?
 
@@ -33,9 +32,8 @@ struct FeedItem: Identifiable, Codable, Equatable {
         timestamp: TimeInterval,
         createdAt: Date = Date(),
         status: FeedItemStatus = .active,
-        detailCategory: DetailCategory? = nil,
+        detailCategory: String? = nil,
         flagSeverity: FlagSeverity? = nil,
-        themeName: String? = nil,
         agendaTopic: String? = nil,
         agendaStatus: AgendaStatus? = nil
     ) {
@@ -48,7 +46,6 @@ struct FeedItem: Identifiable, Codable, Equatable {
         self.status = status
         self.detailCategory = detailCategory
         self.flagSeverity = flagSeverity
-        self.themeName = themeName
         self.agendaTopic = agendaTopic
         self.agendaStatus = agendaStatus
     }
@@ -56,11 +53,7 @@ struct FeedItem: Identifiable, Codable, Equatable {
     var icon: String {
         switch itemType {
         case .detail:
-            return detailCategory?.icon ?? "doc.text"
-        case .quote:
-            return "quote.bubble"
-        case .themeAlert:
-            return "arrow.triangle.2.circlepath"
+            return iconForCategory(detailCategory)
         case .flag:
             return flagSeverity?.icon ?? "flag"
         case .suggestion:
@@ -70,14 +63,23 @@ struct FeedItem: Identifiable, Codable, Equatable {
         }
     }
 
+    private func iconForCategory(_ category: String?) -> String {
+        guard let cat = category?.lowercased() else { return "pin.fill" }
+        switch cat {
+        case "person": return "person.fill"
+        case "relationship", "relationships": return "heart.fill"
+        case "history": return "clock.fill"
+        case "context": return "text.quote"
+        default: return "pin.fill"
+        }
+    }
+
     var iconColor: Color {
         switch itemType {
         case .flag:
             return flagSeverity?.color ?? .yellow
         case .suggestion:
             return .blue
-        case .themeAlert:
-            return .purple
         default:
             return .secondary
         }
@@ -92,8 +94,6 @@ struct FeedItem: Identifiable, Codable, Equatable {
 
 enum FeedItemType: String, Codable {
     case detail
-    case quote
-    case themeAlert
     case flag
     case suggestion
     case agendaUpdate

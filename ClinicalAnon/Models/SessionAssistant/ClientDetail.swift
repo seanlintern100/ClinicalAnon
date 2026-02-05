@@ -10,55 +10,39 @@ import Foundation
 
 struct ClientDetail: Identifiable, Codable, Equatable {
     let id: UUID
+    var stableId: String              // AI-assigned ID for continuity across analyses
     var content: String
-    var category: DetailCategory
-    var sourceQuote: String
+    var category: String              // AI-determined category (e.g., "Person", "Relationship", "History")
     var timestamp: TimeInterval
     var addedAt: Date
     var isManuallyAdded: Bool
-    var isEdited: Bool
 
     init(
         id: UUID = UUID(),
+        stableId: String? = nil,
         content: String,
-        category: DetailCategory,
-        sourceQuote: String,
+        category: String,
         timestamp: TimeInterval,
         addedAt: Date = Date(),
-        isManuallyAdded: Bool = false,
-        isEdited: Bool = false
+        isManuallyAdded: Bool = false
     ) {
         self.id = id
+        self.stableId = stableId ?? "manual_\(id.uuidString.prefix(8))"
         self.content = content
         self.category = category
-        self.sourceQuote = sourceQuote
         self.timestamp = timestamp
         self.addedAt = addedAt
         self.isManuallyAdded = isManuallyAdded
-        self.isEdited = isEdited
     }
-}
 
-enum DetailCategory: String, Codable, CaseIterable, Identifiable {
-    case person
-    case relationship
-    case fact
-    case profession
-    case history
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .person: return "person.fill"
-        case .relationship: return "heart.fill"
-        case .fact: return "pin.fill"
-        case .profession: return "briefcase.fill"
-        case .history: return "clock.fill"
+    /// Icon for display based on category name
+    var categoryIcon: String {
+        switch category.lowercased() {
+        case "person": return "person.fill"
+        case "relationship", "relationships": return "heart.fill"
+        case "history": return "clock.fill"
+        case "context": return "text.quote"
+        default: return "pin.fill"
         }
-    }
-
-    var displayName: String {
-        rawValue.capitalized
     }
 }

@@ -12,34 +12,31 @@ struct Theme: Identifiable, Codable, Equatable {
     let id: UUID
     var stableId: String              // AI-assigned ID for continuity across analyses
     var name: String
-    var mentions: [ThemeMention]
+    var quotes: [ThemeQuote]          // Supporting quotes from the conversation
+    var subThemes: [Theme]            // Nested sub-themes (optional)
     var explored: Bool
     var manuallyMarkedExplored: Bool
-    var relatedThemeIds: [String]?    // Links to related themes (stableIds)
-    var description: String?          // AI explanation of the theme
 
     init(
         id: UUID = UUID(),
         stableId: String? = nil,
         name: String,
-        mentions: [ThemeMention] = [],
+        quotes: [ThemeQuote] = [],
+        subThemes: [Theme] = [],
         explored: Bool = false,
-        manuallyMarkedExplored: Bool = false,
-        relatedThemeIds: [String]? = nil,
-        description: String? = nil
+        manuallyMarkedExplored: Bool = false
     ) {
         self.id = id
         self.stableId = stableId ?? "manual_\(id.uuidString.prefix(8))"
         self.name = name
-        self.mentions = mentions
+        self.quotes = quotes
+        self.subThemes = subThemes
         self.explored = explored
         self.manuallyMarkedExplored = manuallyMarkedExplored
-        self.relatedThemeIds = relatedThemeIds
-        self.description = description
     }
 
-    var mentionCount: Int {
-        mentions.count
+    var quoteCount: Int {
+        quotes.count + subThemes.reduce(0) { $0 + $1.quoteCount }
     }
 
     var isExplored: Bool {
@@ -47,15 +44,15 @@ struct Theme: Identifiable, Codable, Equatable {
     }
 }
 
-struct ThemeMention: Codable, Equatable, Identifiable {
-    let id: UUID  // Stored UUID (not computed) to prevent SwiftUI instability
+struct ThemeQuote: Codable, Equatable, Identifiable {
+    let id: UUID
+    var text: String
     var timestamp: TimeInterval
-    var context: String
 
-    init(id: UUID = UUID(), timestamp: TimeInterval, context: String) {
+    init(id: UUID = UUID(), text: String, timestamp: TimeInterval) {
         self.id = id
+        self.text = text
         self.timestamp = timestamp
-        self.context = context
     }
 
     var formattedTime: String {

@@ -19,7 +19,10 @@ struct AddDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var content: String = ""
-    @State private var category: DetailCategory = .fact
+    @State private var category: String = "Fact"
+
+    // Common category options for manual entry
+    private let categoryOptions = ["Person", "Relationship", "History", "Context", "Fact"]
 
     // MARK: - Body
 
@@ -90,7 +93,7 @@ struct AddDetailSheet: View {
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
 
                 HStack(spacing: DesignSystem.Spacing.small) {
-                    ForEach(DetailCategory.allCases) { cat in
+                    ForEach(categoryOptions, id: \.self) { cat in
                         categoryButton(cat)
                     }
                 }
@@ -100,14 +103,14 @@ struct AddDetailSheet: View {
         .frame(maxHeight: .infinity)
     }
 
-    private func categoryButton(_ cat: DetailCategory) -> some View {
+    private func categoryButton(_ cat: String) -> some View {
         Button {
             category = cat
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: cat.icon)
+                Image(systemName: iconForCategory(cat))
                     .font(.body)
-                Text(cat.displayName)
+                Text(cat)
                     .font(.system(size: 10))
             }
             .frame(maxWidth: .infinity)
@@ -134,6 +137,16 @@ struct AddDetailSheet: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private func iconForCategory(_ cat: String) -> String {
+        switch cat.lowercased() {
+        case "person": return "person.fill"
+        case "relationship": return "heart.fill"
+        case "history": return "clock.fill"
+        case "context": return "text.quote"
+        default: return "pin.fill"
+        }
     }
 
     // MARK: - Actions

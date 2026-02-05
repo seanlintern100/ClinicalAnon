@@ -10,16 +10,12 @@ import SwiftUI
 
 // MARK: - Live Feed Item View
 
-/// Individual feed item with icon, content, and hover actions
+/// Individual feed item with icon and content
 struct LiveFeedItemView: View {
 
     // MARK: - Properties
 
     let item: FeedItem
-    let onStar: () -> Void
-    let onDismiss: () -> Void
-
-    @State private var isHovered = false
 
     // MARK: - Body
 
@@ -49,11 +45,6 @@ struct LiveFeedItemView: View {
             }
 
             Spacer(minLength: 0)
-
-            // Hover actions
-            if isHovered {
-                hoverActions
-            }
         }
         .padding(DesignSystem.Spacing.small)
         .background(itemBackground)
@@ -62,11 +53,6 @@ struct LiveFeedItemView: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(borderColor, lineWidth: borderWidth)
         )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
     }
 
     // MARK: - Icon
@@ -97,40 +83,6 @@ struct LiveFeedItemView: View {
         }
     }
 
-    // MARK: - Hover Actions
-
-    private var hoverActions: some View {
-        HStack(spacing: 4) {
-            // Star button
-            Button {
-                onStar()
-            } label: {
-                Image(systemName: "star")
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .frame(width: 24, height: 24)
-                    .background(DesignSystem.Colors.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-            .buttonStyle(.plain)
-            .help("Star this item")
-
-            // Dismiss button
-            Button {
-                onDismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .frame(width: 24, height: 24)
-                    .background(DesignSystem.Colors.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-            .buttonStyle(.plain)
-            .help("Dismiss this item")
-        }
-    }
-
     // MARK: - Computed Properties
 
     private var typeLabel: String {
@@ -139,12 +91,8 @@ struct LiveFeedItemView: View {
             return item.flagSeverity?.displayName ?? "FLAG"
         case .suggestion:
             return "SUGGESTION"
-        case .themeAlert:
-            return "THEME"
         case .detail:
             return "DETAIL"
-        case .quote:
-            return "QUOTE"
         case .agendaUpdate:
             return "AGENDA"
         }
@@ -183,9 +131,7 @@ struct LiveFeedItemView_Previews: PreviewProvider {
                     rationale: "Risk language detected - requires attention",
                     timestamp: 165,
                     flagSeverity: .safety
-                ),
-                onStar: {},
-                onDismiss: {}
+                )
             )
 
             // Important flag
@@ -196,9 +142,7 @@ struct LiveFeedItemView_Previews: PreviewProvider {
                     rationale: "First mention of relationship breakdown",
                     timestamp: 270,
                     flagSeverity: .important
-                ),
-                onStar: {},
-                onDismiss: {}
+                )
             )
 
             // Suggestion
@@ -208,22 +152,18 @@ struct LiveFeedItemView_Previews: PreviewProvider {
                     content: "Consider exploring family dynamics",
                     rationale: "Theme mentioned 3 times without exploration",
                     timestamp: 192
-                ),
-                onStar: {},
-                onDismiss: {}
+                )
             )
 
-            // Theme alert
+            // Detail
             LiveFeedItemView(
                 item: FeedItem(
-                    itemType: .themeAlert,
-                    content: "Theme: Work stress (4 mentions)",
-                    rationale: "Not yet explored — consider addressing",
+                    itemType: .detail,
+                    content: "Client has two siblings",
+                    rationale: "",
                     timestamp: 240,
-                    themeName: "Work stress"
-                ),
-                onStar: {},
-                onDismiss: {}
+                    detailCategory: "Relationship"
+                )
             )
         }
         .padding()

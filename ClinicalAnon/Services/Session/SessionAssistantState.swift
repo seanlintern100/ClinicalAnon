@@ -16,7 +16,6 @@ class SessionAssistantState: ObservableObject {
     // MARK: - Parking Lot
 
     @Published var details: [ClientDetail] = []
-    @Published var quotes: [Quote] = []
     @Published var agendaItems: [AgendaItem] = []
     @Published var themes: [Theme] = []
 
@@ -65,18 +64,15 @@ class SessionAssistantState: ObservableObject {
 
         struct ParkingLotSnapshot: Codable {
             let details: [ClientDetail]
-            let quotes: [Quote]
             let agenda: [AgendaItem]
             let themes: [Theme]
         }
 
         var currentDetails = details
-        var currentQuotes = quotes
         var currentThemes = themes
 
         var snapshot = ParkingLotSnapshot(
             details: currentDetails,
-            quotes: currentQuotes,
             agenda: agendaItems,
             themes: currentThemes
         )
@@ -89,23 +85,30 @@ class SessionAssistantState: ObservableObject {
         while data.count > maxParkingLotBytes {
             // Progressively reduce arrays, keeping most recent
             currentDetails = Array(currentDetails.suffix(max(1, currentDetails.count - 5)))
-            currentQuotes = Array(currentQuotes.suffix(max(1, currentQuotes.count - 3)))
             currentThemes = currentThemes.map { theme in
                 Theme(
                     id: theme.id,
                     stableId: theme.stableId,
                     name: theme.name,
-                    mentions: Array(theme.mentions.suffix(3)),  // Keep last 3 mentions
+                    quotes: Array(theme.quotes.suffix(3)),  // Keep last 3 quotes
+                    subThemes: theme.subThemes.map { subTheme in
+                        Theme(
+                            id: subTheme.id,
+                            stableId: subTheme.stableId,
+                            name: subTheme.name,
+                            quotes: Array(subTheme.quotes.suffix(2)),  // Keep last 2 quotes for sub-themes
+                            subThemes: [],  // Don't go deeper for truncation
+                            explored: subTheme.explored,
+                            manuallyMarkedExplored: subTheme.manuallyMarkedExplored
+                        )
+                    },
                     explored: theme.explored,
-                    manuallyMarkedExplored: theme.manuallyMarkedExplored,
-                    relatedThemeIds: theme.relatedThemeIds,
-                    description: theme.description
+                    manuallyMarkedExplored: theme.manuallyMarkedExplored
                 )
             }
 
             snapshot = ParkingLotSnapshot(
                 details: currentDetails,
-                quotes: currentQuotes,
                 agenda: agendaItems,  // Keep all agenda
                 themes: currentThemes
             )
@@ -122,7 +125,6 @@ class SessionAssistantState: ObservableObject {
 
     func reset() {
         details = []
-        quotes = []
         agendaItems = []
         themes = []
         feedItems = []
@@ -137,7 +139,6 @@ class SessionAssistantState: ObservableObject {
     var stateData: SessionAssistantStateData {
         SessionAssistantStateData(
             details: details,
-            quotes: quotes,
             agendaItems: agendaItems,
             themes: themes,
             feedItems: feedItems
@@ -147,7 +148,6 @@ class SessionAssistantState: ObservableObject {
     /// Restore assistant state from persisted data
     func restore(from data: SessionAssistantStateData) {
         self.details = data.details
-        self.quotes = data.quotes
         self.agendaItems = data.agendaItems
         self.themes = data.themes
         self.feedItems = data.feedItems
@@ -159,13 +159,12 @@ class SessionAssistantState: ObservableObject {
 /// Codable container for persisting assistant state
 struct SessionAssistantStateData: Codable {
     var details: [ClientDetail]
-    var quotes: [Quote]
     var agendaItems: [AgendaItem]
     var themes: [Theme]
     var feedItems: [FeedItem]
 
     /// Empty state for initialization
     static var empty: SessionAssistantStateData {
-        SessionAssistantStateData(details: [], quotes: [], agendaItems: [], themes: [], feedItems: [])
+        SessionAssistantStateData(details: [], agendaItems: [], themes: [], feedItems: [])
     }
 }

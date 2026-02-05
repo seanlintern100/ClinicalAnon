@@ -103,7 +103,7 @@ struct ThemesListView: View {
 
     // MARK: - Theme Row
 
-    private func themeRow(_ theme: Theme) -> some View {
+    private func themeRow(_ theme: Theme, indentLevel: Int = 0) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             // Header
             Button {
@@ -127,8 +127,8 @@ struct ThemesListView: View {
                         .font(DesignSystem.Typography.body)
                         .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-                    // Mention count badge
-                    Text("\(theme.mentionCount)")
+                    // Quote count badge
+                    Text("\(theme.quoteCount)")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(DesignSystem.Colors.primaryTeal)
                         .padding(.horizontal, 6)
@@ -148,9 +148,14 @@ struct ThemesListView: View {
             }
             .buttonStyle(.plain)
 
-            // Expanded mentions
+            // Expanded content: quotes and sub-themes
             if expandedThemeId == theme.id {
-                mentionsList(for: theme)
+                quotesList(for: theme)
+
+                // Sub-themes (recursive)
+                if !theme.subThemes.isEmpty {
+                    subThemesList(for: theme)
+                }
             }
 
             // Mark as explored button (if not explored)
@@ -171,33 +176,92 @@ struct ThemesListView: View {
             }
         }
         .padding(DesignSystem.Spacing.small)
+        .padding(.leading, CGFloat(indentLevel) * 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DesignSystem.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    // MARK: - Mentions List
+    // MARK: - Quotes List
 
-    private func mentionsList(for theme: Theme) -> some View {
+    private func quotesList(for theme: Theme) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            ForEach(theme.mentions) { mention in
+            ForEach(theme.quotes) { quote in
                 HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
                     // Timestamp
-                    Text(mention.formattedTime)
+                    Text(quote.formattedTime)
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.primaryTeal)
                         .frame(width: 40, alignment: .trailing)
 
-                    // Context
-                    Text(mention.context)
+                    // Quote text
+                    Text("\u{201C}\(quote.text)\u{201D}")
                         .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                        .lineLimit(2)
+                        .italic()
+                        .foregroundStyle(DesignSystem.Colors.textPrimary)
+                        .lineLimit(3)
                 }
             }
         }
         .padding(.leading, 24)
         .padding(.top, DesignSystem.Spacing.xs)
+    }
+
+    // MARK: - Sub-themes List
+
+    private func subThemesList(for theme: Theme) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("Sub-themes")
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .padding(.leading, 24)
+                .padding(.top, DesignSystem.Spacing.xs)
+
+            ForEach(theme.subThemes) { subTheme in
+                subThemeRow(subTheme)
+            }
+        }
+    }
+
+    private func subThemeRow(_ theme: Theme) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            HStack(spacing: DesignSystem.Spacing.small) {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.caption2)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                Text(theme.name)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+
+                Text("\(theme.quotes.count)")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(DesignSystem.Colors.primaryTeal.opacity(0.8))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(DesignSystem.Colors.primaryTeal.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+
+            // Show quotes for sub-theme
+            ForEach(theme.quotes) { quote in
+                HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                    Text(quote.formattedTime)
+                        .font(.system(size: 10))
+                        .foregroundStyle(DesignSystem.Colors.primaryTeal)
+                        .frame(width: 32, alignment: .trailing)
+
+                    Text("\u{201C}\(quote.text)\u{201D}")
+                        .font(.system(size: 11))
+                        .italic()
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+                .padding(.leading, 16)
+            }
+        }
+        .padding(.leading, 32)
+        .padding(.vertical, DesignSystem.Spacing.xs)
     }
 }
 

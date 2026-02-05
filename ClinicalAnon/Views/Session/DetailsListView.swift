@@ -56,10 +56,15 @@ struct DetailsListView: View {
 
     // MARK: - Details List
 
+    /// Unique categories from current details, sorted alphabetically
+    private var sortedCategories: [String] {
+        Array(Set(assistantService.state.details.map { $0.category })).sorted()
+    }
+
     private var detailsList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                ForEach(DetailCategory.allCases) { category in
+                ForEach(sortedCategories, id: \.self) { category in
                     let categoryDetails = assistantService.state.details.filter {
                         $0.category == category
                     }
@@ -75,15 +80,15 @@ struct DetailsListView: View {
 
     // MARK: - Category Section
 
-    private func categorySection(category: DetailCategory, details: [ClientDetail]) -> some View {
+    private func categorySection(category: String, details: [ClientDetail]) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
             // Category header
             HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: category.icon)
+                Image(systemName: iconForCategory(category))
                     .font(.caption)
                     .foregroundStyle(DesignSystem.Colors.primaryTeal)
 
-                Text(category.displayName)
+                Text(category)
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .textCase(.uppercase)
@@ -104,6 +109,16 @@ struct DetailsListView: View {
         .padding(.bottom, DesignSystem.Spacing.small)
     }
 
+    private func iconForCategory(_ category: String) -> String {
+        switch category.lowercased() {
+        case "person": return "person.fill"
+        case "relationship", "relationships": return "heart.fill"
+        case "history": return "clock.fill"
+        case "context": return "text.quote"
+        default: return "pin.fill"
+        }
+    }
+
     // MARK: - Detail Row
 
     private func detailRow(_ detail: ClientDetail) -> some View {
@@ -112,15 +127,6 @@ struct DetailsListView: View {
             Text(detail.content)
                 .font(DesignSystem.Typography.body)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-            // Source quote
-            if !detail.sourceQuote.isEmpty && detail.sourceQuote != "Manually added" {
-                Text("\u{201C}\(detail.sourceQuote)\u{201D}")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .italic()
-                    .lineLimit(2)
-            }
 
             // Metadata
             HStack(spacing: DesignSystem.Spacing.small) {

@@ -12,7 +12,6 @@ import Foundation
 /// All arrays are optional with empty defaults for resilient parsing
 struct AIAnalysisResponse: Codable {
     var details: [AIDetail]
-    var quotes: [AIQuote]
     var agenda: [AIAgendaItem]
     var themes: [AITheme]
     var flags: [AIFlag]
@@ -20,7 +19,7 @@ struct AIAnalysisResponse: Codable {
     var analysisNote: String?
 
     enum CodingKeys: String, CodingKey {
-        case details, quotes, agenda, themes, flags, suggestions
+        case details, agenda, themes, flags, suggestions
         case analysisNote = "analysis_note"
     }
 
@@ -28,7 +27,6 @@ struct AIAnalysisResponse: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         details = (try? container.decode([AIDetail].self, forKey: .details)) ?? []
-        quotes = (try? container.decode([AIQuote].self, forKey: .quotes)) ?? []
         agenda = (try? container.decode([AIAgendaItem].self, forKey: .agenda)) ?? []
         themes = (try? container.decode([AITheme].self, forKey: .themes)) ?? []
         flags = (try? container.decode([AIFlag].self, forKey: .flags)) ?? []
@@ -39,7 +37,6 @@ struct AIAnalysisResponse: Codable {
     // Standard memberwise init for programmatic creation
     init(
         details: [AIDetail] = [],
-        quotes: [AIQuote] = [],
         agenda: [AIAgendaItem] = [],
         themes: [AITheme] = [],
         flags: [AIFlag] = [],
@@ -47,7 +44,6 @@ struct AIAnalysisResponse: Codable {
         analysisNote: String? = nil
     ) {
         self.details = details
-        self.quotes = quotes
         self.agenda = agenda
         self.themes = themes
         self.flags = flags
@@ -57,44 +53,22 @@ struct AIAnalysisResponse: Codable {
 }
 
 struct AIDetail: Codable {
+    var stableId: String              // AI-assigned ID for continuity
     var content: String
     var category: String
-    var sourceQuote: String
     var timestamp: Double
 
     enum CodingKeys: String, CodingKey {
         case content, category, timestamp
-        case sourceQuote = "source_quote"
+        case stableId = "stable_id"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        stableId = (try? container.decode(String.self, forKey: .stableId))
+            ?? "auto_\(UUID().uuidString.prefix(8))"
         content = try container.decode(String.self, forKey: .content)
-        category = try container.decode(String.self, forKey: .category)
-        sourceQuote = (try? container.decode(String.self, forKey: .sourceQuote)) ?? ""
-        timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
-    }
-
-    private static func decodeTimestamp(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double {
-        if let value = try? container.decode(Double.self, forKey: key) { return value }
-        if let str = try? container.decode(String.self, forKey: key), let value = Double(str) { return value }
-        return 0
-    }
-}
-
-struct AIQuote: Codable {
-    var text: String
-    var timestamp: Double
-    var significance: String
-
-    enum CodingKeys: String, CodingKey {
-        case text, timestamp, significance
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        text = try container.decode(String.self, forKey: .text)
-        significance = (try? container.decode(String.self, forKey: .significance)) ?? ""
+        category = (try? container.decode(String.self, forKey: .category)) ?? "Fact"
         timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
     }
 
@@ -153,41 +127,38 @@ struct AITimeRange: Codable {
 struct AITheme: Codable {
     var stableId: String              // AI-assigned ID for continuity
     var name: String
-    var mentions: [AIThemeMention]
+    var quotes: [AIThemeQuote]        // Supporting quotes
+    var subThemes: [AITheme]          // Nested sub-themes
     var explored: Bool
-    var relatedThemeIds: [String]?    // Links to related themes
-    var description: String?          // AI explanation of the theme
 
     enum CodingKeys: String, CodingKey {
-        case name, mentions, explored, description
+        case name, quotes, explored
         case stableId = "stable_id"
-        case relatedThemeIds = "related_theme_ids"
+        case subThemes = "sub_themes"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // stableId is required but fallback if missing
         stableId = (try? container.decode(String.self, forKey: .stableId))
             ?? "auto_\(UUID().uuidString.prefix(8))"
         name = try container.decode(String.self, forKey: .name)
-        mentions = (try? container.decode([AIThemeMention].self, forKey: .mentions)) ?? []
+        quotes = (try? container.decode([AIThemeQuote].self, forKey: .quotes)) ?? []
+        subThemes = (try? container.decode([AITheme].self, forKey: .subThemes)) ?? []
         explored = (try? container.decode(Bool.self, forKey: .explored)) ?? false
-        relatedThemeIds = try? container.decode([String].self, forKey: .relatedThemeIds)
-        description = try? container.decode(String.self, forKey: .description)
     }
 }
 
-struct AIThemeMention: Codable {
+struct AIThemeQuote: Codable {
+    var text: String
     var timestamp: Double
-    var context: String
 
     enum CodingKeys: String, CodingKey {
-        case timestamp, context
+        case text, timestamp
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        context = (try? container.decode(String.self, forKey: .context)) ?? ""
+        text = (try? container.decode(String.self, forKey: .text)) ?? ""
         timestamp = Self.decodeTimestamp(from: container, forKey: .timestamp)
     }
 

@@ -171,11 +171,7 @@ struct LiveFeedView: View {
                 LazyVStack(spacing: DesignSystem.Spacing.small) {
                     // Show newest items at top
                     ForEach(filteredItems.reversed()) { item in
-                        LiveFeedItemView(
-                            item: item,
-                            onStar: { assistantService.starItem(item) },
-                            onDismiss: { assistantService.dismissItem(item) }
-                        )
+                        LiveFeedItemView(item: item)
                         .id(item.id)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .top)),
@@ -206,16 +202,14 @@ struct LiveFeedView: View {
 
         switch selectedFilter {
         case .all:
-            // Show only live feed types (flags, suggestions, theme alerts)
+            // Show only live feed types (flags, suggestions)
             return activeItems.filter {
-                $0.itemType == .flag || $0.itemType == .suggestion || $0.itemType == .themeAlert
+                $0.itemType == .flag || $0.itemType == .suggestion
             }
         case .flags:
             return activeItems.filter { $0.itemType == .flag }
         case .suggestions:
-            return activeItems.filter {
-                $0.itemType == .suggestion || $0.itemType == .themeAlert
-            }
+            return activeItems.filter { $0.itemType == .suggestion }
         }
     }
 
