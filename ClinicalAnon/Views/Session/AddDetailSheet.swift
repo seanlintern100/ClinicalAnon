@@ -19,10 +19,10 @@ struct AddDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var content: String = ""
-    @State private var category: String = "Fact"
+    @State private var category: String = "Person"
 
-    // Common category options for manual entry
-    private let categoryOptions = ["Person", "Relationship", "History", "Context", "Fact"]
+    // Category options matching prompt: Person | Relationship | Employment | Living situation | Health | Key event
+    private let categoryOptions = ["Person", "Relationship", "Employment", "Health", "Key event"]
 
     // MARK: - Body
 
@@ -143,8 +143,9 @@ struct AddDetailSheet: View {
         switch cat.lowercased() {
         case "person": return "person.fill"
         case "relationship": return "heart.fill"
-        case "history": return "clock.fill"
-        case "context": return "text.quote"
+        case "employment": return "briefcase.fill"
+        case "health": return "cross.case.fill"
+        case "key event": return "star.fill"
         default: return "pin.fill"
         }
     }

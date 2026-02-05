@@ -35,13 +35,34 @@ struct ClientDetail: Identifiable, Codable, Equatable {
         self.isManuallyAdded = isManuallyAdded
     }
 
+    // Custom decoder for backward compatibility with old sessions missing stableId
+    enum CodingKeys: String, CodingKey {
+        case id, stableId, content, category, timestamp, addedAt, isManuallyAdded
+        // Legacy key names
+        case sourceQuote
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        content = try container.decode(String.self, forKey: .content)
+        category = (try? container.decode(String.self, forKey: .category)) ?? "Fact"
+        timestamp = (try? container.decode(TimeInterval.self, forKey: .timestamp)) ?? 0
+        addedAt = (try? container.decode(Date.self, forKey: .addedAt)) ?? Date()
+        isManuallyAdded = (try? container.decode(Bool.self, forKey: .isManuallyAdded)) ?? false
+        // Backward compatibility: generate stableId if missing
+        stableId = (try? container.decode(String.self, forKey: .stableId)) ?? "legacy_\(id.uuidString.prefix(8))"
+    }
+
     /// Icon for display based on category name
     var categoryIcon: String {
         switch category.lowercased() {
         case "person": return "person.fill"
-        case "relationship", "relationships": return "heart.fill"
-        case "history": return "clock.fill"
-        case "context": return "text.quote"
+        case "relationship": return "heart.fill"
+        case "employment": return "briefcase.fill"
+        case "living situation": return "house.fill"
+        case "health": return "cross.case.fill"
+        case "key event": return "star.fill"
         default: return "pin.fill"
         }
     }

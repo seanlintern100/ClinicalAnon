@@ -349,25 +349,37 @@ class SessionAssistantService: ObservableObject {
 
         ---
 
-        ## 1. DETAILS — Complete State (max 20)
+        ## 1. KEY FACTS — Complete State (max 20)
 
-        Clinically relevant facts about the client. You own this list — return the complete organised state each analysis.
+        A quick-reference fact map of the client's world. Think cast list, not case notes.
 
-        - **Maximum 20 details** — condense and merge related facts as needed
-        - Be selective — only notable information worth documenting
-        - Organise related facts together (group by person, topic, or connection)
-        - Reorder as understanding develops (most clinically relevant first)
-        - Update/refine existing details as more context emerges
-        - Merge related facts into single entries when clearer picture emerges
-        - Items with stable_id starting with "manual_" MUST be preserved
+        Each entry is a single, short fact — never a paragraph. If you can't say it in one line, it's too much. The clinician glances at this to remember a name, an age, a relationship, a date. Nothing more.
 
-        Create appropriate categories based on content (e.g., "Person", "Relationship", "History", "Context").
+        **What belongs here:**
+        - People: names, roles, relationships (e.g., "[PERSON_A] — partner", "[PERSON_B] — daughter, age 7")
+        - Ages and dates (e.g., "Age: 34", "Started current job [DATE_A]")
+        - Key life events, stated briefly (e.g., "Mother died 2 years ago")
+        - Diagnoses, medications, professionals involved (e.g., "On sertraline 50mg", "GP: [PERSON_C]")
+        - Living situation, employment — one line each
+
+        **What does NOT belong here:**
+        - Summaries of what was discussed
+        - Interpretations or clinical observations (these belong in themes)
+        - Context or background narratives
+        - Anything longer than one short sentence
+        - Emotional states or opinions
+
+        Categories: `Person` | `Relationship` | `Employment` | `Living situation` | `Health` | `Key event`
+
+        You own this list. Each cycle: preserve existing items, update if corrected, merge duplicates, add new facts. Reorder with most referenced/relevant first. Items with stable_id starting "manual_" must always be preserved.
+
+        The test: Could this entry fit on a sticky note with room to spare? If not, it's too long.
 
         ```
         {
-          "stable_id": "detail_mother",
-          "content": "Mother passed away 2 years ago; client was primary caregiver",
-          "category": "Family",
+          "stable_id": "detail_partner",
+          "content": "[PERSON_A] — partner, together 5 years",
+          "category": "Relationship",
           "timestamp": 142
         }
         ```

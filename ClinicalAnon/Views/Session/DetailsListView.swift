@@ -112,9 +112,11 @@ struct DetailsListView: View {
     private func iconForCategory(_ category: String) -> String {
         switch category.lowercased() {
         case "person": return "person.fill"
-        case "relationship", "relationships": return "heart.fill"
-        case "history": return "clock.fill"
-        case "context": return "text.quote"
+        case "relationship": return "heart.fill"
+        case "employment": return "briefcase.fill"
+        case "living situation": return "house.fill"
+        case "health": return "cross.case.fill"
+        case "key event": return "star.fill"
         default: return "pin.fill"
         }
     }
