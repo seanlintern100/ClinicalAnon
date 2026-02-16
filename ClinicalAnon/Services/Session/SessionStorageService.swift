@@ -57,6 +57,9 @@ class SessionStorageService {
     /// Subdirectory name for audio files
     private let audioSubdirectory = "audio"
 
+    /// Encryption service for session data at rest
+    private let encryptionService = SessionEncryptionService.shared
+
     // MARK: - Initialization
 
     private init() {
@@ -142,14 +145,19 @@ class SessionStorageService {
 
             // Use LiveSessionData for encoding, including assistant state
             let sessionData = LiveSessionData(from: session, assistantState: assistantState)
-            let data = try encoder.encode(sessionData)
-            try data.write(to: metadataURL, options: .atomic)
+            let jsonData = try encoder.encode(sessionData)
+
+            // Encrypt before writing to disk
+            let encryptedData = try encryptionService.encrypt(jsonData, for: session.id)
+            try encryptedData.write(to: metadataURL, options: .atomic)
+        } catch let error as SessionEncryptionError {
+            throw SessionStorageError.sessionSaveFailed("Encryption failed: \(error.localizedDescription)")
         } catch {
             throw SessionStorageError.sessionSaveFailed(error.localizedDescription)
         }
     }
 
-    /// Load a single session from disk
+    /// Load a single session from disk (decrypts if encrypted, migrates if not)
     func loadSession(id: UUID) async throws -> LiveSession {
         let sessionDir = sessionsBaseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
         let metadataURL = sessionDir.appendingPathComponent(sessionMetadataFilename)
@@ -159,16 +167,44 @@ class SessionStorageService {
         }
 
         do {
-            let data = try Data(contentsOf: metadataURL)
+            let rawData = try Data(contentsOf: metadataURL)
+            let jsonData = try decryptOrMigrate(data: rawData, sessionId: id)
+
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
 
-            // Decode to LiveSessionData, then create LiveSession
-            let sessionData = try decoder.decode(LiveSessionData.self, from: data)
+            let sessionData = try decoder.decode(LiveSessionData.self, from: jsonData)
             let session = LiveSession(from: sessionData)
+
+            // Migration: if session was unencrypted, re-save to encrypt it
+            if !encryptionService.hasKey(for: id) {
+                if let reEncrypted = try? encryptionService.encrypt(jsonData, for: id) {
+                    try? reEncrypted.write(to: metadataURL, options: .atomic)
+                    print("SessionStorageService: Migrated session \(id) to encrypted storage")
+                }
+            }
+
             return session
         } catch {
             throw SessionStorageError.sessionLoadFailed(error.localizedDescription)
+        }
+    }
+
+    /// Attempt to decrypt data; if no key exists, treat as unencrypted (migration path)
+    private func decryptOrMigrate(data: Data, sessionId: UUID) throws -> Data {
+        if encryptionService.hasKey(for: sessionId) {
+            // Key exists — decrypt
+            return try encryptionService.decrypt(data, for: sessionId)
+        } else {
+            // No key — this is an unencrypted legacy session
+            // Verify it's valid JSON before accepting
+            if (try? JSONSerialization.jsonObject(with: data)) != nil {
+                // Valid unencrypted JSON — will be encrypted on next save
+                return data
+            } else {
+                // Not valid JSON and no key — corrupted data
+                throw SessionStorageError.invalidSessionData
+            }
         }
     }
 
@@ -209,18 +245,28 @@ class SessionStorageService {
             }
 
             do {
-                let data = try Data(contentsOf: metadataURL)
+                let rawData = try Data(contentsOf: metadataURL)
+                let sessionId = UUID(uuidString: item.lastPathComponent)!
+                let jsonData = try decryptOrMigrate(data: rawData, sessionId: sessionId)
+
                 let decoder = JSONDecoder()
                 decoder.dateDecodingStrategy = .iso8601
 
-                // Decode to LiveSessionData, then create LiveSession
-                let sessionData = try decoder.decode(LiveSessionData.self, from: data)
+                let sessionData = try decoder.decode(LiveSessionData.self, from: jsonData)
                 let session = LiveSession(from: sessionData)
                 sessions.append(session)
 
                 // Cache the assistant state if present
                 if let assistantState = sessionData.assistantStateData {
                     assistantStates[session.id] = assistantState
+                }
+
+                // Migration: if session was unencrypted, re-save to encrypt it
+                if !encryptionService.hasKey(for: sessionId) {
+                    if let reEncrypted = try? encryptionService.encrypt(jsonData, for: sessionId) {
+                        try? reEncrypted.write(to: metadataURL, options: .atomic)
+                        print("SessionStorageService: Migrated session \(sessionId) to encrypted storage")
+                    }
                 }
             } catch {
                 // Log error but continue loading other sessions
@@ -236,24 +282,31 @@ class SessionStorageService {
 
     // MARK: - Session Deletion
 
-    /// Delete a session and all associated files
+    /// Delete a session and all associated files (secure overwrite + key deletion)
     func deleteSession(_ session: LiveSession) async throws {
+        // Clean up encryption key first (makes encrypted data unrecoverable)
+        try? encryptionService.deleteKey(for: session.id)
+
         let sessionDir = Self.sessionDirectory(for: session)
 
         guard FileManager.default.fileExists(atPath: sessionDir.path) else {
-            // Already deleted, nothing to do
             return
         }
 
         do {
+            // Securely overwrite sensitive files before removal
+            try secureDeleteContents(of: sessionDir)
             try FileManager.default.removeItem(at: sessionDir)
         } catch {
             throw SessionStorageError.deletionFailed(error.localizedDescription)
         }
     }
 
-    /// Delete a session by ID
+    /// Delete a session by ID (secure overwrite + key deletion)
     func deleteSession(id: UUID) async throws {
+        // Clean up encryption key first
+        try? encryptionService.deleteKey(for: id)
+
         let sessionDir = sessionsBaseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
 
         guard FileManager.default.fileExists(atPath: sessionDir.path) else {
@@ -261,9 +314,34 @@ class SessionStorageService {
         }
 
         do {
+            try secureDeleteContents(of: sessionDir)
             try FileManager.default.removeItem(at: sessionDir)
         } catch {
             throw SessionStorageError.deletionFailed(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Secure Deletion
+
+    /// Overwrite all files in a directory with random data before filesystem removal
+    private func secureDeleteContents(of directory: URL) throws {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for case let fileURL as URL in enumerator {
+            let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard resourceValues.isRegularFile == true else { continue }
+
+            let fileSize = resourceValues.fileSize ?? 0
+            guard fileSize > 0 else { continue }
+
+            // Overwrite with random data (single pass — encryption provides primary protection)
+            var randomBytes = [UInt8](repeating: 0, count: fileSize)
+            _ = SecRandomCopyBytes(kSecRandomDefault, fileSize, &randomBytes)
+            try Data(randomBytes).write(to: fileURL, options: .atomic)
         }
     }
 
@@ -340,7 +418,7 @@ class SessionStorageService {
 
     // MARK: - Cleanup
 
-    /// Delete all session data (for privacy/reset)
+    /// Delete all session data (for privacy/reset) with secure overwrite
     func deleteAllSessions() async throws {
         let contents = try FileManager.default.contentsOfDirectory(
             at: sessionsBaseDirectory,
@@ -349,6 +427,11 @@ class SessionStorageService {
         )
 
         for item in contents {
+            // Clean up encryption key if this is a session directory
+            if let sessionId = UUID(uuidString: item.lastPathComponent) {
+                try? encryptionService.deleteKey(for: sessionId)
+            }
+            try secureDeleteContents(of: item)
             try FileManager.default.removeItem(at: item)
         }
     }

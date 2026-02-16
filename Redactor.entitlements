@@ -12,5 +12,9 @@
 	<true/>
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
+	<key>com.apple.security.keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.3bigthings.Redactor</string>
+	</array>
 </dict>
 </plist>

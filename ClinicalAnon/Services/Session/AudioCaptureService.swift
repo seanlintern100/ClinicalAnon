@@ -814,6 +814,8 @@ class AudioCaptureService: NSObject, ObservableObject {
         let chunkDuration = endTime.timeIntervalSince(startTime)
         let sessionOffset = startTime.timeIntervalSince(sessionStart)
         let chunkIndex = currentChunkIndex
+        let sessionId = session.id
+        let hasMultipleParticipants = session.hasMultipleParticipants
 
         // Get session directory
         let sessionDir = SessionStorageService.sessionDirectory(for: session)
@@ -821,6 +823,15 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Handle microphone chunk (recorded by AVAudioEngine as WAV)
         let micURL = sessionDir.appendingPathComponent("audio/mic_\(String(format: "%03d", chunkIndex)).wav")
         if FileManager.default.fileExists(atPath: micURL.path) {
+            // Encrypt audio chunk at rest
+            do {
+                try SessionEncryptionService.shared.encryptFile(at: micURL, for: sessionId)
+                print("AudioCaptureService: Encrypted mic chunk \(chunkIndex)")
+            } catch {
+                print("AudioCaptureService: Warning - failed to encrypt mic chunk \(chunkIndex): \(error.localizedDescription)")
+            }
+
+            // Capture file size AFTER encryption (reflects actual on-disk size)
             let micSize = (try? FileManager.default.attributesOfItem(atPath: micURL.path)[.size] as? Int64) ?? 0
 
             let micChunk = AudioChunkReference(
@@ -846,6 +857,19 @@ class AudioCaptureService: NSObject, ObservableObject {
             }
         }
 
+        // Helper to post notification after all encryption is complete
+        let postChunkReady = {
+            NotificationCenter.default.post(
+                name: .audioChunkReady,
+                object: AudioChunkReadyInfo(
+                    sessionId: sessionId,
+                    chunkIndex: chunkIndex,
+                    chunkStartTime: sessionOffset,
+                    hasMultipleParticipants: hasMultipleParticipants
+                )
+            )
+        }
+
         // Finish writing system audio (if active)
         if let writer = systemWriter, let input = systemWriterInput {
             input.markAsFinished()
@@ -853,6 +877,16 @@ class AudioCaptureService: NSObject, ObservableObject {
                 guard self != nil else { return }
 
                 let sysURL = sessionDir.appendingPathComponent("audio/sys_\(String(format: "%03d", chunkIndex)).m4a")
+
+                // Encrypt audio chunk at rest
+                do {
+                    try SessionEncryptionService.shared.encryptFile(at: sysURL, for: sessionId)
+                    print("AudioCaptureService: Encrypted sys chunk \(chunkIndex)")
+                } catch {
+                    print("AudioCaptureService: Warning - failed to encrypt sys chunk \(chunkIndex): \(error.localizedDescription)")
+                }
+
+                // Capture file size AFTER encryption
                 let sysSize = (try? FileManager.default.attributesOfItem(atPath: sysURL.path)[.size] as? Int64) ?? 0
 
                 let sysChunk = AudioChunkReference(
@@ -868,20 +902,15 @@ class AudioCaptureService: NSObject, ObservableObject {
                 Task { @MainActor in
                     session.audioChunkPaths.append(sysChunk)
                     print("AudioCaptureService: Added sys chunk \(chunkIndex), size: \(sysSize) bytes")
+
+                    // Notify AFTER sys audio is encrypted and registered
+                    postChunkReady()
                 }
             }
+        } else {
+            // No system audio writer — notify immediately (mic already encrypted)
+            postChunkReady()
         }
-
-        // Notify that chunk is ready for transcription
-        NotificationCenter.default.post(
-            name: .audioChunkReady,
-            object: AudioChunkReadyInfo(
-                sessionId: session.id,
-                chunkIndex: chunkIndex,
-                chunkStartTime: sessionOffset,
-                hasMultipleParticipants: session.hasMultipleParticipants
-            )
-        )
 
         currentChunkIndex += 1
     }

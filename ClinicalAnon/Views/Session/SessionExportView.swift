@@ -49,7 +49,7 @@ struct TranscriptExportView: View {
                 performExport()
             }
         } message: {
-            Text("This transcript contains unredacted personal information including names, dates, and other sensitive data.\n\nOnly export unredacted content if you have appropriate authorization and secure storage.")
+            Text("This export contains unredacted clinical information including patient names, dates, and other PII.\n\nOnly export to secure, authorized locations. Ensure compliance with your organization's data handling policies.")
         }
         .alert("Export Failed", isPresented: .init(
             get: { exportError != nil },
@@ -345,6 +345,19 @@ struct AudioExportView: View {
                 }
                 .padding(DesignSystem.Spacing.small)
                 .background(DesignSystem.Colors.primaryTeal.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
+
+                // Security warning for audio exports
+                HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+
+                    Text("Audio recordings may contain identifiable patient information. Ensure this file is stored securely and in compliance with your organization's data handling policies.")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                }
+                .padding(DesignSystem.Spacing.small)
+                .background(Color.orange.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
             }
         }

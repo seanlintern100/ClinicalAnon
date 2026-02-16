@@ -238,6 +238,9 @@ struct SessionRowView: View {
 
             Spacer()
 
+            // Retention status badge
+            retentionBadge
+
             // Recording indicator for active session
             if isActive && session.state == .recording {
                 recordingIndicator
@@ -271,6 +274,32 @@ struct SessionRowView: View {
             return .green
         case .handedOff:
             return DesignSystem.Colors.textSecondary
+        }
+    }
+
+    // MARK: - Retention Badge
+
+    @ViewBuilder
+    private var retentionBadge: some View {
+        switch session.retentionStatus {
+        case .expiringSoon(let days):
+            HStack(spacing: 2) {
+                Image(systemName: "clock.fill")
+                    .font(.system(size: 9))
+                Text("\(days)d")
+                    .font(.system(size: 10))
+            }
+            .foregroundStyle(.orange)
+            .help("Expires in \(days) day\(days == 1 ? "" : "s")")
+
+        case .pendingDeletion:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.red)
+                .help("Deletion pending")
+
+        default:
+            EmptyView()
         }
     }
 

@@ -37,6 +37,23 @@ enum SessionState: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Retention Status
+
+/// Represents how close a session is to its retention expiry
+enum RetentionStatus {
+    case active              // Well within retention period
+    case expiringSoon(Int)   // Within 2 days of expiry (associated value = days remaining)
+    case pendingDeletion     // Past retention period, awaiting user confirmation
+    case expired             // Past retention + 1 day grace, auto-delete
+
+    var isWarning: Bool {
+        switch self {
+        case .expiringSoon, .pendingDeletion: return true
+        default: return false
+        }
+    }
+}
+
 // MARK: - Pause Gap
 
 /// Represents a gap in recording due to pause
@@ -286,6 +303,33 @@ class LiveSession: ObservableObject, Identifiable {
     /// Whether the session can be handed off to Redact phase
     var canHandoff: Bool {
         state == .complete && !transcriptSegments.isEmpty
+    }
+
+    /// Retention status based on session age and user's retention setting
+    var retentionStatus: RetentionStatus {
+        // Default to enabled if key hasn't been set yet
+        let retentionEnabled = UserDefaults.standard.object(forKey: SettingsKeys.sessionRetentionEnabled) as? Bool ?? true
+        guard retentionEnabled else { return .active }
+
+        let retentionDays = UserDefaults.standard.integer(forKey: SettingsKeys.sessionRetentionDays)
+        let effectiveRetention = retentionDays > 0 ? retentionDays : 7  // Default 7 days
+
+        let calendar = Calendar.current
+        let now = Date()
+        let ageInDays = calendar.dateComponents([.day], from: createdAt, to: now).day ?? 0
+        let warningThreshold = max(effectiveRetention - 2, 0)
+        let hardDeleteThreshold = effectiveRetention + 7
+
+        if ageInDays >= hardDeleteThreshold {
+            return .expired
+        } else if ageInDays >= effectiveRetention {
+            return .pendingDeletion
+        } else if ageInDays >= warningThreshold {
+            let daysRemaining = effectiveRetention - ageInDays
+            return .expiringSoon(daysRemaining)
+        } else {
+            return .active
+        }
     }
 }
 

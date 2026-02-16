@@ -45,7 +45,7 @@ struct SettingsContainerView: View {
                     Label("Transcription", systemImage: "waveform")
                 }
         }
-        .frame(width: 600, height: 520)
+        .frame(width: 600, height: 680)
     }
 }
 

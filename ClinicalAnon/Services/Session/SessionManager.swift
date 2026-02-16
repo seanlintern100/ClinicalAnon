@@ -98,6 +98,12 @@ class SessionManager: ObservableObject {
 
     /// Start a new recording session
     func startSession() async throws -> LiveSession {
+        // Show first-run security advisory if not yet seen
+        if !UserDefaults.standard.bool(forKey: SettingsKeys.sessionSecurityAdvisoryShown) {
+            NotificationCenter.default.post(name: .sessionSecurityAdvisory, object: nil)
+            UserDefaults.standard.set(true, forKey: SettingsKeys.sessionSecurityAdvisoryShown)
+        }
+
         // Don't wait for transcription model here - it will load when needed
         // This allows session to start immediately
         // Model loading happens in background when first audio chunk is ready
@@ -309,6 +315,41 @@ class SessionManager: ObservableObject {
         try? await storageService.deleteSession(session)
     }
 
+    // MARK: - Retention Management
+
+    /// Extend a session's retention by resetting its creation date to now
+    func extendRetention(for session: LiveSession) async {
+        // createdAt is immutable on LiveSession, so we recreate the session
+        // from its data with a fresh createdAt to reset the retention clock.
+        let data = session.sessionData
+        let freshData = LiveSessionData(
+            id: data.id,
+            createdAt: Date(),  // Reset creation date
+            state: data.state,
+            name: data.name,
+            recordingDuration: data.recordingDuration,
+            pausedAt: data.pausedAt,
+            pauseGaps: data.pauseGaps,
+            transcriptSegments: data.transcriptSegments,
+            transcriptionGaps: data.transcriptionGaps,
+            lastTranscriptUpdate: data.lastTranscriptUpdate,
+            detectedEntities: data.detectedEntities,
+            audioChunkPaths: data.audioChunkPaths,
+            assistantStateData: assistantStateCache[session.id],
+            chatMessages: data.chatMessages,
+            hasMultipleParticipants: data.hasMultipleParticipants
+        )
+
+        // Replace session in list with refreshed version
+        let freshSession = LiveSession(from: freshData)
+        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+            sessions[index] = freshSession
+        }
+
+        // Save to disk
+        try? await storageService.saveSession(freshSession, assistantState: assistantStateCache[session.id])
+    }
+
     // MARK: - Assistant State Management
 
     /// Restore assistant state for a session (called when session is selected in UI)
@@ -374,18 +415,35 @@ class SessionManager: ObservableObject {
                 )
             }
 
-            // Check for expired sessions (older than 24 hours)
-            let expirationThreshold: TimeInterval = 24 * 60 * 60  // 24 hours in seconds
-            let expiredSessions = sessions.filter {
-                Date().timeIntervalSince($0.createdAt) > expirationThreshold
-            }
+            // Retention-aware session cleanup
+            let retentionEnabled = UserDefaults.standard.object(forKey: SettingsKeys.sessionRetentionEnabled) as? Bool ?? true
+            if retentionEnabled {
+                var pendingDeletion: [LiveSession] = []
+                var autoDelete: [LiveSession] = []
 
-            if !expiredSessions.isEmpty {
-                // Notify UI to prompt user about expired sessions
-                NotificationCenter.default.post(
-                    name: .expiredSessionsFound,
-                    object: expiredSessions
-                )
+                for session in sessions {
+                    switch session.retentionStatus {
+                    case .expired:
+                        autoDelete.append(session)
+                    case .pendingDeletion:
+                        pendingDeletion.append(session)
+                    default:
+                        break
+                    }
+                }
+
+                // Auto-delete sessions past hard-delete threshold silently
+                for session in autoDelete {
+                    await self.deleteSession(session)
+                }
+
+                // Notify UI about pending-deletion sessions
+                if !pendingDeletion.isEmpty {
+                    NotificationCenter.default.post(
+                        name: .expiredSessionsFound,
+                        object: ["pendingDeletion": pendingDeletion]
+                    )
+                }
             }
         } catch {
             print("SessionManager: Failed to restore sessions: \(error)")
@@ -509,6 +567,7 @@ extension Notification.Name {
     static let sessionsRecovered = Notification.Name("sessionsRecovered")
     static let sessionNeedsNaming = Notification.Name("sessionNeedsNaming")
     static let expiredSessionsFound = Notification.Name("expiredSessionsFound")
+    static let sessionSecurityAdvisory = Notification.Name("sessionSecurityAdvisory")
 }
 
 // MARK: - Preview Helpers

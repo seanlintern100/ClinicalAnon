@@ -86,6 +86,9 @@
 		92823565A8FE9F602B5AEC24 /* ClinicianPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71C90056B7232FF55C2B6FCB /* ClinicianPreferences.swift */; };
 		9305F0A93AE56D10A9BEB497 /* AWSBedrockRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = B1FAA0CD94F764F4CEB02ADB /* AWSBedrockRuntime */; };
 		976A38CC706CDF708430B7A8 /* SessionSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1E2 /* ExpiredSessionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2D1C0B9A8F7E6D5C4B3A2F1 /* ExpiredSessionsSheet.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* SessionEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6071829304A5B6C /* SessionEncryptionService.swift */; };
+		C3D4E5F607182930415B6C7D /* SessionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6071829304152B6C7D8 /* SessionSettingsView.swift */; };
 		9879FB3755B0A1965AB653F0 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 5D751FDF7B7F82943DD81D36 /* Hub */; };
 		98A6CBABBE704F1553573D47 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 3A8999B746A084973818F4A4 /* FluidAudio */; };
 		99877BB9F48172B419E7373D /* SessionAssistantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC3FEB2968A6D59C6614C70 /* SessionAssistantService.swift */; };
@@ -172,6 +175,9 @@
 		145426F955EDE328B23082DC /* AgendaItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaItem.swift; sourceTree = "<group>"; };
 		14BCD698F510EF8404855DD2 /* UserInclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInclusionManager.swift; sourceTree = "<group>"; };
 		16BEEF66057D540CFD26F416 /* SessionExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExportView.swift; sourceTree = "<group>"; };
+		E2D1C0B9A8F7E6D5C4B3A2F1 /* ExpiredSessionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpiredSessionsSheet.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6071829304A5B6C /* SessionEncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEncryptionService.swift; sourceTree = "<group>"; };
+		D4E5F6071829304152B6C7D8 /* SessionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSettingsView.swift; sourceTree = "<group>"; };
 		1743AD851179C67A5B6E5BC0 /* FeedItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedItem.swift; sourceTree = "<group>"; };
 		1A4488473B69644073207EA4 /* SourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDocument.swift; sourceTree = "<group>"; };
 		1C66CCCF0F3FF03B9B352299 /* SessionNamePromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionNamePromptView.swift; sourceTree = "<group>"; };
@@ -426,6 +432,7 @@
 				C49C29C2C6D1143ACFCEB0B1 /* SessionAIService.swift */,
 				DCC3FEB2968A6D59C6614C70 /* SessionAssistantService.swift */,
 				0AEBD2865BA0117324DA4450 /* SessionAssistantState.swift */,
+				B2C3D4E5F6071829304A5B6C /* SessionEncryptionService.swift */,
 				BC2200615CB715B38B4C8DED /* SessionExportService.swift */,
 				61BEC03B51DE72463B083E60 /* SessionManager.swift */,
 				A4DFCD98D30C64C8BD4FD174 /* SessionStorageService.swift */,
@@ -557,8 +564,10 @@
 				77222F445CED83AB2339695D /* SessionAssistantView.swift */,
 				0199925111CE027F24F5DE1E /* SessionChatView.swift */,
 				CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */,
+				E2D1C0B9A8F7E6D5C4B3A2F1 /* ExpiredSessionsSheet.swift */,
 				16BEEF66057D540CFD26F416 /* SessionExportView.swift */,
 				1C66CCCF0F3FF03B9B352299 /* SessionNamePromptView.swift */,
+				D4E5F6071829304152B6C7D8 /* SessionSettingsView.swift */,
 				93337DD9EBD1862EE66113CB /* SessionSidebarView.swift */,
 				DEC924F7EF383E70C56A332D /* SessionWindowContentView.swift */,
 				B6CD77A5DF066B5F6DD40317 /* SessionWindowController.swift */,
@@ -811,10 +820,13 @@
 				738952456D11DF3661618B06 /* SessionAssistantView.swift in Sources */,
 				15FDA0FD5D1FA21F6CB742DB /* SessionChatView.swift in Sources */,
 				BDCE129B32BFAB043737182F /* SessionDetailView.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* SessionEncryptionService.swift in Sources */,
 				B3A4CE415F4192248F8D52CB /* SessionExportService.swift in Sources */,
+				F1A2B3C4D5E6F7A8B9C0D1E2 /* ExpiredSessionsSheet.swift in Sources */,
 				C611D5FEA423B93FA62636C8 /* SessionExportView.swift in Sources */,
 				A7C455478E6634394659C3DD /* SessionManager.swift in Sources */,
 				52DC14EE86F9B67814B0E441 /* SessionNamePromptView.swift in Sources */,
+				C3D4E5F607182930415B6C7D /* SessionSettingsView.swift in Sources */,
 				976A38CC706CDF708430B7A8 /* SessionSidebarView.swift in Sources */,
 				FBB1CC49780B60C8CD801BFB /* SessionStorageService.swift in Sources */,
 				D4CD54BE4E8C047DE3BB5C69 /* SessionWindowContentView.swift in Sources */,

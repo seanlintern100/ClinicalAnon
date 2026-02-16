@@ -18,8 +18,9 @@ struct SessionWindowContentView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @State private var selectedSession: LiveSession?
     @State private var sessionToName: LiveSession?
-    @State private var showExpiredSessionsAlert = false
-    @State private var expiredSessions: [LiveSession] = []
+    @State private var showExpiredSessionsSheet = false
+    @State private var pendingDeletionSessions: [LiveSession] = []
+    @State private var showSecurityAdvisory = false
 
     // MARK: - Body
 
@@ -62,25 +63,18 @@ struct SessionWindowContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .expiredSessionsFound)) { notification in
-            if let sessions = notification.object as? [LiveSession] {
-                expiredSessions = sessions
-                showExpiredSessionsAlert = true
-            }
-        }
-        .alert("Old Sessions Found", isPresented: $showExpiredSessionsAlert) {
-            Button("Delete All", role: .destructive) {
-                Task {
-                    for session in expiredSessions {
-                        await sessionManager.deleteSession(session)
-                    }
-                    expiredSessions = []
+            if let info = notification.object as? [String: [LiveSession]] {
+                pendingDeletionSessions = info["pendingDeletion"] ?? []
+                if !pendingDeletionSessions.isEmpty {
+                    showExpiredSessionsSheet = true
                 }
             }
-            Button("Keep All", role: .cancel) {
-                expiredSessions = []
-            }
-        } message: {
-            Text("\(expiredSessions.count) session\(expiredSessions.count == 1 ? " is" : "s are") older than 24 hours. Would you like to delete them?")
+        }
+        .sheet(isPresented: $showExpiredSessionsSheet) {
+            ExpiredSessionsSheet(
+                sessionManager: sessionManager,
+                sessions: $pendingDeletionSessions
+            )
         }
         .onChange(of: selectedSession) { oldSession, newSession in
             // Save current assistant state before switching
@@ -91,6 +85,14 @@ struct SessionWindowContentView: View {
             if let new = newSession {
                 sessionManager.restoreAssistantState(for: new)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .sessionSecurityAdvisory)) { _ in
+            showSecurityAdvisory = true
+        }
+        .alert("Session Data Security", isPresented: $showSecurityAdvisory) {
+            Button("OK") {}
+        } message: {
+            Text("Live sessions store clinical data on this device. Redactor encrypts session data at rest, but for full protection we recommend enabling FileVault disk encryption (System Settings > Privacy & Security > FileVault).\n\nSessions are automatically deleted after your configured retention period.")
         }
     }
 

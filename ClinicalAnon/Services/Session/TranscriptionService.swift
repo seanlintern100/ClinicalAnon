@@ -419,6 +419,12 @@ class TranscriptionService: ObservableObject {
         defer { isProcessing = false }
 
         var allSegments: [TranscriptSegment] = []
+        var tempFilesToClean: [URL] = []
+        defer {
+            for tempURL in tempFilesToClean {
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
 
         // Update progress
         currentProgress = TranscriptionProgress(
@@ -437,9 +443,15 @@ class TranscriptionService: ObservableObject {
                 stage: .processing
             )
 
+            // Decrypt audio chunk to temp file for transcription
+            let decryptedMicPath = try SessionEncryptionService.shared.decryptFileToTemp(at: microphonePath, for: sessionId)
+            if decryptedMicPath != microphonePath {
+                tempFilesToClean.append(decryptedMicPath)
+            }
+
             let micSegments = try await transcribeFile(
                 whisper: whisper,
-                audioPath: microphonePath,
+                audioPath: decryptedMicPath,
                 speaker: .clinician,
                 chunkIndex: chunkIndex,
                 chunkStartTime: chunkStartTime
@@ -460,9 +472,15 @@ class TranscriptionService: ObservableObject {
             let fileSize = (try? FileManager.default.attributesOfItem(atPath: systemAudioPath.path)[.size] as? Int64) ?? 0
             if fileSize > 1000 {  // Skip files smaller than 1KB (likely empty/headers only)
                 do {
+                    // Decrypt audio chunk to temp file for transcription
+                    let decryptedSysPath = try SessionEncryptionService.shared.decryptFileToTemp(at: systemAudioPath, for: sessionId)
+                    if decryptedSysPath != systemAudioPath {
+                        tempFilesToClean.append(decryptedSysPath)
+                    }
+
                     var sysSegments = try await transcribeFile(
                         whisper: whisper,
-                        audioPath: systemAudioPath,
+                        audioPath: decryptedSysPath,
                         speaker: .other,
                         chunkIndex: chunkIndex,
                         chunkStartTime: chunkStartTime
@@ -473,7 +491,7 @@ class TranscriptionService: ObservableObject {
                     if SpeakerDiarizationService.isEnabled && hasMultipleParticipants {
                         sysSegments = await applySpeakerDiarization(
                             segments: sysSegments,
-                            audioPath: systemAudioPath,
+                            audioPath: decryptedSysPath,
                             chunkStartTime: chunkStartTime
                         )
                     }

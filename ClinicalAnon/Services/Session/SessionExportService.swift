@@ -267,14 +267,27 @@ class SessionExportService {
             throw ExportError.noAudioAvailable
         }
 
+        // Decrypt audio chunks to temp files for export
+        var decryptedURLs: [URL] = []
+        var tempFiles: [URL] = []
+        for url in chunkURLs {
+            let decrypted = try SessionEncryptionService.shared.decryptFileToTemp(at: url, for: session.id)
+            decryptedURLs.append(decrypted)
+            if decrypted != url { tempFiles.append(decrypted) }
+        }
+        defer { for f in tempFiles { try? FileManager.default.removeItem(at: f) } }
+
         // Determine output file
         let outputURL: URL
-        if chunkURLs.count == 1 {
+        let isTemp: Bool
+        if decryptedURLs.count == 1 {
             // Single chunk - use directly
-            outputURL = chunkURLs[0]
+            outputURL = decryptedURLs[0]
+            isTemp = false
         } else {
             // Multiple chunks - concatenate
-            outputURL = try await concatenateAudioFiles(chunkURLs, stream: stream)
+            outputURL = try await concatenateAudioFiles(decryptedURLs, stream: stream)
+            isTemp = true
         }
 
         // Determine file extension from source
@@ -286,10 +299,7 @@ class SessionExportService {
             suggestedName: suggestedName,
             allowedTypes: [sourceExtension]
         ) else {
-            // Clean up temp file if we created one
-            if chunkURLs.count > 1 {
-                try? FileManager.default.removeItem(at: outputURL)
-            }
+            if isTemp { try? FileManager.default.removeItem(at: outputURL) }
             throw ExportError.cancelled
         }
 
@@ -299,11 +309,7 @@ class SessionExportService {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: outputURL, to: destinationURL)
-
-            // Clean up temp file if we created one
-            if chunkURLs.count > 1 {
-                try? FileManager.default.removeItem(at: outputURL)
-            }
+            if isTemp { try? FileManager.default.removeItem(at: outputURL) }
         } catch {
             throw ExportError.fileWriteFailed(error.localizedDescription)
         }
@@ -342,8 +348,23 @@ class SessionExportService {
             throw ExportError.noAudioAvailable
         }
 
+        // Decrypt all audio chunks to temp files for export
+        var tempFiles: [URL] = []
+        defer { for f in tempFiles { try? FileManager.default.removeItem(at: f) } }
+
+        let decryptedMicURLs = try micURLs.map { url -> URL in
+            let decrypted = try SessionEncryptionService.shared.decryptFileToTemp(at: url, for: session.id)
+            if decrypted != url { tempFiles.append(decrypted) }
+            return decrypted
+        }
+        let decryptedSysURLs = try sysURLs.map { url -> URL in
+            let decrypted = try SessionEncryptionService.shared.decryptFileToTemp(at: url, for: session.id)
+            if decrypted != url { tempFiles.append(decrypted) }
+            return decrypted
+        }
+
         // Mix the audio streams
-        let mixedURL = try await mixAudioStreams(micURLs: micURLs, sysURLs: sysURLs)
+        let mixedURL = try await mixAudioStreams(micURLs: decryptedMicURLs, sysURLs: decryptedSysURLs)
 
         // Show save panel
         let suggestedName = "\(session.displayName)-Combined.m4a"

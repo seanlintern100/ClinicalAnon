@@ -41,6 +41,9 @@ struct SessionDetailView: View {
         HSplitView {
             // Main content (left side)
             VStack(spacing: 0) {
+                // Retention warning banner
+                retentionWarningBanner
+
                 // Control bar
                 controlBar
 
@@ -145,6 +148,42 @@ struct SessionDetailView: View {
         .padding(.horizontal, DesignSystem.Spacing.large)
         .padding(.vertical, DesignSystem.Spacing.medium)
         .background(DesignSystem.Colors.surface)
+    }
+
+    // MARK: - Retention Warning Banner
+
+    @ViewBuilder
+    private var retentionWarningBanner: some View {
+        switch session.retentionStatus {
+        case .expiringSoon(let days):
+            HStack(spacing: DesignSystem.Spacing.small) {
+                Image(systemName: "clock.fill")
+                    .foregroundStyle(.orange)
+                Text("This session expires in \(days) day\(days == 1 ? "" : "s"). Export or hand off before it's deleted.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, DesignSystem.Spacing.large)
+            .padding(.vertical, DesignSystem.Spacing.small)
+            .background(Color.orange.opacity(0.15))
+
+        case .pendingDeletion:
+            HStack(spacing: DesignSystem.Spacing.small) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Text("This session is scheduled for deletion. Export now to keep your data.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, DesignSystem.Spacing.large)
+            .padding(.vertical, DesignSystem.Spacing.small)
+            .background(Color.red.opacity(0.15))
+
+        default:
+            EmptyView()
+        }
     }
 
     // MARK: - State Color

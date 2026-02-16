@@ -91,4 +91,15 @@ enum SettingsKeys {
     /// Enable enhanced speaker identification using SpeakerKit (default: false)
     /// When enabled, system audio is analyzed to distinguish multiple remote speakers
     static let enhancedDiarizationEnabled = "enhancedDiarizationEnabled"
+
+    // MARK: - Session Retention Settings
+
+    /// Number of days to keep sessions before deletion (default: 7)
+    static let sessionRetentionDays = "sessionRetentionDays"
+
+    /// Whether auto-deletion of old sessions is enabled (default: true)
+    static let sessionRetentionEnabled = "sessionRetentionEnabled"
+
+    /// Whether the first-run session security advisory has been shown (default: false)
+    static let sessionSecurityAdvisoryShown = "sessionSecurityAdvisoryShown"
 }

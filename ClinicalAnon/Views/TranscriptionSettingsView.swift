@@ -119,9 +119,98 @@ struct TranscriptionSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            // Data Retention Section
+            Section {
+                Toggle(isOn: $retentionEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-delete old sessions")
+                            .font(.body)
+                        Text("Automatically remove sessions after the retention period")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+
+                if retentionEnabled {
+                    HStack {
+                        Text("Delete sessions after")
+                            .font(.body)
+
+                        Stepper(value: $retentionDays, in: 1...30) {
+                            Text("\(retentionDays) day\(retentionDays == 1 ? "" : "s")")
+                                .font(.body)
+                                .foregroundColor(.accentColor)
+                                .monospacedDigit()
+                        }
+                    }
+
+                    retentionTimelineView
+                }
+            } header: {
+                Text("Data Retention")
+            } footer: {
+                Text("Recommended: 7 days. Sessions containing clinical data should not be stored longer than necessary.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            // Storage Section
+            Section {
+                HStack {
+                    Text("Total storage used")
+                        .font(.body)
+                    Spacer()
+                    Text(storageUsed)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+
+                Button(role: .destructive) {
+                    showDeleteAllConfirmation = true
+                } label: {
+                    HStack {
+                        if isDeletingAll {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                        Text("Delete All Sessions Now")
+                    }
+                }
+                .disabled(isDeletingAll)
+            } header: {
+                Text("Session Storage")
+            }
+
+            // Security Section
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Session data encrypted at rest (AES-256)", systemImage: "lock.shield")
+                    Label("Encryption keys stored in macOS Keychain", systemImage: "key")
+                    Label("Audio chunks encrypted after recording", systemImage: "waveform.badge.exclamationmark")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            } header: {
+                Text("Security")
+            } footer: {
+                Text("For maximum protection, ensure FileVault is enabled (System Settings > Privacy & Security > FileVault).")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear { updateStorageUsed() }
+        .alert("Delete All Sessions", isPresented: $showDeleteAllConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete All", role: .destructive) {
+                deleteAllSessions()
+            }
+        } message: {
+            Text("This will permanently delete all session data including transcripts and audio recordings. This action cannot be undone.")
+        }
     }
 
     // MARK: - Audio Settings
@@ -130,6 +219,65 @@ struct TranscriptionSettingsView: View {
     @AppStorage(SettingsKeys.noiseSuppressionEnabled) private var noiseSuppressionEnabled: Bool = true
     @AppStorage(SettingsKeys.vadEnabled) private var vadEnabled: Bool = true
     @AppStorage(SettingsKeys.enhancedDiarizationEnabled) private var enhancedDiarizationEnabled: Bool = false
+
+    // MARK: - Session Retention Settings
+
+    @AppStorage(SettingsKeys.sessionRetentionEnabled) private var retentionEnabled = true
+    @AppStorage(SettingsKeys.sessionRetentionDays) private var retentionDays = 7
+    @State private var storageUsed: String = "Calculating..."
+    @State private var showDeleteAllConfirmation = false
+    @State private var isDeletingAll = false
+
+    // MARK: - Retention Timeline
+
+    private var retentionTimelineView: some View {
+        let warningStart = max(retentionDays - 2, 0)
+        let promptStart = retentionDays
+        let autoDeleteStart = retentionDays + 7
+
+        return VStack(alignment: .leading, spacing: 6) {
+            timelineRow(
+                color: .green,
+                label: "Day 1\(warningStart > 1 ? " – \(warningStart)" : "")",
+                description: "Active — no indicators"
+            )
+            if warningStart < promptStart {
+                timelineRow(
+                    color: .orange,
+                    label: "Day \(warningStart + 1) – \(promptStart)",
+                    description: "Warning badge shown in sidebar"
+                )
+            }
+            timelineRow(
+                color: .red,
+                label: "Day \(promptStart + 1) – \(autoDeleteStart)",
+                description: "Deletion prompt on app launch"
+            )
+            timelineRow(
+                color: .secondary,
+                label: "Day \(autoDeleteStart + 1)+",
+                description: "Automatically deleted"
+            )
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func timelineRow(color: Color, label: String, description: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
 
     // MARK: - Status Helpers
 
@@ -302,6 +450,25 @@ struct TranscriptionSettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
+        }
+    }
+
+    // MARK: - Session Helpers
+
+    private func updateStorageUsed() {
+        let bytes = SessionStorageService.shared.totalStorageUsed()
+        storageUsed = SessionStorageService.formatBytes(bytes)
+    }
+
+    private func deleteAllSessions() {
+        isDeletingAll = true
+        Task {
+            let manager = SessionManager.shared
+            for session in manager.sessions {
+                await manager.deleteSession(session)
+            }
+            updateStorageUsed()
+            isDeletingAll = false
         }
     }
 
