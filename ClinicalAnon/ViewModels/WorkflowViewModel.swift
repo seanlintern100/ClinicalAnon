@@ -867,14 +867,17 @@ class WorkflowViewModel: ObservableObject {
 
     func restoreNamesFromAIOutput() {
         // Ensure all source document entities are in the mapping for multi-doc flow
-        // Always add to ensure the entity's exact replacement code is in allMappings
-        // (handles cases where entity has different code than existing mapping)
+        // Only add if not already mapped — preserves the mapping established during
+        // the redaction phase and avoids last-write-wins overwrites when multiple
+        // entities share the same original text but have different replacement codes
         for doc in improveState.sourceDocuments {
             for entity in doc.entities {
-                engine.entityMapping.addMapping(
-                    originalText: entity.originalText,
-                    replacementCode: entity.replacementCode
-                )
+                if !engine.entityMapping.hasMapping(forOriginalText: entity.originalText) {
+                    engine.entityMapping.addMapping(
+                        originalText: entity.originalText,
+                        replacementCode: entity.replacementCode
+                    )
+                }
             }
         }
 

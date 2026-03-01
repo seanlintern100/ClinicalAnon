@@ -39,6 +39,7 @@ class SwiftNERService {
             MaoriNameRecognizer(),         // NZ-specific Māori names
             RelationshipNameExtractor(),   // Extract names from "sister Margaret"
             TitleNameRecognizer(),         // Extract names from "Mr John", "Dr Smith"
+            FirstNameDictionaryRecognizer(), // 164K name dictionary safety net
             UserInclusionRecognizer(),     // User-specified PII words
             AppleNERRecognizer()           // Apple's baseline NER (names) last
         ]

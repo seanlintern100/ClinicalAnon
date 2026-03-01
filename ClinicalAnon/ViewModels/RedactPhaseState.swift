@@ -1493,32 +1493,40 @@ class RedactPhaseState: ObservableObject {
             }
         }
 
-        // Sort by start position (ascending) to detect overlaps
-        allReplacements.sort { $0.start < $1.start }
+        // Sort by start ascending, then by span length descending (longer first for same start)
+        // The tiebreak ensures "Jane Smith" [0,10] is always processed before "Jane" [0,4]
+        allReplacements.sort {
+            if $0.start != $1.start { return $0.start < $1.start }
+            return ($0.end - $0.start) > ($1.end - $1.start)
+        }
 
-        // Remove overlapping positions, keeping the longer replacement
+        // Remove overlapping positions, keeping the longer replacement.
+        // Track maxEnd separately to avoid the chain-drop bug: when entity B is dropped
+        // (contained in A), entity C that also overlaps A but extends beyond it was
+        // previously compared only against A and silently dropped. Now maxEnd ensures
+        // we correctly identify C as overlapping with already-covered range.
         var nonOverlapping: [(start: Int, end: Int, code: String, entityType: EntityType)] = []
+        var maxEnd = 0
+
         for replacement in allReplacements {
-            if let last = nonOverlapping.last {
-                // Check if this replacement overlaps with the previous one
-                if replacement.start < last.end {
-                    // Overlapping - keep the longer one
+            if replacement.start >= maxEnd {
+                // No overlap with any accepted replacement — accept it
+                nonOverlapping.append(replacement)
+                maxEnd = replacement.end
+            } else if replacement.end > maxEnd {
+                // Partially overlaps but extends beyond current coverage
+                if let last = nonOverlapping.last, replacement.start < last.end {
                     let lastLength = last.end - last.start
                     let currentLength = replacement.end - replacement.start
                     if currentLength > lastLength {
-                        // Current is longer, replace the last one
                         nonOverlapping.removeLast()
                         nonOverlapping.append(replacement)
                     }
-                    // Otherwise keep the existing (last) one
-                } else {
-                    // No overlap, add it
-                    nonOverlapping.append(replacement)
                 }
-            } else {
-                // First replacement
-                nonOverlapping.append(replacement)
+                // Extend maxEnd either way to prevent chain-drops
+                maxEnd = replacement.end
             }
+            // else: fully contained (replacement.end <= maxEnd) — skip
         }
 
         // nonOverlapping is sorted ascending by start - perfect for single-pass build

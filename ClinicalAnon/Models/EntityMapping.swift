@@ -497,6 +497,12 @@ class EntityMapping: ObservableObject {
         mappings[key] = (original: originalText, replacement: replacementCode)
     }
 
+    /// Check if a mapping exists for a given original text (case-insensitive)
+    func hasMapping(forOriginalText originalText: String) -> Bool {
+        let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        return mappings[key] != nil
+    }
+
     /// Check if a mapping exists for a specific replacement code
     func hasMappingForCode(_ code: String) -> Bool {
         return mappings.values.contains { $0.replacement == code }
