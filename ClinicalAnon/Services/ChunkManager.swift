@@ -28,7 +28,8 @@ struct ChunkInfo {
     var contentStart: Int { overlapBefore }
 
     /// End of real content within chunk (before overlap)
-    var contentEnd: Int { text.count - overlapAfter }
+    /// Uses UTF-16 length to match NSRange positions from recognizers
+    var contentEnd: Int { (text as NSString).length - overlapAfter }
 }
 
 // MARK: - Chunk Manager
@@ -59,7 +60,7 @@ class ChunkManager {
     ) -> [ChunkInfo] {
 
         // Small text doesn't need chunking
-        guard text.count > chunkSize else {
+        guard (text as NSString).length > chunkSize else {
             return [ChunkInfo(
                 text: text,
                 globalOffset: 0,

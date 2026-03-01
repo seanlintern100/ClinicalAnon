@@ -109,6 +109,8 @@
 		B3A4CE415F4192248F8D52CB /* SessionExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2200615CB715B38B4C8DED /* SessionExportService.swift */; };
 		B95A47DED2D5B9E43B0A0095 /* LiveSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBADD3AD29E31A56881A0363 /* LiveSession.swift */; };
 		B96FE68837A6D16E7804F41D /* OverlapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8707AD96CA647367240298 /* OverlapDetectorTests.swift */; };
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* RedactionPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8A9B0C1D2E3 /* RedactionPipelineTests.swift */; };
+		8B2C3D4E5F6A7B8C9D0E1F23 /* RedactPhaseStateIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1B2C3D4E5F6A7B8C9D0E1F /* RedactPhaseStateIntegrationTests.swift */; };
 		BDCE129B32BFAB043737182F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */; };
 		BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */; };
 		BED740E805A7B17E543319AE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */; };
@@ -302,6 +304,8 @@
 		F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 		F6C687FE880EAE820CCA3F73 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
 		F7C2E982A2AE591B79349F46 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
+		7A1B2C3D4E5F6A7B8C9D0E1F /* RedactPhaseStateIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactPhaseStateIntegrationTests.swift; sourceTree = "<group>"; };
+		F2A3B4C5D6E7F8A9B0C1D2E3 /* RedactionPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactionPipelineTests.swift; sourceTree = "<group>"; };
 		FA8707AD96CA647367240298 /* OverlapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlapDetectorTests.swift; sourceTree = "<group>"; };
 		FCAB5F15C73A4F4C310E1FB2 /* AddDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddDetailSheet.swift; sourceTree = "<group>"; };
 		FEE09AC0EE82FA4C87F8ECF9 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
@@ -620,6 +624,8 @@
 			isa = PBXGroup;
 			children = (
 				FA8707AD96CA647367240298 /* OverlapDetectorTests.swift */,
+				F2A3B4C5D6E7F8A9B0C1D2E3 /* RedactionPipelineTests.swift */,
+				7A1B2C3D4E5F6A7B8C9D0E1F /* RedactPhaseStateIntegrationTests.swift */,
 			);
 			name = Tests;
 			path = ClinicalAnon/Tests;
@@ -871,6 +877,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B96FE68837A6D16E7804F41D /* OverlapDetectorTests.swift in Sources */,
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* RedactionPipelineTests.swift in Sources */,
+				8B2C3D4E5F6A7B8C9D0E1F23 /* RedactPhaseStateIntegrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

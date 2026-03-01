@@ -107,8 +107,8 @@ class SwiftNERService {
         // This catches cases like "Jane" when "Smith" is known from "John Smith"
         let withSurnames = extendWithKnownSurnames(deduplicated, in: text)
 
-        // Validate positions are within text bounds
-        let validated = validateEntityPositions(withSurnames, textLength: text.count)
+        // Validate positions are within text bounds (UTF-16 length, matching NSRange positions)
+        let validated = validateEntityPositions(withSurnames, textLength: (text as NSString).length)
 
         // PHASE 2: Single-pass occurrence scan for all names
         let withAllOccurrences = singlePassOccurrenceScan(validated, in: text)
@@ -184,7 +184,7 @@ class SwiftNERService {
         // Apply same cleanup as main scan
         let noOverlaps = removeOverlaps(allEntities)
         let deduplicated = deduplicateEntities(noOverlaps)
-        let validated = validateEntityPositions(deduplicated, textLength: text.count)
+        let validated = validateEntityPositions(deduplicated, textLength: (text as NSString).length)
 
         // PHASE 2: Single-pass occurrence scan
         let withAllOccurrences = singlePassOccurrenceScan(validated, in: text)

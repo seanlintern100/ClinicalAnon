@@ -1488,7 +1488,9 @@ class RedactPhaseState: ObservableObject {
                 let end = position[1]
 
                 // Validate against NSString length (UTF-16), not String.count (grapheme clusters)
-                guard start >= 0 && end <= nsText.length && start < end else { continue }
+                guard start >= 0 && end <= nsText.length && start < end else {
+                    continue
+                }
                 allReplacements.append((start: start, end: end, code: code, entityType: entity.type))
             }
         }

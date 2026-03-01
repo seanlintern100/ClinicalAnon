@@ -2,11 +2,11 @@
 
 ## Build Instructions
 
-**DO NOT run xcodebuild from CLI for this project.**
+```bash
+xcodebuild -project Redactor.xcodeproj -scheme Redactor -configuration Debug build
+```
 
-This app uses MLX (Metal Performance Shaders) which requires the full Xcode Metal toolchain. CLI builds will fail or cause DerivedData corruption.
-
-**To verify builds:** Ask user to build from Xcode (Cmd+B) and share any error logs.
+CLI builds via `xcodebuild` work. Use this to verify changes compile.
 
 ## Project Overview
 
@@ -57,3 +57,33 @@ Uses **FluidAudio** (Apache 2.0, open source) for on-device speaker diarization 
 - `TranscriptView.swift` - Shows "Other A", "Other B" with color variation
 
 **User setting:** Settings > Transcription > Enhanced Speaker Identification (default: OFF)
+
+## Redaction Pipeline
+
+### Entity Detection (Phase 1)
+
+Entities come from multiple sources, combined in `RedactPhaseState.allEntities`:
+- `result.entities` — Initial NER (Apple NER + XLM-RoBERTa)
+- `customEntities` — User-added
+- `piiReviewFindings` — Local LLM review
+- `deepScanFindings` — Apple NER at lower confidence (0.75)
+
+**Recognizer chain** (order matters, defined in `SwiftNERService.init()`):
+EmailRecognizer → NZPhoneRecognizer → NZMedicalIDRecognizer → DateRecognizer → NZAddressRecognizer → MaoriNameRecognizer → RelationshipNameExtractor → TitleNameRecognizer → FirstNameDictionaryRecognizer → UserInclusionRecognizer → AppleNERRecognizer
+
+### First Name Dictionary
+
+`FirstNameDictionaryRecognizer` uses a 164K name dataset from [names.io](https://github.com/Debdut/names.io) (Apache 2.0) as a safety net for uncommon names (e.g., "Hamish") that NER models miss. Only matches capitalized words against the dictionary with common word / clinical term filtering.
+
+Key files:
+- `FirstNameDictionaryRecognizer.swift` — Recognizer (scans words, checks Set membership)
+- `Resources/first_names.txt` — 164K lowercase first names, one per line
+- `Resources/first_names_LICENSE.txt` — Apache 2.0 license
+
+### Overlap Resolution
+
+`RedactPhaseState.updateRedactedTextCache()` builds redacted text from entity positions. Overlap resolution uses a sweep algorithm with `maxEnd` tracking to avoid the chain-drop bug (where overlapping entities from different sources were silently lost).
+
+### Restore (Phase 3)
+
+`WorkflowViewModel.restoreNamesFromAIOutput()` re-registers entity mappings before restore. Uses first-write-wins (`hasMapping(forOriginalText:)` guard) to preserve redaction-phase mappings and avoid overwrites.
