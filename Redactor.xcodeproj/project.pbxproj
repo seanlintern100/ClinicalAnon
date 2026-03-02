@@ -41,6 +41,7 @@
 		2FA4EBE090F118C6234E6905 /* MaoriNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* FirstNameDictionaryRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A2 /* FirstNameDictionaryRecognizer.swift */; };
 		C3D4E5F6A7B8C9D0E1F2A3B4 /* first_names.txt in Resources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* first_names.txt */; };
+		E5F6A7B8C9D0E1F2A3B4C5D6 /* nz_places.txt in Resources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* nz_places.txt */; };
 		3158A5D07594467BA0C0D182 /* AddDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCAB5F15C73A4F4C310E1FB2 /* AddDetailSheet.swift */; };
 		3AD032143E2903122259382D /* tokenizer_config.json in Resources */ = {isa = PBXBuildFile; fileRef = 3157B413CD2DE389E9F11157 /* tokenizer_config.json */; };
 		3C67313E85E77557D9019463 /* RedactPhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DECCF16F2FCFC7186EBC13E0 /* RedactPhaseState.swift */; };
@@ -111,6 +112,7 @@
 		B96FE68837A6D16E7804F41D /* OverlapDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8707AD96CA647367240298 /* OverlapDetectorTests.swift */; };
 		E1F2A3B4C5D6E7F8A9B0C1D2 /* RedactionPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8A9B0C1D2E3 /* RedactionPipelineTests.swift */; };
 		8B2C3D4E5F6A7B8C9D0E1F23 /* RedactPhaseStateIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1B2C3D4E5F6A7B8C9D0E1F /* RedactPhaseStateIntegrationTests.swift */; };
+		9C3D4E5F6A7B8C9D0E1F2345 /* RestoreFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D5E6F7A8B9C0D1E2F3A4B5 /* RestoreFlowTests.swift */; };
 		BDCE129B32BFAB043737182F /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC3752B1261DD73633A58A6 /* SessionDetailView.swift */; };
 		BEBACFEF8DDA0D405DC58ADE /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4886F0D532EACBC8AED25439 /* AudioCaptureService.swift */; };
 		BED740E805A7B17E543319AE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */; };
@@ -258,6 +260,7 @@
 		AB2DCE26F49A40B98C51EC64 /* MaoriNameRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaoriNameRecognizer.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A6B7C8D9E0F1A2 /* FirstNameDictionaryRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstNameDictionaryRecognizer.swift; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* first_names.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = first_names.txt; sourceTree = "<group>"; };
+		F6A7B8C9D0E1F2A3B4C5D6E7 /* nz_places.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = nz_places.txt; sourceTree = "<group>"; };
 		AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserExclusionManager.swift; sourceTree = "<group>"; };
 		AD4A3288CEF816ED9D3925CC /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		B050F91B6E8A8A0A7A52BE81 /* ClinicalAnon-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ClinicalAnon-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -305,6 +308,7 @@
 		F6C687FE880EAE820CCA3F73 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
 		F7C2E982A2AE591B79349F46 /* HelpModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpModalView.swift; sourceTree = "<group>"; };
 		7A1B2C3D4E5F6A7B8C9D0E1F /* RedactPhaseStateIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactPhaseStateIntegrationTests.swift; sourceTree = "<group>"; };
+		A4D5E6F7A8B9C0D1E2F3A4B5 /* RestoreFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreFlowTests.swift; sourceTree = "<group>"; };
 		F2A3B4C5D6E7F8A9B0C1D2E3 /* RedactionPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactionPipelineTests.swift; sourceTree = "<group>"; };
 		FA8707AD96CA647367240298 /* OverlapDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlapDetectorTests.swift; sourceTree = "<group>"; };
 		FCAB5F15C73A4F4C310E1FB2 /* AddDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddDetailSheet.swift; sourceTree = "<group>"; };
@@ -510,6 +514,7 @@
 				8096B7BFDB5397D700CDA6FD /* Assets.xcassets */,
 				304B514DF56B1A7F70285358 /* Info.plist */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* first_names.txt */,
+				F6A7B8C9D0E1F2A3B4C5D6E7 /* nz_places.txt */,
 				82DB14D11CCBC2DEF17CF335 /* BERT */,
 				75E756C851010DB88E0108F7 /* Fonts */,
 			);
@@ -626,6 +631,7 @@
 				FA8707AD96CA647367240298 /* OverlapDetectorTests.swift */,
 				F2A3B4C5D6E7F8A9B0C1D2E3 /* RedactionPipelineTests.swift */,
 				7A1B2C3D4E5F6A7B8C9D0E1F /* RedactPhaseStateIntegrationTests.swift */,
+				A4D5E6F7A8B9C0D1E2F3A4B5 /* RestoreFlowTests.swift */,
 			);
 			name = Tests;
 			path = ClinicalAnon/Tests;
@@ -737,6 +743,7 @@
 				3D4AA30906504CD254B65D89 /* xlmr_config.json in Resources */,
 				019AED81DC50D9E2C45936CC /* xlmr_vocab.json in Resources */,
 				C3D4E5F6A7B8C9D0E1F2A3B4 /* first_names.txt in Resources */,
+				E5F6A7B8C9D0E1F2A3B4C5D6 /* nz_places.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -879,6 +886,7 @@
 				B96FE68837A6D16E7804F41D /* OverlapDetectorTests.swift in Sources */,
 				E1F2A3B4C5D6E7F8A9B0C1D2 /* RedactionPipelineTests.swift in Sources */,
 				8B2C3D4E5F6A7B8C9D0E1F23 /* RedactPhaseStateIntegrationTests.swift in Sources */,
+				9C3D4E5F6A7B8C9D0E1F2345 /* RestoreFlowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -764,7 +764,9 @@ class AIAssistantService: ObservableObject {
         - Output ONLY the requested clinical content (report, summary, notes, etc.)
         - No meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
         - Start directly with the report content
-        - Use redacted placeholders (e.g., [PERSON_A], [ORG_B]) as they appear in the source documents
+        - Preserve existing placeholders (e.g., [PERSON_A], [ORG_B]) exactly as they appear in source documents
+        - NEVER redact or replace plain text — you are a writing assistant, NOT a redaction tool
+        - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
         """
 
         #if DEBUG
@@ -825,7 +827,9 @@ class AIAssistantService: ObservableObject {
         - Output ONLY the requested clinical content (report, summary, notes, etc.)
         - No meta-commentary like "Let me check...", "I'll start by...", "Now I'll..."
         - Start directly with the report content
-        - Use redacted placeholders (e.g., [PERSON_A], [ORG_B]) as they appear in the source documents - these will be restored to actual names afterward
+        - Preserve existing placeholders (e.g., [PERSON_A], [ORG_B]) exactly as they appear in source documents
+        - NEVER redact or replace plain text — you are a writing assistant, NOT a redaction tool
+        - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
         """
         }
 

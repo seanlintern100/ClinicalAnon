@@ -593,6 +593,12 @@ class ImprovePhaseState: ObservableObject {
             - Starting document updates with any explanation
             - Forgetting [CONVERSATION] prefix for conversational replies
 
+            PLACEHOLDER RULES:
+            - Preserve existing placeholders (e.g., [PERSON_A], [DATE_A]) exactly as they appear
+            - NEVER redact, mask, or replace any plain text — you are a writing assistant, NOT a redaction tool
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the document
+
             When in doubt: If the user is asking you to DO something to the document, return the document.
             If the user is asking you to EXPLAIN or DISCUSS something, use [CONVERSATION].
             """
@@ -713,9 +719,11 @@ class ImprovePhaseState: ObservableObject {
                - The very first character must be the start of the content
 
             CRITICAL RULES:
-            - Placeholders like [PERSON_A], [DATE_A], [ORG_B] must be preserved exactly as written
+            - Preserve existing placeholders (e.g., [PERSON_A], [DATE_A], [ORG_B]) exactly as they appear
+            - NEVER redact, mask, or replace any plain text — you are a writing assistant, NOT a redaction tool
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the input
             - Do not invent or assume details not in the source text
-            - Do not reveal or reference the original identifiers behind placeholders
             """
 
         streamingDestination = .unknown
@@ -806,6 +814,12 @@ class ImprovePhaseState: ObservableObject {
             - "I've made the changes:" followed by content
             - Starting document updates with any explanation
             - Forgetting [CONVERSATION] prefix for conversational replies
+
+            PLACEHOLDER RULES:
+            - Preserve existing placeholders (e.g., [PERSON_A], [DATE_A]) exactly as they appear
+            - NEVER redact, mask, or replace any plain text — you are a writing assistant, NOT a redaction tool
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the document
 
             When in doubt: If the user is asking you to DO something to the document, return the document.
             If the user is asking you to EXPLAIN or DISCUSS something, use [CONVERSATION].

@@ -1138,6 +1138,30 @@ class RedactPhaseState: ObservableObject {
             #endif
         }
 
+        // Update EntityMapping to match new entity codes
+        // Without this, mappings still reference old codes (e.g., [PERSON_A])
+        // while entities/redacted text now use new codes (e.g., [CLIENT_A])
+        // causing variant codes like [CLIENT_A_FIRST] to have no restore mapping
+        let oldBaseId = "\(entity.type.replacementPrefix)_\(targetLetter)"
+        let newBaseId = "\(newPrefix)_\(finalLetter)"
+
+        #if DEBUG
+        print("🔄 RECLASSIFY: updateBaseId(\(oldBaseId) → \(newBaseId))")
+        print("  Before: mappings with old base:")
+        for (key, value) in engine.entityMapping.mappings where value.replacement.contains(oldBaseId) {
+            print("    [\(key)] → \(value.replacement) (original: '\(value.original)')")
+        }
+        #endif
+
+        engine.entityMapping.updateBaseId(from: oldBaseId, to: newBaseId)
+
+        #if DEBUG
+        print("  After: mappings with new base:")
+        for (key, value) in engine.entityMapping.mappings where value.replacement.contains(newBaseId) {
+            print("    [\(key)] → \(value.replacement) (original: '\(value.original)')")
+        }
+        #endif
+
         // Redacted text is regenerated from entities, so just mark for refresh
         redactedTextNeedsUpdate = true
     }

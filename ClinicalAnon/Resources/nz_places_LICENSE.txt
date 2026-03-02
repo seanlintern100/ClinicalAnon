@@ -1,0 +1,19 @@
+NZ Place Names Data Sources
+============================
+
+This file contains New Zealand place names compiled from:
+
+1. NZ Localities Dataset (GitHub Gist by wilr)
+   Source: https://gist.github.com/wilr/815715
+   ~1,500 NZ suburbs, districts, and regions
+
+2. SimpleMaps NZ Cities Database
+   Source: https://simplemaps.com/data/nz-cities
+   License: MIT
+   93 prominent NZ cities
+
+3. Manual additions of well-known NZ places (national parks,
+   tourist destinations, Canterbury/Auckland suburbs)
+
+Original LINZ Gazetteer data is licensed under Creative Commons
+Attribution 4.0 (CC BY 4.0) by Land Information New Zealand.

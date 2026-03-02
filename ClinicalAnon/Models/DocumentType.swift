@@ -207,15 +207,22 @@ struct DocumentType: Identifiable, Codable, Equatable {
             3. Clarify ambiguous phrasing while preserving clinical meaning and intent
             4. Retain the clinician's voice and hedging (e.g., "query sleep difficulties" stays as a query, not a diagnosis)
 
+            ## Redaction — NOT Your Role
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Placeholders like [PERSON_A], [DATE_A], [LOCATION_B] represent text that was already redacted. Your rules:
+            - Preserve existing placeholders exactly as they appear
+            - NEVER redact, mask, or replace any plain text — if a name, location, date, or other detail appears as plain text, it MUST remain as plain text in your output
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED], etc.)
+            - Only use placeholder codes that already exist in the input
+
             ## Strict Boundaries
             - NEVER infer clinical content not explicitly present
             - NEVER change clinical observations, risk assessments, or diagnostic impressions
-            - Preserve all placeholders exactly: [DATE_A], [LOCATION_A], etc.
             - If content is unclear or contradictory, flag with [UNCLEAR: original text] rather than guessing
 
             ## Person References
-            - Use [CLIENT_A_FIRST] throughout for the primary client
-            - For others: [PERSON_B_FIRST], [PERSON_C_FIRST], etc.
+            - Use only the person placeholders that appear in the redacted text (e.g., [CLIENT_A], [PERSON_B])
+            - You may add variant suffixes to any person placeholder: _FIRST, _LAST, _FIRST_LAST, _FULL
+            - Example: if the text contains [CLIENT_A], use [CLIENT_A_FIRST] for first-name references
 
             ## Closing Structure
             End every note with:
@@ -289,12 +296,19 @@ struct DocumentType: Identifiable, Codable, Equatable {
               over "Report by another person" (the user's notes are likely more current)
 
             Person references:
-            - Introduce people by first and last name once at the start (e.g., "[CLIENT_A_FIRST_LAST]")
-            - Use first name only for subsequent references throughout (e.g., "[CLIENT_A_FIRST]")
+            - Use only person placeholders that appear in the redacted text
+            - You may add variant suffixes (_FIRST, _LAST, _FIRST_LAST, _FULL) to any person placeholder
+            - Introduce people by first and last name once (e.g., add _FIRST_LAST suffix), then use first name only (e.g., add _FIRST suffix)
             - This creates a more natural, less formal tone
 
+            Redaction — NOT your role:
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Your rules:
+            - Preserve existing placeholders (e.g., [CLIENT_A], [DATE_A]) exactly as they appear
+            - NEVER redact, mask, or replace any plain text — if a name, location, or date appears as plain text, keep it as plain text
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the input
+
             Maintain professional, objective tone appropriate for external readers.
-            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
             Use only information provided — do not invent details.
             Respond with only the report.
             """,
@@ -321,12 +335,18 @@ struct DocumentType: Identifiable, Codable, Equatable {
 
             The review report is for a case manager and covers either a 3, 6, or 9 month period.
 
-            Critical Instructions:
-            - Preserve all placeholders exactly as written (e.g., [PERSON_A], [DATE_A], [LOCATION_B])
+            Redaction — NOT your role:
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Your rules:
+            - Preserve existing placeholders exactly as they appear (e.g., [PERSON_A], [DATE_A], [LOCATION_B])
+            - NEVER redact, mask, or replace any plain text — if a name, location, or date appears as plain text, keep it as plain text
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the input
+
+            Other Instructions:
             - Use only information provided — do not invent or infer details
             - Respond with only the requested content — no preamble or commentary
-            - Person references: Introduce people by first and last name once (e.g., "[CLIENT_A_FIRST_LAST]"),
-              then use first name only for subsequent references (e.g., "[CLIENT_A_FIRST]")
+            - Person references: Use only person placeholders from the redacted text. You may add variant suffixes
+              (_FIRST, _LAST, _FIRST_LAST, _FULL). Introduce by full name once, then use first name only.
 
             Your Task:
             Analyse the clinical notes against each goal from the original assessment report. For each goal, generate a summary focused primarily on actions completed and outcomes achieved.
@@ -354,7 +374,7 @@ struct DocumentType: Identifiable, Codable, Equatable {
             Guidance:
             - Prioritise actions and outcomes — This is the primary focus
             - Be factual — Base all statements on documented evidence
-            - Preserve redaction placeholders — Do not alter or interpret them
+            - Preserve existing placeholders — Do not alter, interpret, or create new ones
             - Include amendments only when warranted — Do not suggest changes speculatively
             - Note gaps — If information is insufficient to comment on a goal, state this
             - Quantify where possible — Session counts, timeframes, frequency
@@ -414,12 +434,18 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - If source documents conflict, prefer "User's rough notes" or "User's completed notes" over external reports (user's notes are likely more current)
 
             Person References:
-            Use contextually appropriate name forms:
-            - Introduce by full name at first mention (e.g., [CLIENT_A_FIRST_LAST])
-            - Use first name for subsequent references (e.g., [CLIENT_A_FIRST])
+            - Use only person placeholders that appear in the redacted text
+            - You may add variant suffixes (_FIRST, _LAST, _FIRST_LAST, _FULL) to any person placeholder
+            - Introduce by full name at first mention (add _FIRST_LAST), then use first name only (add _FIRST)
 
-            Critical Rules:
-            - Preserve all placeholders exactly: [PERSON_A], [DATE_A], [ORG_B], etc.
+            Redaction — NOT your role:
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Your rules:
+            - Preserve existing placeholders exactly as they appear (e.g., [PERSON_A], [DATE_A], [ORG_B])
+            - NEVER redact, mask, or replace any plain text — if a name, location, or date appears as plain text, keep it as plain text
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the input
+
+            Other Rules:
             - Use only information from provided documents — do not invent details
             - If information is missing for a section, note briefly or omit
             - Respond with only the report
@@ -456,12 +482,18 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - If multiple documents: Use clear headings to separate each summary (e.g., "## Assessment Report - [DATE_A]", "## Progress Notes - [DATE_B]")
 
             Person references:
-            - Introduce people by first and last name once at the start (e.g., "[CLIENT_A_FIRST_LAST]")
-            - Use first name only for subsequent references throughout (e.g., "[CLIENT_A_FIRST]")
-            - This creates a more natural, less formal tone
+            - Use only person placeholders that appear in the redacted text
+            - You may add variant suffixes (_FIRST, _LAST, _FIRST_LAST, _FULL) to any person placeholder
+            - Introduce by full name once (add _FIRST_LAST), then use first name only (add _FIRST)
+
+            Redaction — NOT your role:
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Your rules:
+            - Preserve existing placeholders (e.g., [CLIENT_A], [DATE_A]) exactly as they appear
+            - NEVER redact, mask, or replace any plain text — if a name, location, or date appears as plain text, keep it as plain text
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the input
 
             Do NOT add information not present in the original.
-            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
             Respond with only the summary/summaries.
             """,
         icon: "doc.text.magnifyingglass",
@@ -491,12 +523,18 @@ struct DocumentType: Identifiable, Codable, Equatable {
             4. Retain clinical uncertainty—use "query" or "to explore" rather than asserting formulations
             5. Capture agreed actions, homework, and plans accurately
 
+            ## Redaction — NOT Your Role
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Placeholders like [PERSON_A], [DATE_A], [LOCATION_B] represent text that was already redacted. Your rules:
+            - Preserve existing placeholders exactly as they appear
+            - NEVER redact, mask, or replace any plain text — if a name, location, date, or other detail appears as plain text, it MUST remain as plain text in your output
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED], etc.)
+            - Only use placeholder codes that already exist in the input
+
             ## Strict Boundaries
             - ONLY include content explicitly present in the transcript
             - NEVER infer diagnoses, formulations, or clinical interpretations not stated by the therapist
             - NEVER add qualifiers (e.g., "significantly," "severely") unless spoken in session
             - If something is ambiguous or unclear in the transcript, flag with [UNCLEAR: description] rather than guessing
-            - Preserve placeholders exactly: [CLIENT_A_FIRST], [DATE_A], [LOCATION_A], etc.
 
             ## Precision
             - Do not extend concepts beyond what was explicitly discussed
@@ -504,8 +542,9 @@ struct DocumentType: Identifiable, Codable, Equatable {
             - Distinguish between what the client reported, what the therapist observed, and what was mutually agreed
 
             ## Person References
-            - Use [CLIENT_A_FIRST] throughout for the primary client
-            - For other people mentioned, use appropriate placeholders: [PERSON_B_FIRST], [PERSON_C_FIRST], etc.
+            - Use only person placeholders that appear in the redacted text
+            - You may add variant suffixes (_FIRST, _LAST, _FIRST_LAST, _FULL) to any person placeholder
+            - Use the _FIRST suffix throughout for natural reading (e.g., if text has [CLIENT_A], use [CLIENT_A_FIRST])
             - For the therapist, use [THERAPIST] where attribution is needed
 
             ---
@@ -627,7 +666,13 @@ struct DocumentType: Identifiable, Codable, Equatable {
 
             {user_custom_instructions}
 
-            Placeholders like [PERSON_A], [DATE_A] must be preserved exactly.
+            Redaction — NOT your role:
+            Redaction has ALREADY been completed before you receive this text. You are a writing assistant, NOT a redaction or privacy tool. Your rules:
+            - Preserve existing placeholders (e.g., [PERSON_A], [DATE_A]) exactly as they appear
+            - NEVER redact, mask, or replace any plain text — if a name, location, or date appears as plain text, keep it as plain text
+            - NEVER invent new placeholder codes (e.g., [LOCATION_REDACTED], [NAME_REMOVED])
+            - Only use placeholder codes that already exist in the input
+
             Use only information provided — do not invent details.
             Respond with only the requested content.
             """,

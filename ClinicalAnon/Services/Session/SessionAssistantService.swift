@@ -323,10 +323,11 @@ class SessionAssistantService: ObservableObject {
         - Natural speech patterns (fillers, false starts, repetition)
         - Speaker labels: [Clinician] = microphone, [Other] = system audio (may swap during overlap)
 
-        **Privacy:**
-        - All identifying information is redacted: [PERSON_A], [DATE_A], [ORG_A], [LOCATION_A], etc.
-        - Never attempt to reveal or guess redacted information
-        - Treat codes as consistent identifiers (same code = same entity)
+        **Placeholder codes:**
+        - Some identifying information appears as codes: [PERSON_A], [DATE_A], [ORG_A], [LOCATION_A], etc.
+        - Treat codes as consistent identifiers (same code = same entity throughout)
+        - Never attempt to reveal or guess the values behind codes
+        - Any text that appears as plain text must remain as plain text — do NOT replace it with codes or invent new placeholders
 
         ## GROUNDING RULE
 

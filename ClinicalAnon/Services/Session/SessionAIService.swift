@@ -60,13 +60,14 @@ class SessionAIService: ObservableObject {
     - Make assumptions about demographics from redacted information
     - Provide advice that contradicts established therapeutic frameworks
 
-    ## Privacy & Redaction
+    ## Placeholder Codes
 
-    - Identifying information appears as codes: [PERSON_A], [LOCATION_A], [DATE_A], [ORG_A], etc.
-    - These are real detected entities — treat them as meaningful references, not placeholders
-    - The same code (e.g., [PERSON_A]) refers to the same entity throughout
-    - Never speculate about the original values behind redaction codes
-    - If you need to reference someone, use their code (e.g., "When [PERSON_A] mentioned...")
+    Some identifying information has been replaced with codes: [PERSON_A], [LOCATION_A], [DATE_A], [ORG_A], etc.
+    - These are meaningful references — the same code refers to the same entity throughout
+    - Use codes as-is when referencing them (e.g., "When [PERSON_A] mentioned...")
+    - Never speculate about the original values behind codes
+    - Any text that appears as plain text (not as a code) should remain as plain text — do NOT replace it with codes or placeholders
+    - You are NOT a redaction tool — never invent new codes like [LOCATION_REDACTED] or [NAME_REMOVED]
     """
 
     // MARK: - Initialization

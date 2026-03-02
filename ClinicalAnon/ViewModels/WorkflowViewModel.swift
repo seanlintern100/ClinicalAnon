@@ -866,24 +866,60 @@ class WorkflowViewModel: ObservableObject {
     // MARK: - Restore Phase Actions
 
     func restoreNamesFromAIOutput() {
-        // Ensure all source document entities are in the mapping for multi-doc flow
-        // Only add if not already mapped — preserves the mapping established during
-        // the redaction phase and avoids last-write-wins overwrites when multiple
-        // entities share the same original text but have different replacement codes
+        // Sync source document entities with EntityMapping
+        // Uses syncMapping to detect and fix stale codes from reclassification
+        // (e.g., mapping says [PERSON_A] but entity was reclassified to [CLIENT_A])
         for doc in improveState.sourceDocuments {
             for entity in doc.entities {
-                if !engine.entityMapping.hasMapping(forOriginalText: entity.originalText) {
-                    engine.entityMapping.addMapping(
-                        originalText: entity.originalText,
-                        replacementCode: entity.replacementCode
-                    )
-                }
+                engine.entityMapping.syncMapping(
+                    originalText: entity.originalText,
+                    replacementCode: entity.replacementCode
+                )
             }
         }
 
         // Detect AI-generated placeholders that weren't in original redacted text
         // These appear when AI creates person references without names in source
         detectAIGeneratedPlaceholders(in: improveState.currentDocument)
+
+        #if DEBUG
+        // Diagnostic dump — check Xcode console to trace restore issues
+        let allMappings = engine.entityMapping.allMappings
+        let aiText = improveState.currentDocument
+        let placeholderPattern = "\\[[A-Z]+_[A-Z0-9]+(?:_[A-Z]+)*\\]"
+        var aiPlaceholders: [String] = []
+        if let regex = try? NSRegularExpression(pattern: placeholderPattern) {
+            let range = NSRange(aiText.startIndex..., in: aiText)
+            let matches = regex.matches(in: aiText, range: range)
+            var seen = Set<String>()
+            for match in matches {
+                if let r = Range(match.range, in: aiText) {
+                    let p = String(aiText[r])
+                    if seen.insert(p).inserted { aiPlaceholders.append(p) }
+                }
+            }
+        }
+        let mappingByCode = Dictionary(allMappings.map { ($0.replacement, $0.original) }, uniquingKeysWith: { a, _ in a })
+        print("🔍 RESTORE DIAGNOSTICS:")
+        print("  📋 \(allMappings.count) total mappings, \(aiPlaceholders.count) placeholders in AI output")
+        for p in aiPlaceholders {
+            let orig = mappingByCode[p]
+            let status = orig == nil ? "❌ NO MAPPING" : (orig!.isEmpty ? "⚠️ EMPTY" : "✅ '\(orig!)'")
+            print("  \(status) → \(p)")
+        }
+        // Dump all CLIENT/PERSON mappings
+        print("  📋 All person-type mappings:")
+        for m in allMappings where m.replacement.contains("CLIENT") || m.replacement.contains("PERSON") {
+            print("    \(m.replacement) → '\(m.original)'")
+        }
+        // Dump raw mappings dict
+        print("  📋 Raw mappings dict (\(engine.entityMapping.mappings.count) entries):")
+        for (key, value) in engine.entityMapping.mappings.sorted(by: { $0.key < $1.key }) {
+            if value.replacement.contains("CLIENT") || value.replacement.contains("PERSON") {
+                print("    [\(key)] → (original: '\(value.original)', replacement: \(value.replacement))")
+            }
+        }
+        #endif
 
         restoreState.restoreNamesFromAIOutput()
         // Rebuild restored text cache using strong reference
@@ -892,11 +928,11 @@ class WorkflowViewModel: ObservableObject {
         }
     }
 
-    /// Detect person-type placeholders in AI output that weren't in original redacted text
+    /// Detect placeholders in AI output that weren't in original redacted text
     /// These are added to entityMapping with empty original for user to fill in during Restore
     private func detectAIGeneratedPlaceholders(in text: String) {
-        // Match person-type placeholders: [PERSON_A_FIRST], [CLIENT_B_FIRST_LAST], etc.
-        let pattern = "\\[(PERSON|CLIENT|PROVIDER|CLINICIAN)_[A-Z](?:_(?:FIRST|LAST|MIDDLE|FIRST_LAST|FULL))*\\]"
+        // Match all placeholder types: [PERSON_A_FIRST], [DATE_B], [LOCATION_C], etc.
+        let pattern = "\\[(PERSON|CLIENT|PROVIDER|CLINICIAN|DATE|NUM|LOCATION|ORG|ID|CONTACT)_[A-Z](?:_[A-Z]+)*\\]"
 
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
 

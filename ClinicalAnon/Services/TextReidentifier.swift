@@ -37,6 +37,24 @@ class TextReidentifier {
         // Example: [PERSON_AB] should be replaced before [PERSON_A]
         let sorted = reverseMappings.sorted { $0.placeholder.count > $1.placeholder.count }
 
+        // Find all placeholders in input text for diagnostic logging
+        #if DEBUG
+        let inputPlaceholders = findAllPlaceholders(in: text)
+        let mappingCodes = Set(sorted.map { $0.placeholder })
+        let unmapped = inputPlaceholders.filter { !mappingCodes.contains($0) }
+        let emptyOriginals = sorted.filter { text.contains($0.placeholder) && $0.original.isEmpty }
+        if !unmapped.isEmpty || !emptyOriginals.isEmpty {
+            print("⚠️ TextReidentifier.restore() diagnostics:")
+            print("  📋 \(inputPlaceholders.count) placeholders in input, \(sorted.count) mappings available")
+            for p in unmapped {
+                print("  ❌ NO MAPPING: \(p)")
+            }
+            for e in emptyOriginals {
+                print("  ⚠️ EMPTY ORIGINAL: \(e.placeholder)")
+            }
+        }
+        #endif
+
         // Replace each placeholder with original text
         for mapping in sorted {
             // Skip if original is empty - leave placeholder in text for user to fill in
@@ -51,7 +69,9 @@ class TextReidentifier {
 
                 if let regex = try? NSRegularExpression(pattern: pattern) {
                     let range = NSRange(result.startIndex..., in: result)
-                    result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: mapping.original)
+                    // Use NSRegularExpression.escapedTemplate to avoid $N backreference issues
+                    let safeTemplate = NSRegularExpression.escapedTemplate(for: mapping.original)
+                    result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: safeTemplate)
                 }
             } else {
                 let occurrences = result.occurrences(of: mapping.placeholder)
@@ -108,7 +128,9 @@ class TextReidentifier {
 
                 if let regex = try? NSRegularExpression(pattern: pattern) {
                     let range = NSRange(result.startIndex..., in: result)
-                    result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: mapping.original)
+                    // Use NSRegularExpression.escapedTemplate to avoid $N backreference issues
+                    let safeTemplate = NSRegularExpression.escapedTemplate(for: mapping.original)
+                    result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: safeTemplate)
                 }
             } else {
                 let occurrences = result.occurrences(of: mapping.placeholder)
@@ -174,6 +196,25 @@ class TextReidentifier {
         return missing
     }
 
+    // MARK: - Private Helpers
+
+    /// Find all bracket-enclosed placeholders in text
+    private func findAllPlaceholders(in text: String) -> [String] {
+        let pattern = "\\[[A-Z]+_[A-Z0-9]+(?:_[A-Z]+)*\\]"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+        var seen = Set<String>()
+        var result: [String] = []
+        for match in matches {
+            guard let matchRange = Range(match.range, in: text) else { continue }
+            let placeholder = String(text[matchRange])
+            if seen.insert(placeholder).inserted {
+                result.append(placeholder)
+            }
+        }
+        return result
+    }
 }
 
 // MARK: - Preview Helpers

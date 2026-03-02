@@ -35,7 +35,9 @@ struct RedactedPerson: Codable {
     }
 
     /// Formal address (Title + Last, e.g., "Mr Versteegh")
+    /// Returns empty if no last name (single-name person can't have formal address)
     var formal: String {
+        guard !last.isEmpty else { return "" }
         let title = detectedTitle ?? "Mr"
         return "\(title) \(last)"
     }
@@ -428,33 +430,58 @@ class EntityMapping: ObservableObject {
 
         // Step 2: Generate ALL variants for each RedactedPerson
         // This is the source of truth - ignores what's stored in mappings.original
+        // Every variant code gets a mapping (fallback to first/full name for empty variants)
+        // so AI-used codes like [PERSON_A_LAST] always restore even for single-name people
         for baseId in personBaseIds {
             guard let person = redactedPersons[baseId] else { continue }
 
+            // Best available fallback: first name, then full name
+            let fallback = person.first.isEmpty ? person.full : person.first
+
             // Base code → first name
             let baseCode = "[\(baseId)]"
-            byCode[baseCode] = (original: person.first, replacement: baseCode)
+            byCode[baseCode] = (original: fallback, replacement: baseCode)
 
             // All variant codes from person.text(for: variant)
+            // Empty variants fall back to first/full name so every code restores
             for variant in NameVariant.allCases {
                 let variantCode = person.placeholder(for: variant)
                 let text = person.text(for: variant)
-                if !text.isEmpty {
-                    byCode[variantCode] = (original: text, replacement: variantCode)
+                let resolvedText = text.isEmpty ? fallback : text
+                if !resolvedText.isEmpty {
+                    byCode[variantCode] = (original: resolvedText, replacement: variantCode)
                 }
             }
         }
 
         // Step 3: Add non-person mappings (dates, locations, orgs, etc.) as-is
         // Also add person codes that don't have a RedactedPerson (single names)
-        for (_, value) in mappings {
+        // Process non-empty originals first to prevent empty AI-generated entries from shadowing
+        let sortedMappings = mappings.values.sorted { a, b in
+            if a.original.isEmpty != b.original.isEmpty {
+                return !a.original.isEmpty // non-empty first
+            }
+            return a.replacement < b.replacement
+        }
+        for value in sortedMappings {
             let code = value.replacement
             if byCode[code] == nil {
+                // Skip entries with empty original if a base code exists that will generate variants
+                // This prevents AI-generated empty entries from shadowing real mappings
+                if value.original.isEmpty {
+                    if let baseId = extractBaseId(from: code) {
+                        let baseCode = "[\(baseId)]"
+                        if baseCode != code && byCode[baseCode] != nil {
+                            continue
+                        }
+                    }
+                }
+
                 // For non-person codes, or person codes without RedactedPerson
                 byCode[code] = (original: value.original, replacement: code)
 
                 // For single-name person codes without RedactedPerson, add variant aliases
-                if code.contains("PERSON") || code.contains("CLIENT") || code.contains("PROVIDER") {
+                if code.contains("PERSON") || code.contains("CLIENT") || code.contains("PROVIDER") || code.contains("CLINICIAN") {
                     let hasVariant = NameVariant.allCases.contains { code.contains($0.codeSuffix + "]") }
                     if !hasVariant {
                         let baseId = String(code.dropFirst().dropLast())
@@ -467,6 +494,31 @@ class EntityMapping: ObservableObject {
                     }
                 }
             }
+        }
+
+        // Step 4: Fix AI prefix swaps
+        // The AI sometimes changes person type prefixes in its output
+        // (e.g., redacted text has [PERSON_A] but AI writes [CLIENT_A])
+        // When a person code has empty original, check if the same letter
+        // exists under a different prefix with a non-empty original
+        let personPrefixes = ["CLIENT", "PERSON", "PROVIDER", "CLINICIAN"]
+        var prefixFixes: [(code: String, original: String)] = []
+        for (code, entry) in byCode where entry.original.isEmpty {
+            let stripped = code.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+            let parts = stripped.split(separator: "_", maxSplits: 1)
+            guard parts.count == 2, personPrefixes.contains(String(parts[0])) else { continue }
+            let letterAndSuffix = String(parts[1]) // e.g., "A" or "A_FIRST"
+
+            for altPrefix in personPrefixes where altPrefix != String(parts[0]) {
+                let altCode = "[\(altPrefix)_\(letterAndSuffix)]"
+                if let altEntry = byCode[altCode], !altEntry.original.isEmpty {
+                    prefixFixes.append((code: code, original: altEntry.original))
+                    break
+                }
+            }
+        }
+        for fix in prefixFixes {
+            byCode[fix.code] = (original: fix.original, replacement: fix.code)
         }
 
         return Array(byCode.values).sorted { $0.original < $1.original }
@@ -497,6 +549,36 @@ class EntityMapping: ObservableObject {
         mappings[key] = (original: originalText, replacement: replacementCode)
     }
 
+    /// Sync a mapping with a source document entity
+    /// Handles stale codes from reclassification: if entity was reclassified (e.g., PERSON_A → CLIENT_A)
+    /// but the mapping was never updated, this detects the mismatch and fixes it
+    func syncMapping(originalText: String, replacementCode: String) {
+        let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let existing = mappings[key] {
+            if existing.replacement != replacementCode {
+                // Code changed — likely reclassification that wasn't synced
+                // Use updateBaseId to also migrate RedactedPerson if needed
+                if let oldBaseId = extractBaseId(from: existing.replacement),
+                   let newBaseId = extractBaseId(from: replacementCode),
+                   oldBaseId != newBaseId {
+                    updateBaseId(from: oldBaseId, to: newBaseId)
+                } else {
+                    // Same base ID but different variant — just update the code
+                    mappings[key] = (original: originalText, replacement: replacementCode)
+                }
+
+                #if DEBUG
+                print("EntityMapping.syncMapping: '\(originalText)' code updated \(existing.replacement) → \(replacementCode)")
+                #endif
+            }
+            // Same code — no action needed
+        } else {
+            // New mapping
+            mappings[key] = (original: originalText, replacement: replacementCode)
+        }
+    }
+
     /// Check if a mapping exists for a given original text (case-insensitive)
     func hasMapping(forOriginalText originalText: String) -> Bool {
         let key = originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -514,8 +596,18 @@ class EntityMapping: ObservableObject {
         // Only add if not already mapped
         guard !hasMappingForCode(placeholder) else { return }
 
-        // Use the placeholder itself as the key (since there's no original text)
-        // Store with empty original - user will fill in during Restore via replacementOverrides
+        // For person variant codes like [CLIENT_A_FIRST], check if the base code
+        // [CLIENT_A] already exists. If so, allMappings will generate this variant
+        // automatically with the correct original text — adding an empty mapping here
+        // would shadow that generated variant (non-deterministic dictionary iteration bug)
+        if let baseId = extractBaseId(from: placeholder) {
+            let baseCode = "[\(baseId)]"
+            if baseCode != placeholder && hasMappingForCode(baseCode) {
+                return
+            }
+        }
+
+        // Truly AI-generated placeholder with no base mapping
         let key = placeholder.lowercased()
         mappings[key] = (original: "", replacement: placeholder)
     }
@@ -532,6 +624,51 @@ class EntityMapping: ObservableObject {
         if mappings[key] != nil {
             mappings[key] = (original: originalText, replacement: newReplacementCode)
         }
+    }
+
+    /// Update all mappings and RedactedPersons when an entity's base ID changes (reclassification)
+    /// For example, when PERSON_A is reclassified to CLIENT_A:
+    /// - Moves RedactedPerson from "PERSON_A" to "CLIENT_A" (with updated baseId)
+    /// - Updates all mapping entries whose replacement code starts with [PERSON_A to [CLIENT_A
+    func updateBaseId(from oldBaseId: String, to newBaseId: String) {
+        guard oldBaseId != newBaseId else { return }
+
+        // Update RedactedPerson if exists
+        if let oldPerson = redactedPersons[oldBaseId] {
+            let newPerson = RedactedPerson(
+                baseId: newBaseId,
+                full: oldPerson.full,
+                first: oldPerson.first,
+                last: oldPerson.last,
+                middle: oldPerson.middle,
+                detectedTitle: oldPerson.detectedTitle
+            )
+            redactedPersons.removeValue(forKey: oldBaseId)
+            redactedPersons[newBaseId] = newPerson
+        }
+
+        // Update all mappings whose replacement code uses the old base ID
+        // e.g., [PERSON_A] → [CLIENT_A], [PERSON_A_FIRST] → [CLIENT_A_FIRST]
+        for (key, value) in mappings {
+            let code = value.replacement
+            let oldBase = "[\(oldBaseId)]"
+            let oldBasePrefix = "[\(oldBaseId)_"
+
+            if code == oldBase {
+                // Exact base code match: [PERSON_A] → [CLIENT_A]
+                let newCode = "[\(newBaseId)]"
+                mappings[key] = (original: value.original, replacement: newCode)
+            } else if code.hasPrefix(oldBasePrefix) {
+                // Variant code match: [PERSON_A_FIRST] → [CLIENT_A_FIRST]
+                let suffix = String(code.dropFirst(oldBasePrefix.count - 1)) // keep the underscore and rest
+                let newCode = "[\(newBaseId)\(suffix)"
+                mappings[key] = (original: value.original, replacement: newCode)
+            }
+        }
+
+        #if DEBUG
+        print("EntityMapping.updateBaseId: \(oldBaseId) → \(newBaseId)")
+        #endif
     }
 
     /// Reclassify an entity to a new type, generating a new replacement code
