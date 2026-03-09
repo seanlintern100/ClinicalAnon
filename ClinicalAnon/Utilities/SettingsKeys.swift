@@ -102,4 +102,23 @@ enum SettingsKeys {
 
     /// Whether the first-run session security advisory has been shown (default: false)
     static let sessionSecurityAdvisoryShown = "sessionSecurityAdvisoryShown"
+
+    // MARK: - Feature Toggles
+
+    /// Enable live session recording feature
+    static let liveSessionEnabled = "liveSessionEnabled"
+
+    /// Enable built-in AI analysis in Improve phase
+    /// When disabled, Improve phase becomes a paste-back workflow for external AI use
+    static let aiAnalysisEnabled = "aiAnalysisEnabled"
+
+    // MARK: - Feature Toggle Defaults (ON in dev, OFF in production)
+
+    #if DEBUG
+    static let liveSessionEnabledDefault = true
+    static let aiAnalysisEnabledDefault = true
+    #else
+    static let liveSessionEnabledDefault = false
+    static let aiAnalysisEnabledDefault = false
+    #endif
 }

@@ -16,6 +16,8 @@ struct MainContentView: View {
     // MARK: - Properties
 
     @EnvironmentObject var viewModel: WorkflowViewModel
+    @AppStorage(SettingsKeys.liveSessionEnabled) private var liveSessionEnabled: Bool = SettingsKeys.liveSessionEnabledDefault
+    @AppStorage(SettingsKeys.aiAnalysisEnabled) private var aiAnalysisEnabled: Bool = SettingsKeys.aiAnalysisEnabledDefault
 
     // MARK: - Body
 
@@ -73,7 +75,7 @@ struct MainContentView: View {
     private var currentHelpContentType: HelpContentType {
         switch viewModel.currentPhase {
         case .redact: return .redactPhase
-        case .improve: return .improvePhase
+        case .improve: return aiAnalysisEnabled ? .improvePhase : .pasteBackPhase
         case .restore: return .restorePhase
         }
     }
@@ -96,14 +98,16 @@ struct MainContentView: View {
                 HelpButton(action: showHelp)
 
                 // Sessions button (opens/shows session window)
-                Button(action: { SessionWindowController.shared.showSessionWindow() }) {
-                    HStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: "waveform")
-                        Text("Sessions")
+                if liveSessionEnabled {
+                    Button(action: { SessionWindowController.shared.showSessionWindow() }) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "waveform")
+                            Text("Sessions")
+                        }
+                        .font(DesignSystem.Typography.caption)
                     }
-                    .font(DesignSystem.Typography.caption)
+                    .buttonStyle(SecondaryButtonStyle())
                 }
-                .buttonStyle(SecondaryButtonStyle())
 
                 Spacer()
             }
@@ -137,7 +141,11 @@ struct MainContentView: View {
         case .redact:
             RedactPhaseView(viewModel: viewModel)
         case .improve:
-            ImprovePhaseView(viewModel: viewModel)
+            if aiAnalysisEnabled {
+                ImprovePhaseView(viewModel: viewModel)
+            } else {
+                PasteBackPhaseView(viewModel: viewModel)
+            }
         case .restore:
             RestorePhaseView(viewModel: viewModel)
         }

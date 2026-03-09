@@ -14,6 +14,7 @@ enum HelpContentType {
     case fullGuide
     case redactPhase
     case improvePhase
+    case pasteBackPhase
     case restorePhase
 
     var title: String {
@@ -21,6 +22,7 @@ enum HelpContentType {
         case .fullGuide: return "Redactor User Guide"
         case .redactPhase: return "Redact Phase Guide"
         case .improvePhase: return "Improve Phase Guide"
+        case .pasteBackPhase: return "Paste Back Phase Guide"
         case .restorePhase: return "Restore Phase Guide"
         }
     }
@@ -30,6 +32,7 @@ enum HelpContentType {
         case .fullGuide: return "Complete Guide"
         case .redactPhase: return "Phase 1 of 3"
         case .improvePhase: return "Phase 2 of 3"
+        case .pasteBackPhase: return "Phase 2 of 3"
         case .restorePhase: return "Phase 3 of 3"
         }
     }
@@ -39,6 +42,7 @@ enum HelpContentType {
         case .fullGuide: return HelpContent.fullGuide
         case .redactPhase: return HelpContent.redactPhase
         case .improvePhase: return HelpContent.improvePhase
+        case .pasteBackPhase: return HelpContent.pasteBackPhase
         case .restorePhase: return HelpContent.restorePhase
         }
     }
@@ -575,6 +579,44 @@ If you want to start over with different settings or a different approach, you c
 - **Match sliders to audience** — External reports need higher formality; internal notes can be warmer
 - **Be specific in custom prompts** — "Write a report" is vague; "Write a one-page summary for the client's GP focusing on medication response and next steps" gets better results
 - **Check the output carefully** — AI is helpful but not perfect. Your professional judgement matters.
+"""
+
+    // MARK: - Paste Back Phase Guide
+
+    static let pasteBackPhase = """
+# Paste Back Phase Guide
+
+## What Happens Here
+
+This phase lets you use an external AI tool to process your redacted text. The redacted text—with all identifying information replaced by placeholders—is shown on the left for you to copy out, process externally, and paste the result back on the right.
+
+The external AI will only ever see placeholders like [CLIENT_A] or [PROVIDER_A], never the real names.
+
+---
+
+## How It Works
+
+### Step 1: Copy Your Redacted Text
+Click **Copy to Clipboard** to copy the redacted text from the left pane. This text contains placeholders in place of all identifying information.
+
+### Step 2: Process Externally
+Paste the redacted text into your preferred AI tool (e.g., ChatGPT, Claude, or any other service). Ask it to process the text however you need—write notes, create a report, summarise, etc.
+
+**Important:** The placeholders (e.g., [CLIENT_A], [DATE_B]) must remain in the AI's output. If the AI removes or changes the placeholders, the Restore phase won't be able to put the real names back.
+
+### Step 3: Paste Back
+Copy the AI's output and paste it into the right pane using **⌘V**.
+
+### Step 4: Continue
+Click **Continue** to move to the Restore phase, where original names are put back in place of the placeholders.
+
+---
+
+## Tips
+
+- **Tell the AI to keep placeholders** — Include something like "Keep all text in square brackets exactly as they appear" in your prompt
+- **Check placeholders are intact** — Before clicking Continue, scan the pasted text to make sure [CLIENT_A], [DATE_B] etc. are still present
+- **Use the Clear button** — If you need to start over with a different result, clear the pasted text and try again
 """
 
     // MARK: - Restore Phase Guide

@@ -98,6 +98,7 @@
 		9D5745C3198DCB84F7ECA1BD /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7542F1D14F61F0CDFFA2ADAC /* UserInclusionRecognizer.swift */; };
 		9E144935796D58A6F68EAF3D /* AWSCredentialsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22DB2B5F3E1335B11F8AA173 /* AWSCredentialsManager.swift */; };
 		9FE512BCBBEE11214C04D7CC /* ImprovePhaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BF6876F36D56149F2DB144 /* ImprovePhaseView.swift */; };
+		A0B1C2D3E4F5A6B7C8D9E0F1 /* PasteBackPhaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F2 /* PasteBackPhaseView.swift */; };
 		A140EA79B5D4FBB92A10083A /* TranscriptSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9A2DA52F7352379B6F372B /* TranscriptSegment.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* SessionEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6071829304A5B6C /* SessionEncryptionService.swift */; };
 		A23043CCB5904C0989A6D716 /* SourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A4488473B69644073207EA4 /* SourceDocument.swift */; };
@@ -209,6 +210,7 @@
 		4F7B43C6A99E8D91F07BFFD4 /* RedactorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RedactorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		50F0A0FBBC1A7D85F6183129 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		51BF6876F36D56149F2DB144 /* ImprovePhaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImprovePhaseView.swift; sourceTree = "<group>"; };
+		A0B1C2D3E4F5A6B7C8D9E0F2 /* PasteBackPhaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteBackPhaseView.swift; sourceTree = "<group>"; };
 		5652BE3366DB6BB9613DBF9C /* WorkflowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowViewModel.swift; sourceTree = "<group>"; };
 		5A2B3C4D5E6F7A8B9C0D1E2F /* LiveFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveFeedView.swift; sourceTree = "<group>"; };
 		5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NZPhoneRecognizer.swift; sourceTree = "<group>"; };
@@ -341,6 +343,7 @@
 				F7C2E982A2AE591B79349F46 /* HelpModalView.swift */,
 				04593A8C8D3B19D5F44EAB58 /* HelpWindowController.swift */,
 				51BF6876F36D56149F2DB144 /* ImprovePhaseView.swift */,
+				A0B1C2D3E4F5A6B7C8D9E0F2 /* PasteBackPhaseView.swift */,
 				E042FBD7835DEC6EDED6AA51 /* InclusionSettingsView.swift */,
 				7E31E54134D9074F0CEC2C12 /* LocalLLMSettingsView.swift */,
 				DA72D874BD6FB4834486B29F /* MainContentView.swift */,
@@ -805,6 +808,7 @@
 				E9A164691AF75A7CB57A7283 /* HighlightedTextView.swift in Sources */,
 				A3AAE9CD034444C5EC34000F /* ImprovePhaseState.swift in Sources */,
 				9FE512BCBBEE11214C04D7CC /* ImprovePhaseView.swift in Sources */,
+				A0B1C2D3E4F5A6B7C8D9E0F1 /* PasteBackPhaseView.swift in Sources */,
 				4BE7660196BB66F38DAB9342 /* InclusionSettingsView.swift in Sources */,
 				221846BC61B2A7516AF042BB /* LiveHighlightedSegment.swift in Sources */,
 				6A3B4C5D6E7F8A9B0C1D2E3F /* LiveFeedItemView.swift in Sources */,
