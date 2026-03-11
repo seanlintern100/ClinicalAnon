@@ -20,6 +20,7 @@ struct RedactPhaseView: View {
     @State private var showClassificationModal = false
     @State private var showAddMoreDocsModal = false
     @State private var showLLMDownloadSheet = false
+    @State private var showPendingChangesAlert = false
 
     // MARK: - Body
 
@@ -54,7 +55,10 @@ struct RedactPhaseView: View {
             }
         }
         .sheet(isPresented: $viewModel.showingAddCustom) {
-            AddCustomEntitySheet(viewModel: viewModel)
+            AddCustomEntitySheet(
+                prefilledText: viewModel.prefilledText,
+                onAdd: { text, type in viewModel.addCustomEntity(text: text, type: type) }
+            )
         }
         .sheet(isPresented: $showClassificationModal) {
             TextClassificationModal(
@@ -79,11 +83,23 @@ struct RedactPhaseView: View {
             )
         }
         .sheet(isPresented: $viewModel.redactState.showDuplicateFinderModal) {
-            DuplicateFinderModal(viewModel: viewModel)
+            DuplicateFinderModal(
+                findDuplicates: { viewModel.redactState.findPotentialDuplicates() },
+                onMergeGroups: { viewModel.mergeDuplicateGroups($0) }
+            )
         }
         .sheet(isPresented: $viewModel.redactState.isEditingNameStructure) {
             if let entity = viewModel.redactState.nameStructureEditEntity {
-                EditNameStructureModal(entity: entity, viewModel: viewModel)
+                EditNameStructureModal(
+                    entity: entity,
+                    onSave: { first, middle, last, title in
+                        viewModel.redactState.saveNameStructure(
+                            firstName: first, middleName: middle, lastName: last, title: title
+                        )
+                    },
+                    onCancel: { viewModel.redactState.cancelNameStructureEdit() },
+                    getPersonForCode: { viewModel.engine.entityMapping.getPersonForCode($0) }
+                )
             }
         }
         .alert("Deep Scan Complete", isPresented: $viewModel.redactState.showDeepScanCompleteMessage) {
@@ -421,7 +437,13 @@ struct RedactPhaseView: View {
                 .disabled(!viewModel.canContinueFromRedact || viewModel.hasPendingChanges)
                 .help("Save this document and add another source document")
 
-                Button(action: { viewModel.continueToNextPhase() }) {
+                Button(action: {
+                    if viewModel.hasPendingChanges {
+                        showPendingChangesAlert = true
+                    } else {
+                        viewModel.continueToNextPhase()
+                    }
+                }) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         Text("Continue")
                         Image(systemName: "arrow.right")
@@ -430,7 +452,16 @@ struct RedactPhaseView: View {
                     .frame(minWidth: 120)
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(!viewModel.canContinueFromRedact)
+                .disabled(viewModel.result == nil)
+                .alert("Unapplied Changes", isPresented: $showPendingChangesAlert) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Apply & Continue") {
+                        viewModel.applyChanges()
+                        viewModel.continueToNextPhase()
+                    }
+                } message: {
+                    Text("You have entity changes that haven't been applied. Apply them and continue?")
+                }
             }
         }
         .padding(DesignSystem.Spacing.medium)
@@ -528,7 +559,7 @@ private struct RedactEntitySidebar: View {
                                 icon: "sparkles",
                                 color: .orange,
                                 entities: viewModel.piiReviewFindings,
-                                viewModel: viewModel,
+                                actions: entityActions,
                                 isAISection: true,
                                 isDeepScanSection: false
                             )
@@ -541,7 +572,7 @@ private struct RedactEntitySidebar: View {
                                 icon: "magnifyingglass.circle.fill",
                                 color: .purple,
                                 entities: viewModel.deepScanFindings,
-                                viewModel: viewModel,
+                                actions: entityActions,
                                 isAISection: false,
                                 isDeepScanSection: true
                             )
@@ -556,7 +587,7 @@ private struct RedactEntitySidebar: View {
                                     icon: entityType.iconName,
                                     color: entityType.highlightColor,
                                     entities: entities,
-                                    viewModel: viewModel,
+                                    actions: entityActions,
                                     isAISection: false,
                                     isDeepScanSection: false
                                 )
@@ -585,6 +616,20 @@ private struct RedactEntitySidebar: View {
         .animation(.easeInOut(duration: 0.2), value: isCollapsed)
     }
 
+    // MARK: - Entity Actions
+
+    private var entityActions: EntityActions {
+        EntityActions(
+            isEntityExcluded: { viewModel.isEntityExcluded($0) },
+            toggleEntity: { viewModel.toggleEntity($0) },
+            toggleEntities: { viewModel.toggleEntities($0) },
+            mergeEntities: { alias, primary in viewModel.mergeEntities(alias: alias, into: primary) },
+            startEditingNameStructure: { viewModel.redactState.startEditingNameStructure($0) },
+            reclassifyEntity: { id, type in viewModel.reclassifyEntity(id, to: type) },
+            allEntities: viewModel.allEntities
+        )
+    }
+
     // MARK: - Computed Properties
 
     /// Count of person entities (for duplicate finder button)
@@ -606,466 +651,6 @@ private struct RedactEntitySidebar: View {
         return viewModel.allEntities.filter {
             $0.type == type && !aiIds.contains($0.id) && !deepIds.contains($0.id)
         }
-    }
-}
-
-// MARK: - Entity Type Section
-
-private struct EntityTypeSection: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let entities: [Entity]
-    @ObservedObject var viewModel: WorkflowViewModel
-    let isAISection: Bool
-    let isDeepScanSection: Bool
-
-    @State private var isExpanded: Bool = true
-
-    /// Check state: all included, all excluded, or mixed
-    private var checkState: CheckState {
-        let excludedCount = entities.filter { viewModel.isEntityExcluded($0) }.count
-        if excludedCount == 0 {
-            return .allIncluded
-        } else if excludedCount == entities.count {
-            return .allExcluded
-        } else {
-            return .mixed
-        }
-    }
-
-    private enum CheckState {
-        case allIncluded, allExcluded, mixed
-    }
-
-    /// Group entities: anchors with their children, sorted alphabetically by anchor
-    private func groupedEntities() -> [(anchor: Entity, children: [Entity])] {
-        // Separate anchors and children
-        let anchors = entities.filter { $0.isAnchor }
-        let children = entities.filter { !$0.isAnchor }
-
-        // Group children by baseId
-        var childrenByBaseId: [String: [Entity]] = [:]
-        for child in children {
-            if let baseId = child.baseId {
-                childrenByBaseId[baseId, default: []].append(child)
-            }
-        }
-
-        // Build groups: each anchor with its children
-        var groups: [(anchor: Entity, children: [Entity])] = []
-        for anchor in anchors.sorted(by: { $0.originalText.lowercased() < $1.originalText.lowercased() }) {
-            let anchorChildren = anchor.baseId.flatMap { childrenByBaseId[$0] } ?? []
-            // Sort children alphabetically within group
-            let sortedChildren = anchorChildren.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() }
-            groups.append((anchor: anchor, children: sortedChildren))
-        }
-
-        return groups
-    }
-
-    /// Create entity row with optional indentation
-    @ViewBuilder
-    private func entityRow(for entity: Entity, indented: Bool) -> some View {
-        HStack(spacing: 0) {
-            if indented {
-                // Indentation spacer for child entities
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 16)
-            }
-
-            RedactEntityRow(
-                entity: entity,
-                isExcluded: viewModel.isEntityExcluded(entity),
-                isFromAIReview: isAISection,
-                isFromDeepScan: isDeepScanSection,
-                isChild: indented,
-                onToggle: { viewModel.toggleEntity(entity) },
-                mergeTargets: viewModel.allEntities.filter { $0.type == entity.type && $0.id != entity.id && $0.isAnchor }.sorted { $0.originalText.lowercased() < $1.originalText.lowercased() },
-                onMerge: { target in viewModel.mergeEntities(alias: entity, into: target) },
-                onEditNameStructure: { viewModel.redactState.startEditingNameStructure(entity) },
-                onChangeType: { newType in viewModel.reclassifyEntity(entity.id, to: newType) }
-            )
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Section header
-            HStack(spacing: 6) {
-                // Toggle all checkbox
-                Button(action: { viewModel.toggleEntities(entities) }) {
-                    Image(systemName: checkState == .allIncluded ? "checkmark.square.fill" :
-                                      checkState == .mixed ? "minus.square.fill" : "square")
-                        .font(.system(size: 12))
-                        .foregroundColor(checkState == .allExcluded ? DesignSystem.Colors.textSecondary : color)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(checkState == .allIncluded ? "Deselect all \(title)" : "Select all \(title)")
-
-                // Expand/collapse button for rest of header
-                Button(action: { withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() } }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: icon)
-                            .font(.system(size: 14))
-                            .foregroundColor(color)
-                            .frame(width: 16)
-
-                        Text(title.uppercased())
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                        Text("(\(entities.count))")
-                            .font(.system(size: 10))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                        Spacer()
-
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "Collapse \(title) section" : "Expand \(title) section")
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, DesignSystem.Spacing.xs)
-            .background(color.opacity(0.6))
-            .cornerRadius(4)
-
-            // Entity rows (grouped by anchor with children indented)
-            if isExpanded {
-                VStack(spacing: 6) {
-                    ForEach(groupedEntities(), id: \.anchor.id) { group in
-                        // Anchor row (no indent)
-                        entityRow(for: group.anchor, indented: false)
-
-                        // Child rows (indented)
-                        ForEach(group.children) { child in
-                            entityRow(for: child, indented: true)
-                        }
-                    }
-                }
-                .padding(.top, 4)
-            }
-        }
-    }
-}
-
-// MARK: - Entity Row
-
-private struct RedactEntityRow: View {
-
-    let entity: Entity
-    let isExcluded: Bool
-    let isFromAIReview: Bool
-    let isFromDeepScan: Bool
-    let isChild: Bool  // Whether this is an indented child entity
-    let onToggle: () -> Void
-    let mergeTargets: [Entity]
-    let onMerge: (Entity) -> Void
-    let onEditNameStructure: () -> Void
-    let onChangeType: (EntityType) -> Void
-
-    /// Text color: gray for excluded or child entities, primary for anchors
-    private var textColor: Color {
-        if isExcluded { return DesignSystem.Colors.textSecondary }
-        return isChild ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textPrimary
-    }
-
-    var body: some View {
-        HStack(spacing: DesignSystem.Spacing.xs) {
-            Button(action: onToggle) {
-                Image(systemName: isExcluded ? "square" : "checkmark.square.fill")
-                    .foregroundColor(isExcluded ? DesignSystem.Colors.textSecondary : entity.type.highlightColor)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExcluded ? "Include \(entity.originalText) in redaction" : "Exclude \(entity.originalText) from redaction")
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(entity.originalText)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(textColor)
-                        .lineLimit(1)
-                        .strikethrough(isExcluded && !isFromDeepScan)
-
-                    if isFromAIReview {
-                        Text("AI")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.orange)
-                            .cornerRadius(3)
-                    }
-                }
-
-                // Only show replacement code and variant badge for anchors, not children
-                if !isChild {
-                    HStack(spacing: 4) {
-                        Text("→ \(entity.replacementCode)")
-                            .font(.system(size: 10))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                        if let variant = entity.nameVariant {
-                            Text(variant.displayName)
-                                .font(.system(size: 8, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(entity.type.highlightColor.opacity(0.8))
-                                .cornerRadius(3)
-                        }
-                    }
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, DesignSystem.Spacing.xs)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(isExcluded ? Color.clear : (isFromAIReview ? Color.orange.opacity(0.1) : entity.type.highlightColor.opacity(0.1)))
-        )
-        .contextMenu {
-            if !mergeTargets.isEmpty {
-                Menu("Merge with...") {
-                    ForEach(mergeTargets) { target in
-                        Button("\(target.originalText) \(target.replacementCode)") {
-                            onMerge(target)
-                        }
-                    }
-                }
-            }
-
-            // Edit Name Structure - only for person types
-            if entity.type.isPerson {
-                Button(action: onEditNameStructure) {
-                    Label("Edit Name Structure", systemImage: "person.text.rectangle")
-                }
-            }
-
-            // Change Type submenu
-            Menu("Change Type") {
-                ForEach(EntityType.allCases.filter { $0 != entity.type }, id: \.self) { newType in
-                    Button(newType.displayName) {
-                        onChangeType(newType)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Add Custom Entity Sheet
-
-struct AddCustomEntitySheet: View {
-
-    @ObservedObject var viewModel: WorkflowViewModel
-    @State private var text: String = ""
-    @State private var selectedType: EntityType = .personClient
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: DesignSystem.Spacing.large) {
-            Text("Add Custom Redaction")
-                .font(DesignSystem.Typography.heading)
-
-            TextField("Text to redact", text: $text)
-                .textFieldStyle(.roundedBorder)
-                .onAppear {
-                    if let prefilled = viewModel.prefilledText {
-                        text = prefilled
-                    }
-                }
-
-            Picker("Entity Type", selection: $selectedType) {
-                ForEach(EntityType.allCases, id: \.self) { type in
-                    Text(type.displayName).tag(type)
-                }
-            }
-            .pickerStyle(.menu)
-
-            HStack {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Button("Add") {
-                    viewModel.addCustomEntity(text: text, type: selectedType)
-                    dismiss()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(DesignSystem.Spacing.large)
-        .frame(width: 350)
-    }
-}
-
-// MARK: - Edit Name Structure Modal
-
-struct EditNameStructureModal: View {
-
-    let entity: Entity
-    @ObservedObject var viewModel: WorkflowViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var firstName: String = ""
-    @State private var middleName: String = ""
-    @State private var lastName: String = ""
-    @State private var title: String = ""
-
-    private let titleOptions = ["", "Mr", "Mrs", "Ms", "Miss", "Dr", "Prof", "Rev"]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            // Header
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Edit Name Structure")
-                    .font(DesignSystem.Typography.heading)
-                Text(entity.baseReplacementCode)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-
-            Divider()
-
-            // Detected text reference
-            HStack {
-                Text("Detected:")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                Text(entity.originalText)
-                    .font(DesignSystem.Typography.caption)
-                    .italic()
-            }
-
-            // Editable fields
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                LabeledContent("Title") {
-                    Picker("", selection: $title) {
-                        ForEach(titleOptions, id: \.self) { opt in
-                            Text(opt.isEmpty ? "None" : opt).tag(opt)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 100)
-                }
-
-                LabeledContent("First Name") {
-                    TextField("First", text: $firstName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 150)
-                }
-
-                LabeledContent("Middle Name") {
-                    TextField("Middle (optional)", text: $middleName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 150)
-                }
-
-                LabeledContent("Last Name") {
-                    TextField("Last", text: $lastName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 150)
-                }
-            }
-
-            // Preview of full name
-            if !firstName.isEmpty || !lastName.isEmpty {
-                HStack {
-                    Text("Full name:")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                    Text(buildFullNamePreview())
-                        .font(DesignSystem.Typography.caption)
-                        .fontWeight(.medium)
-                }
-            }
-
-            Divider()
-
-            // Buttons
-            HStack {
-                Button("Cancel") {
-                    viewModel.redactState.cancelNameStructureEdit()
-                    dismiss()
-                }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Spacer()
-
-                Button("Save") {
-                    viewModel.redactState.saveNameStructure(
-                        firstName: firstName,
-                        middleName: middleName.isEmpty ? nil : middleName,
-                        lastName: lastName.isEmpty ? nil : lastName,  // Allow blank surname for single-name people
-                        title: title.isEmpty ? nil : title
-                    )
-                    dismiss()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(firstName.trimmingCharacters(in: .whitespaces).isEmpty)  // Only require first name
-            }
-        }
-        .padding(DesignSystem.Spacing.large)
-        .frame(width: 350)
-        .onAppear {
-            loadExistingStructure()
-        }
-    }
-
-    private func loadExistingStructure() {
-        // Try to load existing RedactedPerson if available
-        if let person = viewModel.engine.entityMapping.getPersonForCode(entity.replacementCode) {
-            firstName = person.first
-            middleName = person.middle ?? ""
-            lastName = person.last
-            title = person.detectedTitle ?? ""
-        } else {
-            // Parse from the entity's original text as default
-            parseFromOriginalText()
-        }
-    }
-
-    private func parseFromOriginalText() {
-        let text = entity.originalText
-
-        // Strip title if present
-        let titles = ["Mr", "Mrs", "Ms", "Miss", "Dr", "Prof", "Rev", "Mr.", "Mrs.", "Ms.", "Dr.", "Prof."]
-        var parts = text.components(separatedBy: " ").filter { !$0.isEmpty }
-
-        if let firstPart = parts.first, titles.contains(where: { firstPart.lowercased() == $0.lowercased() }) {
-            title = firstPart.replacingOccurrences(of: ".", with: "")
-            parts.removeFirst()
-        }
-
-        // Assign parts to name fields
-        if parts.count >= 1 {
-            firstName = parts[0]
-        }
-        if parts.count >= 2 {
-            lastName = parts[parts.count - 1]
-        }
-        if parts.count >= 3 {
-            middleName = parts[1..<parts.count - 1].joined(separator: " ")
-        }
-    }
-
-    private func buildFullNamePreview() -> String {
-        var parts: [String] = []
-        if !title.isEmpty { parts.append(title) }
-        if !firstName.isEmpty { parts.append(firstName) }
-        if !middleName.isEmpty { parts.append(middleName) }
-        if !lastName.isEmpty { parts.append(lastName) }
-        return parts.joined(separator: " ")
     }
 }
 
@@ -1170,421 +755,6 @@ struct TextClassificationModal: View {
             }
             .buttonStyle(PrimaryButtonStyle())
         }
-    }
-}
-
-// MARK: - Duplicate Finder Modal
-
-struct DuplicateFinderModal: View {
-
-    @ObservedObject var viewModel: WorkflowViewModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var groups: [DuplicateGroup] = []
-
-    private var highConfidenceGroups: [DuplicateGroup] {
-        groups.filter { $0.confidence == .high }
-    }
-
-    private var lowConfidenceGroups: [DuplicateGroup] {
-        groups.filter { $0.confidence == .low }
-    }
-
-    private var selectedGroups: [DuplicateGroup] {
-        groups.filter { $0.isSelected }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Potential Duplicate Names")
-                    .font(DesignSystem.Typography.heading)
-
-                Spacer()
-
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close dialog")
-            }
-            .padding(DesignSystem.Spacing.medium)
-
-            Divider().opacity(0.15)
-
-            // Content
-            if groups.isEmpty {
-                // Empty state
-                VStack(spacing: DesignSystem.Spacing.medium) {
-                    Spacer()
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(DesignSystem.Colors.success)
-
-                    Text("No potential duplicates found")
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                    Text("All person entities appear to be unique")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    VStack(spacing: DesignSystem.Spacing.medium) {
-                        // High Confidence Section
-                        if !highConfidenceGroups.isEmpty {
-                            DuplicateSection(
-                                title: "High Confidence",
-                                subtitle: "Full name matches with overlapping components",
-                                color: DesignSystem.Colors.success,
-                                groups: highConfidenceGroups,
-                                onToggle: toggleGroup,
-                                onSetAnchor: setAnchor
-                            )
-                        }
-
-                        // Low Confidence Section
-                        if !lowConfidenceGroups.isEmpty {
-                            DuplicateSection(
-                                title: "Low Confidence",
-                                subtitle: "Partial matches without full name anchor",
-                                color: .orange,
-                                groups: lowConfidenceGroups,
-                                onToggle: toggleGroup,
-                                onSetAnchor: setAnchor
-                            )
-                        }
-                    }
-                    .padding(DesignSystem.Spacing.medium)
-                }
-            }
-
-            Divider().opacity(0.15)
-
-            // Footer buttons
-            HStack {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Spacer()
-
-                if !groups.isEmpty {
-                    Text("\(selectedGroups.count) group\(selectedGroups.count == 1 ? "" : "s") selected")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-
-                Button("Merge Selected") {
-                    #if DEBUG
-                    print("📋 Merge Selected clicked")
-                    print("   ALL groups in modal: \(groups.count)")
-                    for (i, group) in groups.enumerated() {
-                        print("   Group \(i) [selected=\(group.isSelected)]: primary='\(group.primary.originalText)' matches=\(group.matches.map { $0.originalText })")
-                    }
-                    print("   SELECTED groups to merge: \(selectedGroups.count)")
-                    let unselectedGroups = groups.filter { !$0.isSelected }
-                    print("   UNSELECTED groups (should remain untouched): \(unselectedGroups.count)")
-                    for group in unselectedGroups {
-                        print("      - primary='\(group.primary.originalText)' matches=\(group.matches.map { $0.originalText })")
-                    }
-                    #endif
-                    viewModel.mergeDuplicateGroups(selectedGroups)
-                    dismiss()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(selectedGroups.isEmpty)
-            }
-            .padding(DesignSystem.Spacing.medium)
-        }
-        .frame(width: 500, height: 450)
-        .onAppear {
-            groups = viewModel.redactState.findPotentialDuplicates()
-        }
-    }
-
-    private func toggleGroup(_ group: DuplicateGroup) {
-        if let idx = groups.firstIndex(where: { $0.id == group.id }) {
-            groups[idx].isSelected.toggle()
-        }
-    }
-
-    private func setAnchor(_ group: DuplicateGroup, _ newAnchor: Entity) {
-        if let idx = groups.firstIndex(where: { $0.id == group.id }) {
-            groups[idx] = group.withNewAnchor(newAnchor)
-        }
-    }
-}
-
-// MARK: - Duplicate Section
-
-private struct DuplicateSection: View {
-
-    let title: String
-    let subtitle: String
-    let color: Color
-    let groups: [DuplicateGroup]
-    let onToggle: (DuplicateGroup) -> Void
-    let onSetAnchor: (DuplicateGroup, Entity) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-            // Section header
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 8, height: 8)
-
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                }
-
-                Text(subtitle)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-
-            // Groups
-            ForEach(groups) { group in
-                DuplicateGroupRow(
-                    group: group,
-                    onToggle: { onToggle(group) },
-                    onSetAnchor: { newAnchor in onSetAnchor(group, newAnchor) }
-                )
-            }
-        }
-    }
-}
-
-// MARK: - Duplicate Group Row
-
-private struct DuplicateGroupRow: View {
-
-    let group: DuplicateGroup
-    let onToggle: () -> Void
-    let onSetAnchor: (Entity) -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: DesignSystem.Spacing.small) {
-            // Checkbox
-            Button(action: onToggle) {
-                Image(systemName: group.isSelected ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 14))
-                    .foregroundColor(group.isSelected ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 2)
-            .accessibilityLabel(group.isSelected ? "Deselect merge group for \(group.primary.originalText)" : "Select merge group for \(group.primary.originalText)")
-
-            // Group content
-            VStack(alignment: .leading, spacing: 4) {
-                // Primary entity (anchor) with star indicator
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.yellow)
-
-                    Text(group.primary.replacementCode)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(group.primary.type.highlightColor)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(group.primary.type.highlightColor.opacity(0.15))
-                        .cornerRadius(3)
-
-                    Text(group.primary.originalText)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                    Text("Primary")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.yellow)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.yellow.opacity(0.2))
-                        .cornerRadius(3)
-                }
-
-                // Matches with "Make Primary" buttons
-                ForEach(group.matches, id: \.id) { match in
-                    HStack(spacing: 6) {
-                        Text("├─")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                        Text(match.originalText)
-                            .font(.system(size: 11))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                        Text(match.replacementCode)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
-
-                        Spacer()
-
-                        Button(action: { onSetAnchor(match) }) {
-                            Text("Make Primary")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.primaryTeal)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Make \(match.originalText) the primary entity")
-                    }
-                    .padding(.leading, 8)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(DesignSystem.Spacing.small)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(group.isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.08) : DesignSystem.Colors.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(group.isSelected ? DesignSystem.Colors.primaryTeal.opacity(0.3) : DesignSystem.Colors.border.opacity(0.3), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Custom NSTextView with Context Menu
-
-/// NSTextView subclass that adds "Add as entity" and "Remove from entities" to right-click menu
-class FastTextViewWithMenu: NSTextView {
-    var onRightClickWithSelection: ((String) -> Void)?
-    var onRemoveEntity: ((String) -> Void)?
-    var getAnchorName: ((String) -> String?)?
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let menu = super.menu(for: event) ?? NSMenu()
-
-        // Get selected text
-        let selectedRange = self.selectedRange()
-        if selectedRange.length > 0,
-           let storage = self.textStorage {
-            let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !selectedText.isEmpty {
-                // Add custom items at top
-                let addItem = NSMenuItem(title: "Add '\(selectedText)' as entity...", action: #selector(addAsEntity), keyEquivalent: "")
-                addItem.target = self
-                menu.insertItem(addItem, at: 0)
-
-                // For remove, show anchor name if this is a child entity
-                let displayName = getAnchorName?(selectedText) ?? selectedText
-                let removeItem = NSMenuItem(title: "Remove '\(displayName)' from entities", action: #selector(removeFromEntities), keyEquivalent: "")
-                removeItem.target = self
-                menu.insertItem(removeItem, at: 1)
-
-                menu.insertItem(NSMenuItem.separator(), at: 2)
-            }
-        }
-
-        return menu
-    }
-
-    @objc private func addAsEntity() {
-        let selectedRange = self.selectedRange()
-        if selectedRange.length > 0,
-           let storage = self.textStorage {
-            let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !selectedText.isEmpty {
-                onRightClickWithSelection?(selectedText)
-            }
-        }
-    }
-
-    @objc private func removeFromEntities() {
-        let selectedRange = self.selectedRange()
-        if selectedRange.length > 0,
-           let storage = self.textStorage {
-            let selectedText = storage.attributedSubstring(from: selectedRange).string.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !selectedText.isEmpty {
-                onRemoveEntity?(selectedText)
-            }
-        }
-    }
-}
-
-// MARK: - Fast Text View (NSTextView wrapper for performance)
-
-/// NSTextView wrapper for fast rendering of large AttributedStrings
-/// SwiftUI's Text is extremely slow for large documents (20-30s for 152K chars)
-/// NSTextView renders the same content in <1s
-struct FastTextView: NSViewRepresentable {
-    let attributedText: AttributedString
-    var onRightClick: ((String) -> Void)? = nil
-    var onRemoveEntity: ((String) -> Void)? = nil
-    var getAnchorName: ((String) -> String?)? = nil
-
-    func makeNSView(context: Context) -> NSScrollView {
-        // Create text storage, layout manager, and text container manually for proper setup
-        let textStorage = NSTextStorage()
-        let layoutManager = NSLayoutManager()
-        textStorage.addLayoutManager(layoutManager)
-
-        let textContainer = NSTextContainer()
-        textContainer.widthTracksTextView = true
-        textContainer.heightTracksTextView = false
-        layoutManager.addTextContainer(textContainer)
-
-        let textView = FastTextViewWithMenu(frame: .zero, textContainer: textContainer)
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.allowsUndo = false
-        textView.backgroundColor = .textBackgroundColor  // System color for dark mode support
-        textView.drawsBackground = true
-        textView.textContainerInset = NSSize(width: 16, height: 16)
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
-        textView.onRightClickWithSelection = onRightClick
-        textView.onRemoveEntity = onRemoveEntity
-        textView.getAnchorName = getAnchorName
-
-        // Set initial text
-        textStorage.setAttributedString(NSAttributedString(attributedText))
-
-        let scrollView = NSScrollView()
-        scrollView.documentView = textView
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
-        scrollView.borderType = .noBorder
-        scrollView.backgroundColor = .textBackgroundColor
-        scrollView.drawsBackground = true
-
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? FastTextViewWithMenu else { return }
-
-        // Update the attributed text
-        textView.textStorage?.setAttributedString(NSAttributedString(attributedText))
-
-        // Update callbacks in case they changed
-        textView.onRightClickWithSelection = onRightClick
-        textView.onRemoveEntity = onRemoveEntity
-        textView.getAnchorName = getAnchorName
-
-        // Ensure text container tracks width properly
-        let contentWidth = max(scrollView.contentSize.width - 32, 100)  // Account for insets
-        textView.textContainer?.containerSize = NSSize(width: contentWidth, height: .greatestFiniteMagnitude)
-
-        // Update frame to match scroll view
-        textView.minSize = NSSize(width: contentWidth, height: 0)
-        textView.maxSize = NSSize(width: contentWidth, height: .greatestFiniteMagnitude)
     }
 }
 

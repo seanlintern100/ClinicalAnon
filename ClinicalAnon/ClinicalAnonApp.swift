@@ -56,6 +56,9 @@ struct ClinicalAnonApp: App {
             MainContentView()
                 .environmentObject(viewModel)
                 .task {
+                    // Skip heavy initialization during Xcode previews
+                    guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
+
                     // Clear any stale memory files from previous session
                     viewModel.improveState.resetMemoryModeOnLaunch()
 

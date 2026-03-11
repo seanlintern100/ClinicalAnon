@@ -440,11 +440,27 @@ class RedactPhaseState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// All entities (detected + custom + PII review + Deep Scan)
+    /// All entities (detected + custom + PII review + Deep Scan + saved documents)
     var allEntities: [Entity] {
-        guard let result = result else { return customEntities + piiReviewFindings + deepScanFindings }
-        let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-        return baseEntities + customEntities + piiReviewFindings + deepScanFindings
+        var entities: [Entity]
+        if let result = result {
+            let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
+            entities = baseEntities + customEntities + piiReviewFindings + deepScanFindings
+        } else {
+            entities = customEntities + piiReviewFindings + deepScanFindings
+        }
+        // Include entities from saved source documents, deduplicating by originalText.
+        // Current doc entities are authoritative (latest merge/reclassify state),
+        // so only add saved doc entities whose text isn't already represented.
+        let existingTexts = Set(entities.map { $0.originalText })
+        for doc in sourceDocuments {
+            for entity in doc.entities {
+                if !existingTexts.contains(entity.originalText) {
+                    entities.append(entity)
+                }
+            }
+        }
+        return entities
     }
 
     /// Only active entities (not excluded)
@@ -769,7 +785,8 @@ class RedactPhaseState: ObservableObject {
     /// The alias is removed and its positions are consolidated into the primary
     /// Also updates any sibling entities that share the alias's replacement code
     func mergeEntities(alias: Entity, into primary: Entity) {
-        guard alias.type == primary.type else { return }
+        // Allow merging across person subtypes (client/provider/other), block other cross-type merges
+        guard alias.type == primary.type || (alias.type.isPerson && primary.type.isPerson) else { return }
 
         let aliasCode = alias.replacementCode
         let primaryCode = primary.replacementCode
@@ -913,6 +930,12 @@ class RedactPhaseState: ObservableObject {
         if let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) {
             updateEntity(&deepScanFindings[idx])
         }
+        // Also update entities in saved source documents
+        for docIdx in sourceDocuments.indices {
+            if let entityIdx = sourceDocuments[docIdx].entities.firstIndex(where: { $0.id == entityId }) {
+                sourceDocuments[docIdx].entities[entityIdx].replacementCode = newCode
+            }
+        }
     }
 
     /// Mark an entity as a merged child (so it displays as sub-entity regardless of variant)
@@ -929,6 +952,12 @@ class RedactPhaseState: ObservableObject {
         }
         if let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) {
             deepScanFindings[idx].isMergedChild = true
+        }
+        // Also update entities in saved source documents
+        for docIdx in sourceDocuments.indices {
+            if let entityIdx = sourceDocuments[docIdx].entities.firstIndex(where: { $0.id == entityId }) {
+                sourceDocuments[docIdx].entities[entityIdx].isMergedChild = true
+            }
         }
     }
 

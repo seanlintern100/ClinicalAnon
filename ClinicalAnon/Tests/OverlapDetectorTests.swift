@@ -170,9 +170,9 @@ final class OverlapDetectorTests: XCTestCase {
     func testOverlapAtExactThreshold() {
         detector.minimumOverlapDuration = 0.1
 
-        // Mic: 0-5s, Sys: 4.9-10s -> Overlap of exactly 0.1s should be detected
-        let mic = [segment(speaker: .clinician, start: 0, end: 5)]
-        let sys = [segment(speaker: .other, start: 4.9, end: 10)]
+        // Mic: 0-0.4s, Sys: 0.3-0.7s -> Overlap of 0.1s (25% of each segment) should be detected
+        let mic = [segment(speaker: .clinician, start: 0, end: 0.4)]
+        let sys = [segment(speaker: .other, start: 0.3, end: 0.7)]
 
         let result = detector.detectOverlaps(micSegments: mic, systemSegments: sys)
 

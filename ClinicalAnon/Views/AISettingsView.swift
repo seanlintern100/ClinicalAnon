@@ -45,10 +45,6 @@ struct SettingsContainerView: View {
                     Label("Transcription", systemImage: "waveform")
                 }
 
-            FeatureSettingsView()
-                .tabItem {
-                    Label("Features", systemImage: "switch.2")
-                }
         }
         .frame(width: 600, height: 680)
     }
@@ -170,63 +166,6 @@ struct AIModelSettingsView: View {
                 .foregroundColor(.secondary)
             } header: {
                 Text("Security")
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-}
-
-// MARK: - Feature Settings View
-
-struct FeatureSettingsView: View {
-    @AppStorage(SettingsKeys.liveSessionEnabled) private var liveSessionEnabled: Bool = SettingsKeys.liveSessionEnabledDefault
-    @AppStorage(SettingsKeys.aiAnalysisEnabled) private var aiAnalysisEnabled: Bool = SettingsKeys.aiAnalysisEnabledDefault
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle(isOn: $liveSessionEnabled) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Live Session Recording")
-                            .font(.body)
-                        Text("Record and transcribe live sessions (Zoom, Teams, etc.)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
-            } header: {
-                Text("Live Session")
-            } footer: {
-                Text("When disabled, the Sessions button and live recording features are hidden.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Section {
-                Toggle(isOn: $aiAnalysisEnabled) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Built-in AI Analysis")
-                            .font(.body)
-                        Text("Use the integrated AI to process redacted documents")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
-            } header: {
-                Text("AI Analysis")
-            } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("When disabled, the Improve phase becomes a paste-back workflow:")
-                    Text("1. Copy the redacted text out")
-                    Text("2. Process it with an external AI tool")
-                    Text("3. Paste the result back into Redactor")
-                    Text("4. Continue to Restore to re-identify names")
-                }
-                .font(.caption)
-                .foregroundColor(.secondary)
             }
         }
         .formStyle(.grouped)

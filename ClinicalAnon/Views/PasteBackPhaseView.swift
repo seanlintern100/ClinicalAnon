@@ -45,7 +45,7 @@ struct PasteBackPhaseView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Redacted Text")
+                Text(documentCountLabel)
                     .font(DesignSystem.Typography.subheading)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
@@ -181,8 +181,25 @@ struct PasteBackPhaseView: View {
 
     // MARK: - Helpers
 
+    private var documentCountLabel: String {
+        let count = viewModel.improveState.sourceDocuments.count
+        return count > 1 ? "Redacted Text (\(count) documents)" : "Redacted Text"
+    }
+
+    /// Combined redacted text from all source documents (or just the current one if single doc)
     private var redactedText: String {
-        viewModel.displayedRedactedText
+        let docs = viewModel.improveState.sourceDocuments
+        if docs.count > 1 {
+            // Multiple documents — show all with headers, matching AI flow format
+            return docs.map { doc in
+                """
+                === \(doc.name)\(doc.description.isEmpty ? "" : " (\(doc.description))") ===
+
+                \(doc.redactedText)
+                """
+            }.joined(separator: "\n\n")
+        }
+        return viewModel.displayedRedactedText
     }
 
     private func copyRedactedText() {

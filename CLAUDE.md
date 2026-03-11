@@ -3,10 +3,15 @@
 ## Build Instructions
 
 ```bash
+# Full app (all features: AI analysis, live sessions, etc.)
 xcodebuild -project Redactor.xcodeproj -scheme Redactor -configuration Debug build
+
+# Lite app (redact + paste-back workflow, no AI/sessions)
+xcodebuild -project Redactor.xcodeproj -scheme "Redactor Lite" -configuration Debug build
 ```
 
 CLI builds via `xcodebuild` work. Use this to verify changes compile.
+The project uses `xcodegen` — run `xcodegen generate` after editing `project.yml`.
 
 ## Project Overview
 
@@ -17,6 +22,18 @@ Redactor is a macOS app for anonymizing clinical documentation. It detects and r
 - **MLX Swift** - Local LLM for PII review (requires Apple Silicon)
 - **XLM-RoBERTa** - CoreML model for NER
 - **AWS Bedrock** - Cloud AI via Lambda proxy (AU region)
+
+## Targets
+
+- **Redactor** — Full-featured app with AI analysis (Bedrock), live sessions, transcription
+- **Redactor Lite** — Simplified 3-panel app for colleagues: Redact → Copy out → Paste back → Restore. No AI integration, no live sessions. Shares all engine code (recognizers, entity mapping, overlap resolution) with the full app.
+
+Lite-specific files live in `ClinicalAnon/RedactorLite/`:
+- `RedactorLiteApp.swift` — App entry point
+- `LiteViewModel.swift` — Coordinates RedactPhaseState + restore
+- `LiteRedactorView.swift` — 3-panel UI with entity sidebar
+
+The Lite target excludes full-app Views (MainContentView, phase views, session views) and ViewModels (WorkflowViewModel, ImprovePhaseState) but shares everything else.
 
 ## Feature Branches
 

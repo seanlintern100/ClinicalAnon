@@ -577,6 +577,19 @@ class EntityMapping: ObservableObject {
             // New mapping
             mappings[key] = (original: originalText, replacement: replacementCode)
         }
+
+        // Ensure a RedactedPerson exists for person codes so variant restoration works.
+        // Without this, reclassified entities (e.g., PERSON→CLIENT) may lack a RedactedPerson,
+        // causing AI-generated variant codes like [CLIENT_J_FIRST] to be unmapped at restore time.
+        let isPersonCode = replacementCode.contains("PERSON") ||
+                           replacementCode.contains("CLIENT") ||
+                           replacementCode.contains("PROVIDER")
+        if isPersonCode, let baseId = extractBaseId(from: replacementCode) {
+            if redactedPersons[baseId] == nil {
+                let person = RedactedPerson.parse(fullName: originalText, baseId: baseId)
+                redactedPersons[baseId] = person
+            }
+        }
     }
 
     /// Check if a mapping exists for a given original text (case-insensitive)

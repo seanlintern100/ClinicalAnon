@@ -16,7 +16,6 @@ struct PhaseIndicator: View {
     // MARK: - Properties
 
     @ObservedObject var viewModel: WorkflowViewModel
-    @AppStorage(SettingsKeys.aiAnalysisEnabled) private var aiAnalysisEnabled: Bool = SettingsKeys.aiAnalysisEnabledDefault
 
     // MARK: - Body
 
@@ -26,7 +25,6 @@ struct PhaseIndicator: View {
                 PhaseStep(
                     phase: phase,
                     currentPhase: viewModel.currentPhase,
-                    displayName: phase == .improve && !aiAnalysisEnabled ? "Paste Back" : phase.displayName,
                     onTap: {
                         // Only allow navigating backward to completed phases
                         if phase.stepNumber < viewModel.currentPhase.stepNumber {
@@ -53,7 +51,6 @@ private struct PhaseStep: View {
 
     let phase: WorkflowPhase
     let currentPhase: WorkflowPhase
-    let displayName: String
     let onTap: () -> Void
 
     private var state: StepState {
@@ -85,7 +82,7 @@ private struct PhaseStep: View {
                     }
                 }
 
-                Text(displayName)
+                Text(phase.displayName)
                     .font(DesignSystem.Typography.caption)
                     .fontWeight(state == .current ? .semibold : .regular)
                     .foregroundColor(textColor)

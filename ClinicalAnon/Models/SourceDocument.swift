@@ -16,7 +16,7 @@ struct SourceDocument: Identifiable, Codable {
     var description: String           // Optional user description
     let originalText: String          // Original input text
     let redactedText: String          // Redacted version with placeholders
-    let entities: [Entity]            // Entities detected in this document
+    var entities: [Entity]            // Entities detected in this document
     let timestamp: Date               // When document was added
     var textInputType: TextInputType  // Classification of document type
     var textInputTypeDescription: String  // Custom description if type is .other

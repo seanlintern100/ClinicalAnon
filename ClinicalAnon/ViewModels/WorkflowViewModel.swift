@@ -430,7 +430,8 @@ class WorkflowViewModel: ObservableObject {
     /// If variant detection fails, shows prompt for user to select variant
     /// - Parameter skipCacheRebuild: If true, skips cache rebuild (for batch operations)
     func mergeEntities(alias: Entity, into primary: Entity, skipCacheRebuild: Bool = false) {
-        guard alias.type == primary.type else {
+        // Allow merging across person subtypes (client/provider/other), block other cross-type merges
+        guard alias.type == primary.type || (alias.type.isPerson && primary.type.isPerson) else {
             #if false  // DEBUG disabled for perf testing
             // print("WorkflowViewModel.mergeEntities: Cannot merge different entity types")
             #endif
@@ -438,7 +439,7 @@ class WorkflowViewModel: ObservableObject {
         }
 
         // Non-person entities: skip variant detection, use simple merge
-        guard alias.type.isPerson else {
+        guard alias.type.isPerson || primary.type.isPerson else {
             _ = engine.entityMapping.mergeMapping(alias: alias.originalText, into: primary.originalText)
             completeMerge(alias: alias, into: primary, skipCacheRebuild: skipCacheRebuild)
             return

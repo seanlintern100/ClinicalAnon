@@ -16,8 +16,6 @@ struct MainContentView: View {
     // MARK: - Properties
 
     @EnvironmentObject var viewModel: WorkflowViewModel
-    @AppStorage(SettingsKeys.liveSessionEnabled) private var liveSessionEnabled: Bool = SettingsKeys.liveSessionEnabledDefault
-    @AppStorage(SettingsKeys.aiAnalysisEnabled) private var aiAnalysisEnabled: Bool = SettingsKeys.aiAnalysisEnabledDefault
 
     // MARK: - Body
 
@@ -75,7 +73,7 @@ struct MainContentView: View {
     private var currentHelpContentType: HelpContentType {
         switch viewModel.currentPhase {
         case .redact: return .redactPhase
-        case .improve: return aiAnalysisEnabled ? .improvePhase : .pasteBackPhase
+        case .improve: return .improvePhase
         case .restore: return .restorePhase
         }
     }
@@ -98,16 +96,14 @@ struct MainContentView: View {
                 HelpButton(action: showHelp)
 
                 // Sessions button (opens/shows session window)
-                if liveSessionEnabled {
-                    Button(action: { SessionWindowController.shared.showSessionWindow() }) {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            Image(systemName: "waveform")
-                            Text("Sessions")
-                        }
-                        .font(DesignSystem.Typography.caption)
+                Button(action: { SessionWindowController.shared.showSessionWindow() }) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: "waveform")
+                        Text("Sessions")
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .font(DesignSystem.Typography.caption)
                 }
+                .buttonStyle(SecondaryButtonStyle())
 
                 Spacer()
             }
@@ -141,11 +137,7 @@ struct MainContentView: View {
         case .redact:
             RedactPhaseView(viewModel: viewModel)
         case .improve:
-            if aiAnalysisEnabled {
-                ImprovePhaseView(viewModel: viewModel)
-            } else {
-                PasteBackPhaseView(viewModel: viewModel)
-            }
+            ImprovePhaseView(viewModel: viewModel)
         case .restore:
             RestorePhaseView(viewModel: viewModel)
         }

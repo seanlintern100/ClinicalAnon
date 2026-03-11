@@ -418,6 +418,85 @@ extension View {
     func baseElevation() -> some View {
         self.background(DesignSystem.Colors.surface)
     }
+
+    /// Apply glass panel styling (Portal-inspired glassmorphism)
+    func glassPanel(cornerRadius: CGFloat = DesignSystem.CornerRadius.xlarge) -> some View {
+        self
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(Color.white.opacity(0.55))
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+    }
+
+    /// Apply glass sidebar styling
+    func glassSidebar() -> some View {
+        self
+            .background(
+                Color.white.opacity(0.65)
+                    .background(.ultraThinMaterial)
+            )
+    }
+}
+
+// MARK: - Gradient Page Background (Portal-inspired)
+
+/// Subtle multi-layer gradient background matching the Portal web app
+struct GradientPageBackground: View {
+    var body: some View {
+        ZStack {
+            // Base: warm white to cool teal-tinted top
+            LinearGradient(
+                colors: [
+                    Color(red: 235/255, green: 244/255, blue: 245/255), // #EBF4F5 cool teal top
+                    Color(red: 240/255, green: 244/255, blue: 244/255), // #F0F4F4 mid
+                    DesignSystem.Colors.warmWhite,                       // #FAF7F4 warm bottom
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Teal orb top-left
+            RadialGradient(
+                colors: [
+                    DesignSystem.Colors.primaryTeal.opacity(0.10),
+                    Color.clear
+                ],
+                center: UnitPoint(x: 0.15, y: 0.10),
+                startRadius: 0,
+                endRadius: 500
+            )
+
+            // Sand orb right
+            RadialGradient(
+                colors: [
+                    DesignSystem.Colors.sandDark.opacity(0.08),
+                    Color.clear
+                ],
+                center: UnitPoint(x: 0.85, y: 0.35),
+                startRadius: 0,
+                endRadius: 400
+            )
+
+            // Subtle orange accent top-right
+            RadialGradient(
+                colors: [
+                    DesignSystem.Colors.orange.opacity(0.04),
+                    Color.clear
+                ],
+                center: UnitPoint(x: 1.0, y: 0.15),
+                startRadius: 0,
+                endRadius: 300
+            )
+        }
+        .ignoresSafeArea()
+    }
 }
 
 // MARK: - Preview Helper
