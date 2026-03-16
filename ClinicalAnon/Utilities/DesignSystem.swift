@@ -87,23 +87,41 @@ struct DesignSystem {
 
         // MARK: Highlight Colors (Entity Types)
 
-        /// Person/Name highlight - Light blue
-        static let highlightPerson = Color(red: 173/255, green: 216/255, blue: 230/255, opacity: 0.5)  // Light blue
+        /// Person/Name highlight - Light blue / dark mode: deeper blue
+        static let highlightPerson = Color(
+            light: Color(red: 173/255, green: 216/255, blue: 230/255, opacity: 0.5),
+            dark: Color(red: 70/255, green: 130/255, blue: 180/255, opacity: 0.4)
+        )
 
-        /// Organization highlight - Light purple/lavender
-        static let highlightOrganization = Color(red: 221/255, green: 160/255, blue: 221/255, opacity: 0.5)  // Plum
+        /// Organization highlight - Light purple / dark mode: deeper purple
+        static let highlightOrganization = Color(
+            light: Color(red: 221/255, green: 160/255, blue: 221/255, opacity: 0.5),
+            dark: Color(red: 160/255, green: 100/255, blue: 180/255, opacity: 0.4)
+        )
 
-        /// Date highlight - Light green
-        static let highlightDate = Color(red: 144/255, green: 238/255, blue: 144/255, opacity: 0.5)  // Light green
+        /// Date highlight - Light green / dark mode: deeper green
+        static let highlightDate = Color(
+            light: Color(red: 144/255, green: 238/255, blue: 144/255, opacity: 0.5),
+            dark: Color(red: 60/255, green: 160/255, blue: 80/255, opacity: 0.4)
+        )
 
-        /// Location highlight - Light orange/peach
-        static let highlightLocation = Color(red: 255/255, green: 218/255, blue: 185/255, opacity: 0.5)  // Peach
+        /// Location highlight - Light orange / dark mode: deeper orange
+        static let highlightLocation = Color(
+            light: Color(red: 255/255, green: 218/255, blue: 185/255, opacity: 0.5),
+            dark: Color(red: 200/255, green: 130/255, blue: 60/255, opacity: 0.4)
+        )
 
-        /// Contact (email/phone) highlight - Light pink
-        static let highlightContact = Color(red: 255/255, green: 182/255, blue: 193/255, opacity: 0.5)  // Light pink
+        /// Contact (email/phone) highlight - Light pink / dark mode: deeper pink
+        static let highlightContact = Color(
+            light: Color(red: 255/255, green: 182/255, blue: 193/255, opacity: 0.5),
+            dark: Color(red: 200/255, green: 80/255, blue: 100/255, opacity: 0.4)
+        )
 
-        /// Identifier (IDs) highlight - Light gray
-        static let highlightIdentifier = Color(red: 211/255, green: 211/255, blue: 211/255, opacity: 0.5)  // Light gray
+        /// Identifier (IDs) highlight - Light gray / dark mode: medium gray
+        static let highlightIdentifier = Color(
+            light: Color(red: 211/255, green: 211/255, blue: 211/255, opacity: 0.5),
+            dark: Color(red: 120/255, green: 120/255, blue: 130/255, opacity: 0.4)
+        )
 
         /// Yellow highlight for entities (30% opacity) - deprecated, use type-specific colors
         static let highlightYellow = Color.yellow.opacity(0.3)
@@ -114,13 +132,22 @@ struct DesignSystem {
         // MARK: Card & Panel Colors
 
         /// Warm panel background (source/input panels)
-        static let panelWarm = Color(red: 245/255, green: 243/255, blue: 239/255)  // #F5F3EF
+        static let panelWarm = Color(
+            light: Color(red: 245/255, green: 243/255, blue: 239/255),  // #F5F3EF
+            dark: Color(red: 38/255, green: 38/255, blue: 40/255)       // #262628
+        )
 
         /// Warm card background
-        static let cardWarm = Color(red: 255/255, green: 253/255, blue: 249/255)   // #FFFDF9
+        static let cardWarm = Color(
+            light: Color(red: 255/255, green: 253/255, blue: 249/255),  // #FFFDF9
+            dark: Color(red: 50/255, green: 50/255, blue: 52/255)       // #323234
+        )
 
         /// Neutral panel background (output panels)
-        static let panelNeutral = Color(red: 248/255, green: 248/255, blue: 248/255) // #F8F8F8
+        static let panelNeutral = Color(
+            light: Color(red: 248/255, green: 248/255, blue: 248/255),  // #F8F8F8
+            dark: Color(red: 42/255, green: 42/255, blue: 44/255)       // #2A2A2C
+        )
     }
 
     // MARK: - Typography
@@ -427,7 +454,8 @@ extension View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(Color.white.opacity(0.55))
+                            .fill(Color(light: Color.white.opacity(0.55),
+                                        dark: Color.white.opacity(0.08)))
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
@@ -439,7 +467,8 @@ extension View {
     func glassSidebar() -> some View {
         self
             .background(
-                Color.white.opacity(0.65)
+                Color(light: Color.white.opacity(0.65),
+                      dark: Color.white.opacity(0.08))
                     .background(.ultraThinMaterial)
             )
     }
@@ -449,51 +478,88 @@ extension View {
 
 /// Subtle multi-layer gradient background matching the Portal web app
 struct GradientPageBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ZStack {
-            // Base: warm white to cool teal-tinted top
-            LinearGradient(
-                colors: [
-                    Color(red: 235/255, green: 244/255, blue: 245/255), // #EBF4F5 cool teal top
-                    Color(red: 240/255, green: 244/255, blue: 244/255), // #F0F4F4 mid
-                    DesignSystem.Colors.warmWhite,                       // #FAF7F4 warm bottom
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            if colorScheme == .dark {
+                // Dark mode: subtle dark gradient with muted brand accents
+                LinearGradient(
+                    colors: [
+                        Color(red: 22/255, green: 24/255, blue: 28/255),   // Dark blue-gray top
+                        Color(red: 26/255, green: 26/255, blue: 28/255),   // Mid
+                        Color(red: 28/255, green: 28/255, blue: 30/255),   // #1C1C1E bottom
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
 
-            // Teal orb top-left
-            RadialGradient(
-                colors: [
-                    DesignSystem.Colors.primaryTeal.opacity(0.10),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.15, y: 0.10),
-                startRadius: 0,
-                endRadius: 500
-            )
+                // Teal orb top-left (dimmed)
+                RadialGradient(
+                    colors: [
+                        DesignSystem.Colors.primaryTeal.opacity(0.06),
+                        Color.clear
+                    ],
+                    center: UnitPoint(x: 0.15, y: 0.10),
+                    startRadius: 0,
+                    endRadius: 500
+                )
 
-            // Sand orb right
-            RadialGradient(
-                colors: [
-                    DesignSystem.Colors.sandDark.opacity(0.08),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.85, y: 0.35),
-                startRadius: 0,
-                endRadius: 400
-            )
+                // Sand orb right (dimmed)
+                RadialGradient(
+                    colors: [
+                        DesignSystem.Colors.sandDark.opacity(0.04),
+                        Color.clear
+                    ],
+                    center: UnitPoint(x: 0.85, y: 0.35),
+                    startRadius: 0,
+                    endRadius: 400
+                )
+            } else {
+                // Light mode: warm white to cool teal-tinted top
+                LinearGradient(
+                    colors: [
+                        Color(red: 235/255, green: 244/255, blue: 245/255), // #EBF4F5 cool teal top
+                        Color(red: 240/255, green: 244/255, blue: 244/255), // #F0F4F4 mid
+                        DesignSystem.Colors.warmWhite,                       // #FAF7F4 warm bottom
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
 
-            // Subtle orange accent top-right
-            RadialGradient(
-                colors: [
-                    DesignSystem.Colors.orange.opacity(0.04),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 1.0, y: 0.15),
-                startRadius: 0,
-                endRadius: 300
-            )
+                // Teal orb top-left
+                RadialGradient(
+                    colors: [
+                        DesignSystem.Colors.primaryTeal.opacity(0.10),
+                        Color.clear
+                    ],
+                    center: UnitPoint(x: 0.15, y: 0.10),
+                    startRadius: 0,
+                    endRadius: 500
+                )
+
+                // Sand orb right
+                RadialGradient(
+                    colors: [
+                        DesignSystem.Colors.sandDark.opacity(0.08),
+                        Color.clear
+                    ],
+                    center: UnitPoint(x: 0.85, y: 0.35),
+                    startRadius: 0,
+                    endRadius: 400
+                )
+
+                // Subtle orange accent top-right
+                RadialGradient(
+                    colors: [
+                        DesignSystem.Colors.orange.opacity(0.04),
+                        Color.clear
+                    ],
+                    center: UnitPoint(x: 1.0, y: 0.15),
+                    startRadius: 0,
+                    endRadius: 300
+                )
+            }
         }
         .ignoresSafeArea()
     }
