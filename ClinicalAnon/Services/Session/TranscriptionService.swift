@@ -777,11 +777,17 @@ class TranscriptionService: ObservableObject {
             let micEnd = mic.endTime
             let micDuration = max(micEnd - micStart, 0.1)
 
-            // Calculate how much of this clinician segment overlaps with ANY system audio
+            // Calculate how much of this clinician segment overlaps with ANY system audio.
+            // Shrink system audio windows by 2s on each end — Whisper timestamps are imprecise
+            // and extend beyond actual speech, which would incorrectly clip the next speaker.
+            let boundary: TimeInterval = 2.0
             var totalOverlap: TimeInterval = 0
             for sys in otherSegments {
-                let overlapStart = max(micStart, sys.startTime)
-                let overlapEnd = min(micEnd, sys.endTime)
+                let trimmedStart = sys.startTime + boundary
+                let trimmedEnd = sys.endTime - boundary
+                guard trimmedEnd > trimmedStart else { continue } // Skip very short segments
+                let overlapStart = max(micStart, trimmedStart)
+                let overlapEnd = min(micEnd, trimmedEnd)
                 if overlapEnd > overlapStart {
                     totalOverlap += overlapEnd - overlapStart
                 }
