@@ -42,7 +42,7 @@ struct RecordingWindowView: View {
 
     /// Whether first-time setup (folder + model) is needed
     private var needsFirstTimeSetup: Bool {
-        !coworkExport.hasRootFolder || !transcriptionService.isModelLoaded
+        !coworkExport.hasRootFolder || !transcriptionService.isModelCached(size: transcriptionService.selectedModelSize)
     }
 
     // MARK: - Body
