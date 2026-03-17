@@ -266,6 +266,8 @@ function Dashboard() {
   const [complete,setComplete]=useState(false);
   const [expanded,setExpanded]=useState(null);
   const [viewMode,setViewMode]=useState("session");
+  const [wallElapsed,setWallElapsed]=useState(0); // real-time seconds since first data
+  const firstDataAt=useRef(null); // Date.now() when first state received
   const pollRef=useRef(null);
 
   const q=`?token=${AUTH_TOKEN}`;
@@ -281,6 +283,17 @@ function Dashboard() {
 
   useEffect(()=>{poll();pollRef.current=setInterval(poll,POLL_MS);return()=>clearInterval(pollRef.current);},[poll]);
   useEffect(()=>{if(complete&&pollRef.current){clearInterval(pollRef.current);pollRef.current=null;}},[complete]);
+
+  // Real-time wall clock timer — starts when first session data arrives
+  useEffect(()=>{
+    if(!state) return;
+    if(!firstDataAt.current) firstDataAt.current=Date.now();
+    const iv=setInterval(()=>{
+      if(complete) return;
+      setWallElapsed(Math.floor((Date.now()-firstDataAt.current)/1000));
+    },1000);
+    return()=>clearInterval(iv);
+  },[state,complete]);
 
   const s=state;
   const parseTS=ts=>{if(!ts)return 0;const p=ts.split(":");return(parseInt(p[0])||0)*3600+(parseInt(p[1])||0)*60+(parseInt(p[2])||0);};
@@ -310,10 +323,10 @@ function Dashboard() {
   );
 
   const DUR=s.session_duration_seconds||3000;
-  const elapsed=parseTS(s.last_chunk_timestamp);
-  const fmt=sec=>`${Math.floor(sec/60)}:${Math.floor(sec%60).toString().padStart(2,"0")}`;
-  const remaining=DUR-elapsed;
-  const pPct=(elapsed/DUR)*100;
+  const elapsed=wallElapsed; // real-time wall clock, not chunk timestamps
+  const fmt=sec=>{const m=Math.floor(Math.abs(sec)/60);const ss=Math.floor(Math.abs(sec)%60);return `${sec<0?"-":""}${m}:${ss.toString().padStart(2,"0")}`;};
+  const remaining=Math.max(0,DUR-elapsed);
+  const pPct=Math.min(100,(elapsed/DUR)*100);
   const pColor=complete?C.green:remaining<5*60?C.red:remaining<12*60?C.amber:C.teal;
 
   const clientTalk=s.speaker_totals?.client_talk_pct||0;
