@@ -509,6 +509,9 @@ class TranscriptionService: ObservableObject {
         // Sort by start time
         allSegments.sort { $0.startTime < $1.startTime }
 
+        // Remove echo: mic segments that are actually client speech picked up through speakers
+        allSegments = removeEchoSegments(allSegments)
+
         // Detect overlapping speech between speakers
         allSegments = annotateOverlaps(allSegments)
 
@@ -753,6 +756,59 @@ class TranscriptionService: ObservableObject {
     /// Detect and annotate overlapping speech in segments
     /// - Parameter segments: Segments from transcription
     /// - Returns: Segments with overlap annotations
+    // MARK: - Echo Removal
+
+    /// Remove clinician segments that are actually echo of client speech picked up by the mic.
+    /// Compares timing and text similarity — if a clinician segment overlaps with a system audio
+    /// segment and the text is similar, the clinician segment is echo and gets dropped.
+    private func removeEchoSegments(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
+        let clinicianSegments = segments.filter { $0.speaker == .clinician }
+        let otherSegments = segments.filter { $0.speaker == .other }
+
+        guard !clinicianSegments.isEmpty && !otherSegments.isEmpty else { return segments }
+
+        var echoIds = Set<UUID>()
+
+        for mic in clinicianSegments {
+            // Find system audio segments that overlap in time (within ±3 seconds)
+            let overlapping = otherSegments.filter { sys in
+                let timeOverlap = mic.startTime < sys.endTime + 3.0 && mic.endTime > sys.startTime - 3.0
+                return timeOverlap
+            }
+
+            guard !overlapping.isEmpty else { continue }
+
+            // Check text similarity against each overlapping system segment
+            let micWords = Set(mic.text.lowercased().split(separator: " ").map(String.init))
+            guard micWords.count >= 2 else { continue } // Skip very short segments
+
+            for sys in overlapping {
+                let sysWords = Set(sys.text.lowercased().split(separator: " ").map(String.init))
+                guard sysWords.count >= 2 else { continue }
+
+                // Jaccard similarity: shared words / total unique words
+                let shared = micWords.intersection(sysWords).count
+                let total = micWords.union(sysWords).count
+                let similarity = total > 0 ? Float(shared) / Float(total) : 0
+
+                if similarity > 0.25 {
+                    // 25% word overlap with time overlap = echo
+                    echoIds.insert(mic.id)
+                    #if DEBUG
+                    print("TranscriptionService: [ECHO] Dropping clinician segment (similarity=\(String(format: "%.0f%%", similarity * 100))): \"\(mic.text.prefix(60))...\"")
+                    #endif
+                    break
+                }
+            }
+        }
+
+        if !echoIds.isEmpty {
+            print("TranscriptionService: [ECHO] Removed \(echoIds.count) echo segments from clinician stream")
+        }
+
+        return segments.filter { !echoIds.contains($0.id) }
+    }
+
     func annotateOverlaps(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
         return overlapDetector.annotateOverlaps(segments: segments)
     }
