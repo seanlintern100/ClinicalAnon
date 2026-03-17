@@ -157,7 +157,7 @@ struct RecordingSettingsView: View {
                 .padding()
             }
         }
-        .frame(width: 450, height: 550)
+        .frame(minWidth: 400, minHeight: 400)
     }
 
     // MARK: - Helpers

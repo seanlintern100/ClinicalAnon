@@ -66,6 +66,6 @@ struct LiteSettingsView: View {
                 .tabItem { Label("Recording", systemImage: "mic.circle") }
                 .tag(Tab.recording)
         }
-        .frame(width: 500, height: 500)
+        .frame(width: 500, height: 650)
     }
 }
