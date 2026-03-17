@@ -427,9 +427,10 @@ function Dashboard() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,
         height:"calc(100vh - 290px)"}}>
 
-        {/* LEFT: Agenda */}
-        <div style={{...card,gap:14}}>
-          <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+        {/* LEFT: Agenda + Themes */}
+        <div style={{display:"flex",flexDirection:"column",gap:14,overflow:"hidden"}}>
+          {/* Therapist Focus — compact */}
+          <div style={{...card,flex:"0 0 auto",maxHeight:"28%",gap:8}}>
             <SL label="Therapist Focus"/>
             <div style={{flex:1,overflowY:"auto"}}>
               {tAgenda.length===0
@@ -442,7 +443,8 @@ function Dashboard() {
               ))}
             </div>
           </div>
-          <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          {/* Client Agenda — compact */}
+          <div style={{...card,flex:"0 0 auto",maxHeight:"28%",gap:8}}>
             <SL label="Client Agenda"/>
             <div style={{flex:1,overflowY:"auto"}}>
               {cAgenda.length===0
@@ -454,20 +456,8 @@ function Dashboard() {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* RIGHT: Scratch Pad */}
-        <div style={{...card,gap:14}}>
-          <div style={{flexShrink:0,maxHeight:"38%",overflow:"hidden",
-            display:"flex",flexDirection:"column"}}>
-            <SL label="People & Details"/>
-            <div style={{overflowY:"auto"}}>
-              {people.length===0
-                ?<span style={{fontSize:13,color:C.textDim,fontStyle:"italic"}}>Listening\u2026</span>
-                :people.map((p,i)=><PersonCard key={i} person={p} em={em}/>)}
-            </div>
-          </div>
-          <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          {/* Themes */}
+          <div style={{...card,flex:1,overflow:"hidden",gap:8}}>
             <SL label={`Themes${themes.length>0?`  \u00B7  ${themes.length}`:""}`}/>
             <div style={{flex:1,overflowY:"auto"}}>
               {themes.length===0
@@ -479,6 +469,16 @@ function Dashboard() {
                   onToggle={()=>setExpanded(expanded===th.id?null:th.id)}/>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* RIGHT: People & Details (full column) */}
+        <div style={{...card,gap:8}}>
+          <SL label="People & Details"/>
+          <div style={{flex:1,overflowY:"auto"}}>
+            {people.length===0
+              ?<span style={{fontSize:13,color:C.textDim,fontStyle:"italic"}}>Listening\u2026</span>
+              :people.map((p,i)=><PersonCard key={i} person={p} em={em}/>)}
           </div>
         </div>
       </div>
