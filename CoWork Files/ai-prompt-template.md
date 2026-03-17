@@ -75,6 +75,18 @@ Confrontation rupture — client moves against:
 - Repeated content with increased emphasis after therapist moved on
 
 Only flag a rupture if the signal is clear in the NEW CHUNK when compared to recent context.
+
+RISK MONITORING:
+Continuously assess each chunk for clinical risk signals. Flag risk_signal if you detect:
+- Suicidal ideation: expressions of wanting to die, not wanting to be here, references to ending things, hopelessness about the future being unbearable
+- Self-harm: references to cutting, burning, hitting oneself, or other deliberate self-injury, current or recent
+- Harm to others: expressed intent or plan to hurt another person, threats, escalating anger with a specific target
+- Child safety: disclosures suggesting a child is being harmed, neglected, or is at risk
+- Acute distress: sudden dissociation, panic, or reality detachment that may require immediate clinical response
+
+Use clinical judgment — not keyword matching. Consider context, tone, and severity. A client discussing past self-harm in a reflective, recovery-oriented way is different from a client expressing current intent. Flag when the clinical signal warrants the therapist's immediate attention.
+
+Risk is persistent once flagged — it is never cleared during a session.
 ```
 
 ---
@@ -165,6 +177,12 @@ Return the delta JSON for this chunk.
   "rupture_signal": {
     "type": "withdrawal",
     "evidence": "Client turn length dropped from ~35 words to 4–6 words over last 3 turns"
+  },
+
+  "risk_signal": {
+    "type": "suicidal_ideation",
+    "severity": "high",
+    "evidence": "Client stated 'I don't see the point in carrying on' in context of hopelessness about future"
   }
 }
 ```

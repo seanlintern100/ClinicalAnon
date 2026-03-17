@@ -84,7 +84,7 @@ Once you have all the info, write a trigger file to the Cowork export folder. Th
 
 **Important:** The Redactor app must already be open (it starts the file watcher on launch). If it's not running, tell the therapist to open it first.
 
-**Step 1 — Find the export folder.** This is the same folder you monitor for chunk files. It is the workspace folder that has been selected/mounted for this session.
+**Step 1 — Find the export folder.** This is the folder where session subfolders (like `JB_2026-03-17_1430/`) appear — NOT the `CoWork Files/` directory. Look for existing session subfolders to confirm you have the right path. It is typically a sibling folder to `CoWork Files/` in the workspace, often called `TEMP Transcripts/` or similar. List the workspace root and look for a folder that contains session subdirectories.
 
 **Step 2 — Write the trigger file.** Create `.cowork_trigger.json` in the export root folder (NOT inside a session subfolder):
 
@@ -125,33 +125,63 @@ Cowork handles:
 - Processing chunks (local calculations + AI analysis)
 - Writing `session_state.json` to the session folder (which the app's HTTP server serves to the dashboard)
 
-Once the app is recording, chunk files will appear in the session folder. Proceed to **Folder Watching** below to start processing.
+Once the app is recording, chunk files will appear in the session folder. **Immediately** start the polling loop below — do not wait for the user to prompt you.
 
 ---
 
-## Folder Watching
+## Orchestration Loop
 
-You must continuously monitor the session folder for new chunk files throughout the recording session.
+You (Cowork/Claude) are the orchestrator. You run a continuous loop that handles BOTH local calculations AND AI analysis. Do not delegate to a long-running background process — you are the loop.
 
-### How to poll
+### CRITICAL: Stay active and proactive
 
-List the session folder every **5 seconds** and compare against the chunks you have already processed. When a new `chunk_NNN.json` file appears, process it immediately through the pipeline (Steps 1–5 below).
+**Do not go passive.** After writing the trigger file and confirming the app started, immediately begin the orchestration loop. Do not wait for the user to prompt you. Continue looping until `session_complete.json` appears.
+
+### The loop
+
+Each iteration:
+
+1. **Run the pipeline (one-shot).** Call `session_pipeline.py` — it processes any new chunks (local calculations) and merges any pending AI deltas, writes `session_state.json`, and exits with a JSON status report.
+
+```bash
+python3 "/path/to/CoWork Files/session_pipeline.py" "/path/to/export/folder"
+```
+
+Output tells you what's new:
+```json
+{"session_path": "/path/to/session", "new_chunks": [3, 4], "new_deltas": [], "total_chunks": 4, "complete": false}
+```
+
+2. **AI analysis.** If `new_chunks` is non-empty, read each new chunk file and perform AI analysis following the prompt template in `ai-prompt-template.md`. Generate the delta JSON and write it to the session folder as `ai_delta_NNN.json` (matching the chunk index).
+
+3. **Merge the delta.** Run `session_pipeline.py` again — it picks up the new delta file and merges it into `session_state.json`. The dashboard updates on its next poll.
+
+4. **Sleep ~10 seconds** (or less if chunks are arriving fast), then repeat from step 1.
+
+5. **Stop** when the pipeline reports `"complete": true`.
+
+### AI analysis details
+
+For each new chunk, you must:
+- Read the chunk JSON from the session folder
+- Read `session_state.json` for current agenda, people, themes (context for analysis)
+- Read recent client segments from prior chunks (for rupture detection)
+- Analyse the chunk following the system/user prompt in `ai-prompt-template.md`
+- Write the delta as `ai_delta_NNN.json` in the session folder
+
+**The AI analysis IS you (Claude) reasoning about the transcript.** You are not calling an external API — you read the chunk, think about it, and generate the delta JSON directly. This is where the real clinical value comes from: utterance classification, theme detection, agenda tracking, rupture signals.
+
+### Timing budget
+
+Chunks arrive every ~60 seconds. Your loop iteration (pipeline call + AI analysis + delta write + pipeline merge) should complete well within that window. Even at 20-30 seconds per iteration, you have plenty of headroom.
 
 ### Detecting a new session
 
-Watch the root export folder for new subdirectories. When a new folder appears containing `session_info.json`, that is a new session starting. Read `session_info.json` and `entity_map.json`, initialise session state, and begin polling for chunk files.
+The pipeline finds the most recent session folder automatically. Once you write the trigger and the app starts recording, just start calling the pipeline — it will find the session.
 
 ### When to stop
 
-Stop polling when `session_complete.json` appears in the session folder. This file is written by the app when the therapist stops the recording:
-
-```json
-{
-  "session_id": "JB_2026-03-17_1430",
-  "chunks_exported": 12,
-  "completed_at": "2026-03-17T15:22:04+13:00"
-}
-```
+Stop looping when the pipeline reports `"complete": true`. This means `session_complete.json` appeared in the session folder (the therapist stopped recording). Process any final chunks, write any final deltas, and do one last pipeline run to save final state.
 
 After `session_complete.json` appears:
 1. Process any remaining unprocessed chunks
