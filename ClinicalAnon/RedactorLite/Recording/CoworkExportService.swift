@@ -13,14 +13,14 @@ import Foundation
 struct ChunkSegmentJSON: Codable {
     let speaker: String
     let text: String
-    let start: TimeInterval
-    let end: TimeInterval
+    let timestamp: String
 }
 
 struct ChunkJSON: Codable {
     let chunk_index: Int
-    let timestamp_start: TimeInterval
-    let timestamp_end: TimeInterval
+    let session_id: String
+    let timestamp_start: String
+    let timestamp_end: String
     let segments: [ChunkSegmentJSON]
 }
 
@@ -40,6 +40,7 @@ class CoworkExportService: ObservableObject {
 
     private var chunkCounter: Int = 0
     private var lastExportedSegmentCount: Int = 0
+    private var sessionId: String = ""
 
     // MARK: - UserDefaults Keys
 
@@ -103,7 +104,7 @@ class CoworkExportService: ObservableObject {
 
     // MARK: - Session Lifecycle
 
-    /// Start a new export session — creates folder and writes session_info.json
+    /// Start a new export session — creates folder and writes session_info.json + entity_map.json
     func startSession(metadata: SessionMetadata) throws {
         guard let rootURL = exportRootFolderURL else {
             throw CoworkExportError.noRootFolder
@@ -120,18 +121,42 @@ class CoworkExportService: ObservableObject {
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
 
         sessionFolderURL = folderURL
+        sessionId = metadata.folderName
         chunkCounter = 0
         chunksExported = 0
         lastExportedSegmentCount = 0
         lastExportError = nil
 
-        // Write session_info.json
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        let infoData = try encoder.encode(metadata)
+        // Write session_info.json (spec-compliant format)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        let goals = metadata.sessionGoals
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        let sessionInfo: [String: Any] = [
+            "session_id": sessionId,
+            "session_type": metadata.sessionType.rawValue.lowercased(),
+            "session_date": dateFormatter.string(from: metadata.sessionDate),
+            "session_duration_minutes": metadata.sessionLengthMinutes,
+            "therapist_goals": goals,
+            "entity_map_version": "1"
+        ]
+
+        let infoData = try JSONSerialization.data(withJSONObject: sessionInfo, options: [.prettyPrinted, .sortedKeys])
         let infoURL = folderURL.appendingPathComponent("session_info.json")
         try infoData.write(to: infoURL, options: .atomic)
+
+        // Write initial entity_map.json (empty)
+        let initialMap: [String: Any] = [
+            "version": "1",
+            "mappings": [String: String]()
+        ]
+        let mapData = try JSONSerialization.data(withJSONObject: initialMap, options: [.prettyPrinted, .sortedKeys])
+        let mapURL = folderURL.appendingPathComponent("entity_map.json")
+        try mapData.write(to: mapURL, options: .atomic)
 
         metadata.saveAsLastUsed()
         print("CoworkExportService: Session started at \(folderURL.path)")
@@ -175,15 +200,15 @@ class CoworkExportService: ObservableObject {
             return ChunkSegmentJSON(
                 speaker: speakerLabel,
                 text: text,
-                start: segment.startTime,
-                end: segment.endTime
+                timestamp: formatTimestamp(segment.startTime)
             )
         }
 
         let chunk = ChunkJSON(
             chunk_index: chunkCounter,
-            timestamp_start: newSegments.first?.startTime ?? 0,
-            timestamp_end: newSegments.last?.endTime ?? 0,
+            session_id: sessionId,
+            timestamp_start: formatTimestamp(newSegments.first?.startTime ?? 0),
+            timestamp_end: formatTimestamp(newSegments.last?.endTime ?? 0),
             segments: chunkSegments
         )
 
@@ -202,15 +227,73 @@ class CoworkExportService: ObservableObject {
             lastExportError = "Failed to write chunk: \(error.localizedDescription)"
             print("CoworkExportService: Error writing chunk: \(error)")
         }
+
+        // Update entity_map.json with current mappings
+        updateEntityMap(for: session)
     }
 
-    /// Finalize the session export
+    /// Finalize the session export — writes session_complete.json marker
     func finalizeSession() {
+        // Write completion marker so Cowork knows to stop polling
+        if let folderURL = sessionFolderURL {
+            let marker: [String: Any] = [
+                "session_id": sessionId,
+                "chunks_exported": chunksExported,
+                "completed_at": ISO8601DateFormatter().string(from: Date())
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: marker, options: [.prettyPrinted, .sortedKeys]) {
+                let markerURL = folderURL.appendingPathComponent("session_complete.json")
+                try? data.write(to: markerURL, options: .atomic)
+            }
+        }
+
         if let rootURL = exportRootFolderURL {
             rootURL.stopAccessingSecurityScopedResource()
         }
         sessionFolderURL = nil
+        sessionId = ""
         print("CoworkExportService: Session finalized (\(chunksExported) chunks exported)")
+    }
+
+    // MARK: - Entity Map Export
+
+    /// Write current entity mappings to entity_map.json (replacement code → original text)
+    private func updateEntityMap(for session: LiveSession) {
+        guard let folderURL = sessionFolderURL else { return }
+
+        // Build inverted mapping: replacement code → original text
+        // allMappings returns (original, replacement) tuples
+        var invertedMap: [String: String] = [:]
+        for mapping in session.entityMapping.allMappings {
+            // Strip brackets from replacement for clean keys: "[PERSON_A]" → "PERSON_A"
+            var code = mapping.replacement
+            if code.hasPrefix("[") && code.hasSuffix("]") {
+                code = String(code.dropFirst().dropLast())
+            }
+            invertedMap[code] = mapping.original
+        }
+
+        let entityMap: [String: Any] = [
+            "version": "1",
+            "mappings": invertedMap
+        ]
+
+        do {
+            let mapData = try JSONSerialization.data(withJSONObject: entityMap, options: [.prettyPrinted, .sortedKeys])
+            let mapURL = folderURL.appendingPathComponent("entity_map.json")
+            try mapData.write(to: mapURL, options: .atomic)
+        } catch {
+            print("CoworkExportService: Failed to update entity map: \(error)")
+        }
+    }
+
+    // MARK: - Formatting Helpers
+
+    private func formatTimestamp(_ seconds: TimeInterval) -> String {
+        let h = Int(seconds) / 3600
+        let m = (Int(seconds) % 3600) / 60
+        let s = Int(seconds) % 60
+        return String(format: "%02d:%02d:%02d", h, m, s)
     }
 
     // MARK: - Speaker Label Mapping

@@ -20,7 +20,7 @@ struct LiveTranscriptPanel: View {
             // Header
             HStack {
                 Text("Transcript")
-                    .font(DesignSystem.Typography.heading)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Spacer()
                 if let session = session {
@@ -31,7 +31,7 @@ struct LiveTranscriptPanel: View {
             }
             .padding(DesignSystem.Spacing.medium)
 
-            Divider()
+            Divider().opacity(0.15)
 
             // Content
             if let session = session, !session.transcriptSegments.isEmpty {

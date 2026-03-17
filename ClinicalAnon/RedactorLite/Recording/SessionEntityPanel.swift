@@ -19,7 +19,7 @@ struct SessionEntityPanel: View {
             // Header
             HStack {
                 Text("Entities")
-                    .font(DesignSystem.Typography.heading)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Spacer()
                 if let session = session {
@@ -36,7 +36,7 @@ struct SessionEntityPanel: View {
             }
             .padding(DesignSystem.Spacing.medium)
 
-            Divider()
+            Divider().opacity(0.15)
 
             if let session = session, !session.detectedEntities.isEmpty {
                 entityList(session: session)

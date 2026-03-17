@@ -51,7 +51,7 @@ struct SessionSetupPanel: View {
     private var setupView: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
             Text("Session Setup")
-                .font(DesignSystem.Typography.heading)
+                .font(DesignSystem.Typography.subheading)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
             // Client Initials
@@ -176,7 +176,7 @@ struct SessionSetupPanel: View {
             // Header
             HStack {
                 Text("Recording")
-                    .font(DesignSystem.Typography.heading)
+                    .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Spacer()
                 Button(action: { showSettings = true }) {
@@ -255,7 +255,7 @@ struct SessionSetupPanel: View {
     private var stoppedView: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
             Text("Session Complete")
-                .font(DesignSystem.Typography.heading)
+                .font(DesignSystem.Typography.subheading)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
             // Summary

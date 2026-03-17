@@ -35,7 +35,7 @@ struct RecordingWindowView: View {
         ZStack {
             GradientPageBackground()
 
-            HStack(spacing: 0) {
+            HStack(spacing: DesignSystem.Spacing.medium) {
                 // Panel 1: Session Setup / Controls
                 SessionSetupPanel(
                     phase: $phase,
@@ -51,10 +51,8 @@ struct RecordingWindowView: View {
                     onResumeRecording: resumeRecording,
                     onTransferToRedactor: transferToRedactor
                 )
-                .frame(width: 260)
+                .frame(minWidth: 280, maxWidth: 320)
                 .glassPanel()
-
-                Divider()
 
                 // Panel 2: Live Transcript
                 LiveTranscriptPanel(
@@ -64,16 +62,16 @@ struct RecordingWindowView: View {
                 .frame(maxWidth: .infinity)
                 .glassPanel()
 
-                Divider()
-
                 // Panel 3: Detected Entities
                 SessionEntityPanel(
                     session: sessionManager.activeSession
                 )
-                .frame(width: 240)
+                .frame(minWidth: 240, maxWidth: 280)
                 .glassPanel()
             }
-            .padding(DesignSystem.Spacing.medium)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.bottom, DesignSystem.Spacing.medium)
+            .padding(.top, DesignSystem.Spacing.small)
         }
         .sheet(isPresented: $showSettings) {
             RecordingSettingsView(coworkExport: coworkExport)
