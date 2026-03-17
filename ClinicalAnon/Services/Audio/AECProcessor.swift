@@ -45,8 +45,7 @@ final class AECProcessor {
 
         self.bridge = AECBridge(sampleRate: Int32(sampleRate), noiseSuppressionEnabled: nsEnabled)
 
-        // Set default stream delay estimate (50ms is typical for laptop speakers/mic)
-        bridge.setStreamDelayMs(50)
+        // Stream delay is set by AECBridge default (120ms) or overridden by AudioCaptureService from UserDefaults
 
         isInitialized = bridge.isActive
 #if DEBUG

@@ -27,6 +27,7 @@ static const int kFrameSizeMs = 10;
     int _referenceFramesPending;  // Count reference frames to process before capture
     BOOL _hasVoice;  // Voice activity detection result
     float _voiceProbability;  // Voice probability 0.0-1.0
+    int _diagnosticCounter;  // For periodic diagnostic logging
 }
 
 - (instancetype)initWithSampleRate:(int)sampleRate {
@@ -160,6 +161,14 @@ static const int kFrameSizeMs = 10;
     // Process ALL complete 10ms frames to apply AEC to entire buffer
     int framesToProcess = count / _expectedFrameSize;
 
+    // Measure energy before AEC for diagnostics
+    float energyBefore = 0.0f;
+    int diagSamples = MIN(count, 480);
+    for (int i = 0; i < diagSamples; i++) {
+        energyBefore += samples[i] * samples[i];
+    }
+    energyBefore = sqrtf(energyBefore / diagSamples);
+
     // Lock to prevent concurrent access with AnalyzeReverseStream
     os_unfair_lock_lock(&_lock);
 
@@ -172,6 +181,22 @@ static const int kFrameSizeMs = 10;
 
         // ProcessStream modifies samples in-place with echo removed
         _apm->ProcessStream(channelPtrs, streamConfig, streamConfig, channelPtrs);
+    }
+
+    // Measure energy after AEC
+    float energyAfter = 0.0f;
+    for (int i = 0; i < diagSamples; i++) {
+        energyAfter += samples[i] * samples[i];
+    }
+    energyAfter = sqrtf(energyAfter / diagSamples);
+
+    // Log AEC effectiveness every ~5 seconds (500 frames at 10ms each)
+    _diagnosticCounter++;
+    if (_diagnosticCounter % 500 == 0) {
+        float reductionDb = (energyBefore > 0.0001f && energyAfter > 0.0001f)
+            ? 20.0f * log10f(energyAfter / energyBefore) : 0.0f;
+        NSLog(@"AECBridge: [DIAG] delay=%dms, energy before=%.4f after=%.4f reduction=%.1fdB",
+              _streamDelayMs, energyBefore, energyAfter, reductionDb);
     }
 
     // Get VAD statistics from WebRTC APM
@@ -202,7 +227,7 @@ static const int kFrameSizeMs = 10;
     if (_apm) {
         _apm->Initialize();
         _hasReceivedReference = NO;
-        _referenceFramesPending = 5;
+        _referenceFramesPending = 15;
 #ifdef DEBUG
         NSLog(@"AECBridge: Reset - AEC state cleared");
 #endif
