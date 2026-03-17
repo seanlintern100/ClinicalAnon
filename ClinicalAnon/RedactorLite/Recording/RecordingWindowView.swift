@@ -150,6 +150,15 @@ struct RecordingWindowView: View {
                 phase = .recording
                 errorMessage = nil
                 startLevelTimer()
+
+                // Start HTTP server and open dashboard in browser
+                if let sessionFolder = coworkExport.sessionFolderURL {
+                    SessionHTTPServer.shared.start(sessionFolder: sessionFolder)
+                    // Brief delay for server to bind, then open dashboard
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        SessionHTTPServer.shared.openDashboard()
+                    }
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -163,6 +172,11 @@ struct RecordingWindowView: View {
             coworkExport.finalizeSession()
             stopLevelTimer()
             phase = .stopped
+
+            // Keep server alive briefly for final dashboard view, then stop
+            DispatchQueue.main.asyncAfter(deadline: .now() + 120) {
+                SessionHTTPServer.shared.stop()
+            }
         }
     }
 

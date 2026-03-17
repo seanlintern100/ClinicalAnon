@@ -86,6 +86,7 @@
 		9A4D090C8EFC809FB9BA0238 /* AddCustomEntitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D6066AEE25F9E1A4FD496A /* AddCustomEntitySheet.swift */; };
 		9B7B2BA26EF227BFA7EDE1AD /* NZPhoneRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B16571DDCE065CA7A1D96A1 /* NZPhoneRecognizer.swift */; };
 		9D5745C3198DCB84F7ECA1BD /* UserInclusionRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7542F1D14F61F0CDFFA2ADAC /* UserInclusionRecognizer.swift */; };
+		9D7D9EA5649BD61E2E68D72D /* SessionHTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39AEE281FAFE854DEA7B6B6 /* SessionHTTPServer.swift */; };
 		9E144935796D58A6F68EAF3D /* AWSCredentialsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22DB2B5F3E1335B11F8AA173 /* AWSCredentialsManager.swift */; };
 		A140EA79B5D4FBB92A10083A /* TranscriptSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9A2DA52F7352379B6F372B /* TranscriptSegment.swift */; };
 		A23043CCB5904C0989A6D716 /* SourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A4488473B69644073207EA4 /* SourceDocument.swift */; };
@@ -253,6 +254,7 @@
 		E042FBD7835DEC6EDED6AA51 /* InclusionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InclusionSettingsView.swift; sourceTree = "<group>"; };
 		E37A69EB65B2D3F1BF8DAC56 /* EntityActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityActions.swift; sourceTree = "<group>"; };
 		E39AA02B94C43190B3535E10 /* WorkflowPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowPhase.swift; sourceTree = "<group>"; };
+		E39AEE281FAFE854DEA7B6B6 /* SessionHTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHTTPServer.swift; sourceTree = "<group>"; };
 		E4F517DF729F2ED6F872EEEE /* nz_places.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = nz_places.txt; sourceTree = "<group>"; };
 		E5FEF96E6EF292831B42911A /* RecordingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWindowController.swift; sourceTree = "<group>"; };
 		E651FEE8336560D0C0FE26EC /* RedactEntityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedactEntityRow.swift; sourceTree = "<group>"; };
@@ -439,6 +441,7 @@
 				E5FEF96E6EF292831B42911A /* RecordingWindowController.swift */,
 				2BD81FFEEF974D05C3073CDF /* RecordingWindowView.swift */,
 				CB19E34956779B296E9A276E /* SessionEntityPanel.swift */,
+				E39AEE281FAFE854DEA7B6B6 /* SessionHTTPServer.swift */,
 				48A33F12A6CC0077EEB9EA57 /* SessionMetadata.swift */,
 				7CA6A35EC144FB485103BAE0 /* SessionSetupPanel.swift */,
 			);
@@ -746,6 +749,7 @@
 				337C7848B111F75827E567BB /* SessionEncryptionService.swift in Sources */,
 				F441464002F637F1850042EE /* SessionEntityPanel.swift in Sources */,
 				B3A4CE415F4192248F8D52CB /* SessionExportService.swift in Sources */,
+				9D7D9EA5649BD61E2E68D72D /* SessionHTTPServer.swift in Sources */,
 				A7C455478E6634394659C3DD /* SessionManager.swift in Sources */,
 				5ED96BFC685AE4C92ED66BC3 /* SessionMetadata.swift in Sources */,
 				54D84D9F0CCDF241528F69E0 /* SessionSetupPanel.swift in Sources */,

@@ -38,11 +38,11 @@ static const int kFrameSizeMs = 10;
     self = [super init];
     if (self) {
         _sampleRate = sampleRate;
-        _streamDelayMs = 50;  // Default 50ms delay estimate
+        _streamDelayMs = 120;  // Default 120ms — typical for video calls through speakers
         _expectedFrameSize = sampleRate / (1000 / kFrameSizeMs);  // 480 at 48kHz
         _lock = OS_UNFAIR_LOCK_INIT;
         _hasReceivedReference = NO;
-        _referenceFramesPending = 5;  // Process 5 reference frames before enabling capture
+        _referenceFramesPending = 15;  // Process 15 reference frames (~312ms) before enabling capture
         _hasVoice = NO;
         _voiceProbability = 0.0f;
 

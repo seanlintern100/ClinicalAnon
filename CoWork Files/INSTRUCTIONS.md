@@ -111,11 +111,21 @@ EOF
 | `goals` | string | no | Session goals free text |
 | `multiSpeaker` | bool | no | true for couples/family/group (default: false) |
 
-**What happens:** The app detects the trigger file within 2 seconds, reads the metadata, deletes the trigger file, opens the recording window with pre-filled settings, and starts recording automatically. The therapist doesn't need to touch the app.
+**What happens:** The app detects the trigger file within 2 seconds, reads the metadata, deletes the trigger file, opens the recording window with pre-filled settings, starts recording, starts an HTTP server on `127.0.0.1:8787`, and opens the live dashboard in the default browser — all automatically. The therapist doesn't need to touch the app.
 
 ### After launch
 
-Once the app is recording, it will begin writing chunk files to the watched export folder. Proceed to **Folder Watching** below to start the pipeline.
+The app handles:
+- Recording and transcription
+- Exporting redacted chunks to the session folder
+- Serving the live dashboard via HTTP (`http://127.0.0.1:8787/dashboard`)
+- Opening the dashboard in the browser automatically
+
+Cowork handles:
+- Processing chunks (local calculations + AI analysis)
+- Writing `session_state.json` to the session folder (which the app's HTTP server serves to the dashboard)
+
+Once the app is recording, chunk files will appear in the session folder. Proceed to **Folder Watching** below to start processing.
 
 ---
 
