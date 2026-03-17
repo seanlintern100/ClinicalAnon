@@ -759,8 +759,11 @@ class TranscriptionService: ObservableObject {
     // MARK: - Echo Removal
 
     /// Remove clinician segments that are actually echo of client speech picked up by the mic.
-    /// Compares timing and text similarity — if a clinician segment overlaps with a system audio
-    /// segment and the text is similar, the clinician segment is echo and gets dropped.
+    ///
+    /// Strategy: If a clinician segment overlaps in time with a system audio segment, the mic
+    /// segment is almost certainly echo — the therapist can't be saying something at the exact
+    /// same moment the client is speaking through the system audio. We use time overlap as the
+    /// primary signal, with text similarity as a secondary confirmation for edge cases.
     private func removeEchoSegments(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
         let clinicianSegments = segments.filter { $0.speaker == .clinician }
         let otherSegments = segments.filter { $0.speaker == .other }
@@ -770,40 +773,33 @@ class TranscriptionService: ObservableObject {
         var echoIds = Set<UUID>()
 
         for mic in clinicianSegments {
-            // Find system audio segments that overlap in time (within ±3 seconds)
-            let overlapping = otherSegments.filter { sys in
-                let timeOverlap = mic.startTime < sys.endTime + 3.0 && mic.endTime > sys.startTime - 3.0
-                return timeOverlap
+            let micStart = mic.startTime
+            let micEnd = mic.endTime
+            let micDuration = max(micEnd - micStart, 0.1)
+
+            // Calculate how much of this clinician segment overlaps with ANY system audio
+            var totalOverlap: TimeInterval = 0
+            for sys in otherSegments {
+                let overlapStart = max(micStart, sys.startTime)
+                let overlapEnd = min(micEnd, sys.endTime)
+                if overlapEnd > overlapStart {
+                    totalOverlap += overlapEnd - overlapStart
+                }
             }
 
-            guard !overlapping.isEmpty else { continue }
+            let overlapRatio = totalOverlap / micDuration
 
-            // Check text similarity against each overlapping system segment
-            let micWords = Set(mic.text.lowercased().split(separator: " ").map(String.init))
-            guard micWords.count >= 2 else { continue } // Skip very short segments
-
-            for sys in overlapping {
-                let sysWords = Set(sys.text.lowercased().split(separator: " ").map(String.init))
-                guard sysWords.count >= 2 else { continue }
-
-                // Jaccard similarity: shared words / total unique words
-                let shared = micWords.intersection(sysWords).count
-                let total = micWords.union(sysWords).count
-                let similarity = total > 0 ? Float(shared) / Float(total) : 0
-
-                if similarity > 0.25 {
-                    // 25% word overlap with time overlap = echo
-                    echoIds.insert(mic.id)
-                    #if DEBUG
-                    print("TranscriptionService: [ECHO] Dropping clinician segment (similarity=\(String(format: "%.0f%%", similarity * 100))): \"\(mic.text.prefix(60))...\"")
-                    #endif
-                    break
-                }
+            if overlapRatio > 0.3 {
+                // >30% of the clinician segment's time is covered by system audio = echo
+                echoIds.insert(mic.id)
+                #if DEBUG
+                print("TranscriptionService: [ECHO] Dropping clinician segment (overlap=\(String(format: "%.0f%%", overlapRatio * 100))): \"\(mic.text.prefix(60))\"")
+                #endif
             }
         }
 
         if !echoIds.isEmpty {
-            print("TranscriptionService: [ECHO] Removed \(echoIds.count) echo segments from clinician stream")
+            print("TranscriptionService: [ECHO] Removed \(echoIds.count)/\(clinicianSegments.count) clinician segments (echo from system audio)")
         }
 
         return segments.filter { !echoIds.contains($0.id) }
