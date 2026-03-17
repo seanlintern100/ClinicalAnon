@@ -10,39 +10,108 @@ Redactor Lite exports redacted transcript chunks to a watched folder during live
 
 ## Session Setup (Before Recording)
 
-When the therapist asks to start a session, collect the following information conversationally before launching the app. Ask one question at a time.
+When the therapist asks to start a session, collect session info using the `AskUserQuestion` tool. Use **two** question blocks to keep it quick.
 
-### Required fields
+### Question block 1 — Session basics
 
-1. **Client ID** — Initials used to identify the client (e.g. "JB"). Ask: *"What are the client's initials?"*
-2. **Session type** — One of: `Therapy`, `Coaching`, `Supervision`, `Other`. If Other, ask for a brief description. Ask: *"What type of session is this — therapy, coaching, supervision, or other?"*
-3. **Session length** — Duration in minutes (default 50, range 10–180, step 5). Ask: *"How long is the session? (default 50 minutes)"*
-4. **Session goals** — What the therapist wants to focus on. Ask: *"What are your goals for this session?"*
-5. **Multiple speakers** — Whether more than one person is on the remote end (couples, family, group). This enables speaker diarization. Ask: *"Is anyone else joining the client today, or is it a 1:1 session?"*
+Ask all four questions in a single `AskUserQuestion` call:
+
+```
+Question 1: "What are the client's initials?"
+  header: "Client ID"
+  options: (use "Other" — the user always types initials as free text)
+  multiSelect: false
+
+Question 2: "What type of session is this?"
+  header: "Type"
+  options:
+    - label: "Therapy"        description: "Standard therapeutic session"
+    - label: "Coaching"       description: "Coaching or mentoring session"
+    - label: "Supervision"    description: "Clinical supervision session"
+    - label: "Other"          description: "Specify session type"
+  multiSelect: false
+
+Question 3: "How long is the session?"
+  header: "Length"
+  options:
+    - label: "50 min"         description: "Standard session (Recommended)"
+    - label: "30 min"         description: "Brief check-in"
+    - label: "80 min"         description: "Extended session"
+    - label: "90 min"         description: "Long session"
+  multiSelect: false
+
+Question 4: "Is anyone else joining the client today?"
+  header: "Speakers"
+  options:
+    - label: "1:1 session"    description: "Just the client on the remote end (Recommended)"
+    - label: "Multiple"       description: "Couples, family, or group — enables speaker identification"
+  multiSelect: false
+```
+
+### Question block 2 — Session goals
+
+After block 1, ask goals as free text:
+
+```
+Question 1: "What are your goals for this session?"
+  header: "Goals"
+  options:
+    - label: "General check-in"   description: "No specific focus area"
+    - label: "Continue previous"   description: "Continue from where last session left off"
+  multiSelect: false
+  (The therapist will typically choose "Other" and type specific goals)
+```
 
 ### Defaults
 
-- **Session date**: today (no need to ask unless the therapist wants to back-date)
-- **Session length**: 50 minutes — confirm rather than ask from scratch
-- **Multiple speakers**: off unless told otherwise
+- **Session date**: today (no need to ask)
+- **Session length**: 50 minutes is the default/recommended option
+- **Multiple speakers**: 1:1 is the default/recommended option
+
+### Mapping answers to URL parameters
+
+| Answer | URL parameter |
+|---|---|
+| Client initials (free text) | `initials=JB` |
+| Session type label | `type=Therapy` |
+| Length — extract number from label | `length=50` |
+| Goals (free text or label) | `goals=Explore+anxiety+triggers` |
+| Speakers — "1:1 session" → false, "Multiple" → true | `multiSpeaker=false` |
 
 ### Launching the app
 
-Once you have all the info, launch Redactor Lite directly into recording mode using the URL scheme:
+Once you have all the info, write a trigger file to the Cowork export folder. The Redactor app watches this folder and will auto-start recording when it finds the trigger.
+
+**Important:** The Redactor app must already be open (it starts the file watcher on launch). If it's not running, tell the therapist to open it first.
+
+**Step 1 — Find the export folder.** This is the same folder you monitor for chunk files. It is the workspace folder that has been selected/mounted for this session.
+
+**Step 2 — Write the trigger file.** Create `.cowork_trigger.json` in the export root folder (NOT inside a session subfolder):
 
 ```bash
-open "redactor-lite://record?initials=JB&type=Therapy&length=50&goals=Explore+anxiety+triggers&multiSpeaker=false"
+cat > /path/to/export/folder/.cowork_trigger.json << 'EOF'
+{
+  "initials": "JB",
+  "type": "Therapy",
+  "length": 50,
+  "goals": "Explore anxiety triggers",
+  "multiSpeaker": false
+}
+EOF
 ```
 
-**Parameter encoding:** URL-encode the `goals` value (spaces → `+` or `%20`). All other values are simple strings.
+**Field reference:**
 
-**What happens:** The app opens, the recording window appears with pre-filled metadata, and recording starts automatically. The therapist doesn't need to touch the app at all.
+| Field | Type | Required | Values |
+|---|---|---|---|
+| `initials` | string | yes | Client initials, e.g. "JB" |
+| `type` | string | no | "Therapy", "Coaching", "Supervision", "Other" (default: Therapy) |
+| `otherType` | string | no | Description if type is "Other" |
+| `length` | int | no | Minutes, 10–180 (default: 50) |
+| `goals` | string | no | Session goals free text |
+| `multiSpeaker` | bool | no | true for couples/family/group (default: false) |
 
-If the app is not installed or the URL scheme doesn't work, fall back to:
-```bash
-open -a "Redactor"
-```
-Then instruct the therapist to fill in the setup form manually and click "Start Recording".
+**What happens:** The app detects the trigger file within 2 seconds, reads the metadata, deletes the trigger file, opens the recording window with pre-filled settings, and starts recording automatically. The therapist doesn't need to touch the app.
 
 ### After launch
 

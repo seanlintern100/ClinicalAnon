@@ -59,6 +59,7 @@
 		5C79DBE3BC89A3B0AFAE393E /* LiteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60BEDA68EDE0FAB2B737093D /* LiteViewModel.swift */; };
 		5ED96BFC685AE4C92ED66BC3 /* SessionMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A33F12A6CC0077EEB9EA57 /* SessionMetadata.swift */; };
 		636D5D617C9B4FD998FA76A1 /* ExclusionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A899922CA47101C73867E8EB /* ExclusionSettingsView.swift */; };
+		6579F87110870F0B5043708E /* CoworkTriggerWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CC43A71ED96CA853B2D1FB /* CoworkTriggerWatcher.swift */; };
 		6660CAD6DED28B7D40A7E1E1 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C687FE880EAE820CCA3F73 /* ModelDownloadSheet.swift */; };
 		68B3CBA278D5410C4D4C3351 /* RecordingWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD81FFEEF974D05C3073CDF /* RecordingWindowView.swift */; };
 		6C977274807CF69003AB0C99 /* LiveTranscriptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60B301AA16F5A3C1E4ACDB0 /* LiveTranscriptPanel.swift */; };
@@ -224,6 +225,7 @@
 		AB74CF4C016018DD28A5CA3D /* UserExclusionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserExclusionManager.swift; sourceTree = "<group>"; };
 		B050F91B6E8A8A0A7A52BE81 /* ClinicalAnon-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ClinicalAnon-Bridging-Header.h"; sourceTree = "<group>"; };
 		B2947BC1E45EBA4D209EF181 /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
+		B7CC43A71ED96CA853B2D1FB /* CoworkTriggerWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoworkTriggerWatcher.swift; sourceTree = "<group>"; };
 		B80BE3BA06214218C806D68C /* Lora-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lora-Bold.ttf"; sourceTree = "<group>"; };
 		B8CB06DA5513EED4CC41ACC8 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		B9817C173F62CE3FC71F02EF /* OverlapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlapDetector.swift; sourceTree = "<group>"; };
@@ -430,6 +432,7 @@
 			isa = PBXGroup;
 			children = (
 				F910890E26CB4F723C50BDDF /* CoworkExportService.swift */,
+				B7CC43A71ED96CA853B2D1FB /* CoworkTriggerWatcher.swift */,
 				3921D8C41A155681994E077B /* FirstTimeSetupView.swift */,
 				D60B301AA16F5A3C1E4ACDB0 /* LiveTranscriptPanel.swift */,
 				A594416A84D072C3A92D08AC /* RecordingSettingsView.swift */,
@@ -685,6 +688,7 @@
 				80E1AA7DEECC4557167AFAD9 /* ClipboardHelper.swift in Sources */,
 				FF95567410154E5A4510A129 /* ConversationContext.swift in Sources */,
 				794535A25AA1D7BDA40589D9 /* CoworkExportService.swift in Sources */,
+				6579F87110870F0B5043708E /* CoworkTriggerWatcher.swift in Sources */,
 				D10A008A46F1D16E631B74BD /* DateNormalizer.swift in Sources */,
 				77070C1F6D2F5E7C93827F34 /* DateRecognizer.swift in Sources */,
 				83EF90D3711841281EEB6FE3 /* DesignSystem.swift in Sources */,

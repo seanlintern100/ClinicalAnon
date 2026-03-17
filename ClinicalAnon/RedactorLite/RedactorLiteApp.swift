@@ -23,6 +23,9 @@ struct RedactorLiteApp: App {
                 .onOpenURL { url in
                     handleRecordingURL(url)
                 }
+                .onAppear {
+                    CoworkTriggerWatcher.shared.startWatching()
+                }
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1400, height: 800)
