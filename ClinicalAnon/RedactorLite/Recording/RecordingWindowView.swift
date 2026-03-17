@@ -31,10 +31,12 @@ struct RecordingWindowView: View {
     @State private var errorMessage: String?
     @State private var multiSpeaker: Bool = false
 
-    // Timer to poll audio levels (SessionManager proxies are computed, not @Published)
+    // Timer to poll audio levels and duration (SessionManager level proxies are computed, not @Published,
+    // and session.recordingDuration changes don't propagate through sessionManager's objectWillChange)
     @State private var levelRefreshTimer: Timer?
     @State private var micLevel: Float = 0
     @State private var sysLevel: Float = 0
+    @State private var displayDuration: String = "0:00"
 
     /// Whether first-time setup (folder + model) is needed
     private var needsFirstTimeSetup: Bool {
@@ -55,6 +57,9 @@ struct RecordingWindowView: View {
                     errorMessage: $errorMessage,
                     showSettings: $showSettings,
                     multiSpeaker: $multiSpeaker,
+                    micLevel: micLevel,
+                    sysLevel: sysLevel,
+                    displayDuration: displayDuration,
                     sessionManager: sessionManager,
                     transcriptionService: transcriptionService,
                     coworkExport: coworkExport,
@@ -135,6 +140,7 @@ struct RecordingWindowView: View {
                 session.hasMultipleParticipants = multiSpeaker
                 phase = .recording
                 errorMessage = nil
+                startLevelTimer()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -146,6 +152,7 @@ struct RecordingWindowView: View {
         Task {
             await sessionManager.stopSession(session)
             coworkExport.finalizeSession()
+            stopLevelTimer()
             phase = .stopped
         }
     }
@@ -166,8 +173,31 @@ struct RecordingWindowView: View {
         guard let session = sessionManager.activeSession ?? sessionManager.sessions.first(where: { $0.state == .complete }) else {
             return
         }
+        stopLevelTimer()
         let transcript = sessionManager.handoffToRedact(session)
         NotificationCenter.default.post(name: .transferTranscript, object: transcript)
         RecordingWindowController.shared.closeRecordingWindow()
+    }
+
+    // MARK: - Level & Duration Polling
+
+    private func startLevelTimer() {
+        levelRefreshTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { _ in
+            Task { @MainActor in
+                micLevel = sessionManager.microphoneLevel
+                sysLevel = sessionManager.systemLevel
+                if let session = sessionManager.activeSession {
+                    displayDuration = session.formattedDuration
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        levelRefreshTimer = timer
+    }
+
+    private func stopLevelTimer() {
+        levelRefreshTimer?.invalidate()
+        levelRefreshTimer = nil
     }
 }

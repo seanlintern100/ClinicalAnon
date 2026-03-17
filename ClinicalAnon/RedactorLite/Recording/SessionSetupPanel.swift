@@ -19,6 +19,10 @@ struct SessionSetupPanel: View {
     @Binding var showSettings: Bool
     @Binding var multiSpeaker: Bool
 
+    var micLevel: Float
+    var sysLevel: Float
+    var displayDuration: String
+
     @ObservedObject var sessionManager: SessionManager
     @ObservedObject var transcriptionService: TranscriptionService
     @ObservedObject var coworkExport: CoworkExportService
@@ -206,21 +210,19 @@ struct SessionSetupPanel: View {
             Divider()
 
             // Timer
-            if let session = sessionManager.activeSession {
-                HStack {
-                    Image(systemName: session.state == .paused ? "pause.circle.fill" : "record.circle.fill")
-                        .foregroundStyle(session.state == .paused ? .orange : .red)
-                        .font(.title2)
-                    Text(session.formattedDuration)
-                        .font(.system(.title, design: .monospaced))
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                }
+            HStack {
+                Image(systemName: sessionManager.activeSession?.state == .paused ? "pause.circle.fill" : "record.circle.fill")
+                    .foregroundStyle(sessionManager.activeSession?.state == .paused ? .orange : .red)
+                    .font(.title2)
+                Text(displayDuration)
+                    .font(.system(.title, design: .monospaced))
+                    .foregroundStyle(DesignSystem.Colors.textPrimary)
+            }
 
-                // Audio levels
-                VStack(spacing: 4) {
-                    audioLevelBar(label: "Mic", level: sessionManager.microphoneLevel)
-                    audioLevelBar(label: "Sys", level: sessionManager.systemLevel)
-                }
+            // Audio levels
+            VStack(spacing: 4) {
+                audioLevelBar(label: "Mic", level: micLevel)
+                audioLevelBar(label: "Sys", level: sysLevel)
             }
 
             // Export status
