@@ -116,6 +116,62 @@ struct LiteRedactorView: View {
 
     // MARK: - Toolbar
 
+    // MARK: - Action Buttons (+ Doc / Analyse)
+
+    /// Compact action buttons that stay on one line; wraps vertically only if truly no room
+    private var actionButtons: some View {
+        ViewThatFits(in: .horizontal) {
+            // First try: both buttons side by side
+            HStack(spacing: DesignSystem.Spacing.small) {
+                addDocButton
+                analyzeButton
+            }
+            // Fallback: stack vertically
+            VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xs) {
+                addDocButton
+                analyzeButton
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var addDocButton: some View {
+        if viewModel.result != nil {
+            Button(action: { viewModel.addAnotherDocument() }) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "plus.doc")
+                        .frame(width: 14, height: 14)
+                    Text("+ Doc")
+                }
+                .font(DesignSystem.Typography.caption)
+                .lineLimit(1)
+                .fixedSize()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
+    }
+
+    private var analyzeButton: some View {
+        Button(action: { Task { await viewModel.analyze() } }) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                if viewModel.isProcessing {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: "wand.and.stars")
+                        .frame(width: 14, height: 14)
+                }
+                Text(viewModel.isProcessing ? "Analyzing..." : "Analyze")
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .font(DesignSystem.Typography.caption)
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
+    }
+
     private var toolbar: some View {
         HStack {
             // Start Recording button
@@ -206,37 +262,9 @@ struct LiteRedactorView: View {
 
                     Spacer()
 
-                    // Add Another Document button
-                    if viewModel.result != nil {
-                        Button(action: { viewModel.addAnotherDocument() }) {
-                            HStack(spacing: DesignSystem.Spacing.xs) {
-                                Image(systemName: "plus.doc")
-                                    .frame(width: 14, height: 14)
-                                Text("Add Another")
-                            }
-                            .font(DesignSystem.Typography.caption)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-
-                    // Analyze button
-                    Button(action: { Task { await viewModel.analyze() } }) {
-                        HStack(spacing: DesignSystem.Spacing.xs) {
-                            if viewModel.isProcessing {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                    .frame(width: 14, height: 14)
-                            } else {
-                                Image(systemName: "wand.and.stars")
-                                    .frame(width: 14, height: 14)
-                            }
-                            Text(viewModel.isProcessing ? "Analyzing..." : "Analyze")
-                                .frame(minWidth: 70)
-                        }
-                        .font(DesignSystem.Typography.caption)
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(viewModel.inputText.isEmpty || viewModel.isProcessing)
+                    // Action buttons — wrap vertically if horizontal space is tight
+                    actionButtons
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.medium)
                 .padding(.vertical, DesignSystem.Spacing.xs)
