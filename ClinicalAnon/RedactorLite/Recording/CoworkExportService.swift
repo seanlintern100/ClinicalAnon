@@ -241,7 +241,12 @@ class CoworkExportService: ObservableObject {
             let marker: [String: Any] = [
                 "session_id": sessionId,
                 "chunks_exported": chunksExported,
-                "completed_at": ISO8601DateFormatter().string(from: Date())
+                "completed_at": {
+                    let f = ISO8601DateFormatter()
+                    f.timeZone = .current
+                    f.formatOptions = [.withInternetDateTime]
+                    return f.string(from: Date())
+                }()
             ]
             if let data = try? JSONSerialization.data(withJSONObject: marker, options: [.prettyPrinted, .sortedKeys]) {
                 let markerURL = folderURL.appendingPathComponent("session_complete.json")
