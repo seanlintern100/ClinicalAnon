@@ -119,7 +119,7 @@ private struct SessionEntityContent: View {
                         .lineLimit(1)
                     Spacer()
                     let code = mapping.existingMapping(for: entity.originalText.lowercased()) ?? entity.replacementCode
-                    Text("[\(code)]")
+                    Text(code)
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(entityColor(for: entity.type))
                 }

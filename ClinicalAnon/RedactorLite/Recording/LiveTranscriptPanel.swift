@@ -222,7 +222,7 @@ private struct LiveTranscriptContent: View {
         for entity in entities {
             text = text.replacingOccurrences(
                 of: entity.originalText,
-                with: "[\(entity.replacementCode)]",
+                with: entity.replacementCode,
                 options: .caseInsensitive
             )
         }
