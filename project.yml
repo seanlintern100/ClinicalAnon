@@ -6,21 +6,12 @@ options:
   developmentLanguage: en
 
 packages:
-  AWSSDKSwift:
-    url: https://github.com/awslabs/aws-sdk-swift
-    exactVersion: "1.0.40"
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
     exactVersion: "0.15.0"
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     from: "0.7.7"
-  mlx-swift-lm:
-    url: https://github.com/ml-explore/mlx-swift-lm
-    exactVersion: "2.29.3"
-  swift-transformers:
-    url: https://github.com/huggingface/swift-transformers
-    from: "1.1.6"
 
 settings:
   MARKETING_VERSION: 1.0
@@ -36,136 +27,7 @@ targets:
           - "**/*.md"
           - "**/Tests"
           - "**/GLiNERBundle/**"
-          - "**/RedactorLite/**"
-    dependencies:
-      - package: AWSSDKSwift
-        product: AWSBedrockRuntime
-      - package: WhisperKit
-      - package: FluidAudio
-      - package: mlx-swift-lm
-        product: MLXLLM
-      - package: mlx-swift-lm
-        product: MLXLMCommon
-      - package: swift-transformers
-        product: Hub
-    resources:
-      - path: ClinicalAnon/Resources/Fonts
-      - path: ClinicalAnon/Resources/Assets.xcassets
-      - path: ClinicalAnon/Preview Content
-    info:
-      path: ClinicalAnon/Resources/Info.plist
-      properties:
-        CFBundleDevelopmentRegion: $(DEVELOPMENT_LANGUAGE)
-        CFBundleDisplayName: Redactor
-        CFBundleExecutable: $(EXECUTABLE_NAME)
-        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
-        CFBundleInfoDictionaryVersion: "6.0"
-        CFBundleName: $(PRODUCT_NAME)
-        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        LSMinimumSystemVersion: "14.0"
-        NSHumanReadableCopyright: "Copyright © 2025 3 Big Things. All rights reserved."
-        NSPrincipalClass: NSApplication
-        UIAppFonts:
-          - Fonts/Lora-Regular.ttf
-          - Fonts/Lora-Bold.ttf
-          - Fonts/Lora-Italic.ttf
-          - Fonts/SourceSans3-Regular.ttf
-          - Fonts/SourceSans3-SemiBold.ttf
-          - Fonts/SourceSans3-Bold.ttf
-        LSApplicationCategoryType: public.app-category.healthcare-fitness
-        NSSupportsAutomaticTermination: true
-        NSSupportsSuddenTermination: true
-        NSMicrophoneUsageDescription: "Redactor needs microphone access to record your voice during clinical sessions."
-    settings:
-      base:
-        PRODUCT_NAME: Redactor
-        PRODUCT_BUNDLE_IDENTIFIER: com.3bigthings.Redactor
-        SWIFT_VERSION: "5.9"
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
-        ENABLE_PREVIEWS: true
-        DEVELOPMENT_ASSET_PATHS: "\"ClinicalAnon/Preview Content\""
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: 5N8GXZGSZ5
-        CODE_SIGN_ENTITLEMENTS: Redactor.entitlements
-        ENABLE_HARDENED_RUNTIME: true
-        COMBINE_HIDPI_IMAGES: true
-        CURRENT_PROJECT_VERSION: 1
-        GENERATE_INFOPLIST_FILE: false
-        INFOPLIST_FILE: ClinicalAnon/Resources/Info.plist
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2025 3 Big Things. All rights reserved."
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
-        MARKETING_VERSION: 1.0
-        SWIFT_EMIT_LOC_STRINGS: true
-        # C++17 required by abseil
-        CLANG_CXX_LANGUAGE_STANDARD: "c++17"
-        # WebRTC Audio Processing library configuration
-        HEADER_SEARCH_PATHS:
-          - "$(inherited)"
-          - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include"
-          - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include/webrtc"
-          - "/opt/homebrew/include"
-        LIBRARY_SEARCH_PATHS:
-          - "$(inherited)"
-          - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/lib"
-          - "/opt/homebrew/lib"
-        OTHER_LDFLAGS:
-          - "$(inherited)"
-          - "-lc++"
-          # WebRTC audio processing libraries
-          - "-lwebrtc-audio-processing-2"
-          - "-lcommon_audio"
-          - "-llibbase"
-          - "-llibapi"
-          - "-lsystem_wrappers"
-          - "-llibpffft"
-          - "-llibrnnoise"
-          - "-llibfft"
-          # Abseil libraries (WebRTC dependency)
-          - "-labsl_base"
-          - "-labsl_raw_logging_internal"
-          - "-labsl_log_severity"
-          - "-labsl_spinlock_wait"
-          - "-labsl_synchronization"
-          - "-labsl_graphcycles_internal"
-          - "-labsl_kernel_timeout_internal"
-          - "-labsl_malloc_internal"
-          - "-labsl_time"
-          - "-labsl_civil_time"
-          - "-labsl_time_zone"
-          - "-labsl_strings"
-          - "-labsl_strings_internal"
-          - "-labsl_int128"
-          - "-labsl_throw_delegate"
-          # System frameworks
-          - "-framework CoreFoundation"
-        # WebRTC macros for proper compilation
-        OTHER_CPLUSPLUSFLAGS:
-          - "$(inherited)"
-          - "-std=c++17"
-          - "-DWEBRTC_MAC"
-          - "-DWEBRTC_POSIX"
-          - "-DWEBRTC_APM_DEBUG_DUMP=0"
-        # Bridging header for Objective-C++ to Swift
-        SWIFT_OBJC_BRIDGING_HEADER: "ClinicalAnon/ClinicalAnon-Bridging-Header.h"
-    scheme:
-      testTargets:
-        - RedactorTests
-      gatherCoverageData: false
-
-  Redactor Lite:
-    type: application
-    platform: macOS
-    sources:
-      - path: ClinicalAnon
-        excludes:
-          - "**/*.md"
-          - "**/Tests"
-          - "**/GLiNERBundle/**"
-          # Full app entry point & views
+          # Full app entry point & views (legacy, not used)
           - ClinicalAnonApp.swift
           - Views/MainContentView.swift
           - Views/RedactPhaseView.swift
@@ -184,10 +46,10 @@ targets:
           - Views/TranscriptionSettingsView.swift
           - Views/LocalLLMSettingsView.swift
           - Views/AISettingsView.swift
-          # AI assistant service (replaced by Cowork export in Lite)
+          # AI assistant service (replaced by Cowork export)
           - Services/Session/SessionAssistantService.swift
           - Services/Session/SessionAIService.swift
-          # Heavy services not needed for Lite
+          # Heavy services not needed
           - Services/LocalLLMService.swift
     dependencies:
       - package: WhisperKit
@@ -197,8 +59,8 @@ targets:
       - path: ClinicalAnon/Resources/Assets.xcassets
     settings:
       base:
-        PRODUCT_NAME: "Redactor Lite"
-        PRODUCT_BUNDLE_IDENTIFIER: com.3bigthings.redactor-lite
+        PRODUCT_NAME: Redactor
+        PRODUCT_BUNDLE_IDENTIFIER: com.3bigthings.Redactor
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -210,7 +72,7 @@ targets:
         COMBINE_HIDPI_IMAGES: true
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Redactor Lite needs microphone access to record your voice during clinical sessions."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Redactor needs microphone access to record your voice during clinical sessions."
         MARKETING_VERSION: 1.0
         SWIFT_EMIT_LOC_STRINGS: true
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "REDACTOR_LITE"
@@ -265,16 +127,5 @@ targets:
           - "-DWEBRTC_APM_DEBUG_DUMP=0"
         # Bridging header for Objective-C++ to Swift
         SWIFT_OBJC_BRIDGING_HEADER: "ClinicalAnon/ClinicalAnon-Bridging-Header.h"
-
-  RedactorTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - ClinicalAnon/Tests
-    dependencies:
-      - target: Redactor
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.3bigthings.RedactorTests
-        SWIFT_VERSION: "5.9"
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
+    scheme:
+      gatherCoverageData: false
