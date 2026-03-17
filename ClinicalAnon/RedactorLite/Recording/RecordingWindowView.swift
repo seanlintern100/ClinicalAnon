@@ -30,6 +30,8 @@ struct RecordingWindowView: View {
     @State private var showFirstTimeSetup = false
     @State private var errorMessage: String?
     @State private var multiSpeaker: Bool = false
+    /// Retains session reference after stop so transcript/entities stay visible
+    @State private var currentSession: LiveSession?
 
     // Timer to poll audio levels and duration (SessionManager level proxies are computed, not @Published,
     // and session.recordingDuration changes don't propagate through sessionManager's objectWillChange)
@@ -67,14 +69,15 @@ struct RecordingWindowView: View {
                     onStopRecording: stopRecording,
                     onPauseRecording: pauseRecording,
                     onResumeRecording: resumeRecording,
-                    onTransferToRedactor: transferToRedactor
+                    onTransferToRedactor: transferToRedactor,
+                    onNewSession: newSession
                 )
                 .frame(minWidth: 280, maxWidth: 320)
                 .glassPanel()
 
                 // Panel 2: Live Transcript
                 LiveTranscriptPanel(
-                    session: sessionManager.activeSession,
+                    session: currentSession,
                     phase: phase
                 )
                 .frame(maxWidth: .infinity)
@@ -82,7 +85,7 @@ struct RecordingWindowView: View {
 
                 // Panel 3: Detected Entities
                 SessionEntityPanel(
-                    session: sessionManager.activeSession
+                    session: currentSession
                 )
                 .frame(minWidth: 240, maxWidth: 280)
                 .glassPanel()
@@ -107,7 +110,7 @@ struct RecordingWindowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .transcriptionChunkRedacted)) { notification in
             guard let sessionId = notification.userInfo?["sessionId"] as? UUID,
-                  let session = sessionManager.activeSession,
+                  let session = currentSession,
                   session.id == sessionId else { return }
             coworkExport.writeChunk(for: session)
         }
@@ -138,6 +141,7 @@ struct RecordingWindowView: View {
                 // Start audio recording session
                 let session = try await sessionManager.startSession()
                 session.hasMultipleParticipants = multiSpeaker
+                currentSession = session
                 phase = .recording
                 errorMessage = nil
                 startLevelTimer()
@@ -148,7 +152,7 @@ struct RecordingWindowView: View {
     }
 
     private func stopRecording() {
-        guard let session = sessionManager.activeSession else { return }
+        guard let session = currentSession else { return }
         Task {
             await sessionManager.stopSession(session)
             coworkExport.finalizeSession()
@@ -158,19 +162,27 @@ struct RecordingWindowView: View {
     }
 
     private func pauseRecording() {
-        guard let session = sessionManager.activeSession else { return }
+        guard let session = currentSession else { return }
         sessionManager.pauseSession(session)
     }
 
     private func resumeRecording() {
-        guard let session = sessionManager.activeSession else { return }
+        guard let session = currentSession else { return }
         Task {
             try? await sessionManager.resumeSession(session)
         }
     }
 
+    private func newSession() {
+        currentSession = nil
+        phase = .setup
+        metadata = SessionMetadata.fromLastUsed()
+        multiSpeaker = false
+        displayDuration = "0:00"
+    }
+
     private func transferToRedactor() {
-        guard let session = sessionManager.activeSession ?? sessionManager.sessions.first(where: { $0.state == .complete }) else {
+        guard let session = currentSession ?? sessionManager.sessions.first(where: { $0.state == .complete }) else {
             return
         }
         stopLevelTimer()
@@ -187,7 +199,7 @@ struct RecordingWindowView: View {
             Task { @MainActor in
                 micLevel = sessionManager.microphoneLevel
                 sysLevel = sessionManager.systemLevel
-                if let session = sessionManager.activeSession {
+                if let session = currentSession {
                     displayDuration = session.formattedDuration
                 }
             }

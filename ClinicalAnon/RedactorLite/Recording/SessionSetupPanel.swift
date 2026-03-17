@@ -32,6 +32,7 @@ struct SessionSetupPanel: View {
     var onPauseRecording: () -> Void
     var onResumeRecording: () -> Void
     var onTransferToRedactor: () -> Void
+    var onNewSession: () -> Void
 
     @State private var showModelDownload = false
     @State private var showMultiSpeakerInfo: Bool = false
@@ -302,8 +303,7 @@ struct SessionSetupPanel: View {
             .controlSize(.large)
 
             Button("New Session") {
-                phase = .setup
-                metadata = SessionMetadata.fromLastUsed()
+                onNewSession()
             }
             .buttonStyle(.bordered)
             .frame(maxWidth: .infinity)
