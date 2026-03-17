@@ -39,6 +39,16 @@ enum NameVariant: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Entity Source
+
+/// Where an entity was detected from
+enum EntitySource: String, Codable {
+    case detected      // From AnonymizationEngine (initial analysis)
+    case custom        // User-added via Add Custom Entity
+    case piiReview     // From local LLM PII review
+    case deepScan      // From Apple NER deep scan
+}
+
 // MARK: - Entity Model
 
 /// Represents a single piece of personally identifiable information (PII) detected in text
@@ -70,6 +80,9 @@ struct Entity: Identifiable, Codable, Hashable {
     /// When true, this entity displays as a sub-entity regardless of nameVariant
     var isMergedChild: Bool
 
+    /// Where this entity was detected from
+    var source: EntitySource
+
     // MARK: - Initialization
 
     init(
@@ -79,7 +92,8 @@ struct Entity: Identifiable, Codable, Hashable {
         type: EntityType,
         positions: [[Int]],
         confidence: Double? = nil,
-        isMergedChild: Bool = false
+        isMergedChild: Bool = false,
+        source: EntitySource = .detected
     ) {
         self.id = id
         self.originalText = originalText
@@ -88,6 +102,7 @@ struct Entity: Identifiable, Codable, Hashable {
         self.positions = positions
         self.confidence = confidence
         self.isMergedChild = isMergedChild
+        self.source = source
     }
 
     // MARK: - Computed Properties

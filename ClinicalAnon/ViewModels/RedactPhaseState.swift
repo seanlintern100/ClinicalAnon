@@ -119,16 +119,22 @@ class RedactPhaseState: ObservableObject {
     // MARK: - Entity Management
 
     @Published var excludedEntityIds: Set<UUID> = []
-    @Published var customEntities: [Entity] = []
+
+    /// Consolidated storage for all non-detected entities (custom, PII review, deep scan).
+    /// Each entity's `source` property indicates its origin.
+    @Published var supplementalEntities: [Entity] = []
+
+    // Source-filtered views (computed from supplementalEntities)
+    var customEntities: [Entity] { supplementalEntities.filter { $0.source == .custom } }
+    var piiReviewFindings: [Entity] { supplementalEntities.filter { $0.source == .piiReview } }
+    var deepScanFindings: [Entity] { supplementalEntities.filter { $0.source == .deepScan } }
 
     // Local LLM PII review
-    @Published var piiReviewFindings: [Entity] = []
     @Published var isReviewingPII: Bool = false
     @Published var piiReviewError: String?
     private var entitiesToRemove: Set<UUID> = []
 
     // Deep Scan (Apple NER at 0.75 confidence)
-    @Published var deepScanFindings: [Entity] = []
     @Published var isRunningDeepScan: Bool = false
     @Published var deepScanError: String?
     @Published var showDeepScanCompleteMessage: Bool = false
@@ -441,22 +447,30 @@ class RedactPhaseState: ObservableObject {
     // MARK: - Computed Properties
 
     /// All entities (detected + custom + PII review + Deep Scan + saved documents)
+    /// All entities for the current document (detected + supplemental)
     var allEntities: [Entity] {
-        var entities: [Entity]
-        if let result = result {
-            let baseEntities = result.entities.filter { !entitiesToRemove.contains($0.id) }
-            entities = baseEntities + customEntities + piiReviewFindings + deepScanFindings
-        } else {
-            entities = customEntities + piiReviewFindings + deepScanFindings
+        let base = (result?.entities ?? []).filter { !entitiesToRemove.contains($0.id) }
+        return base + supplementalEntities
+    }
+
+    /// Cumulative entities: current doc + saved docs (for sidebar display).
+    /// Saved-doc entities get empty positions (their ranges don't apply to current text).
+    var cumulativeEntities: [Entity] {
+        var entities = allEntities
+
+        var seen = Set<String>()
+        for entity in entities {
+            seen.insert("\(entity.originalText.lowercased())|\(entity.type)")
         }
-        // Include entities from saved source documents, deduplicating by originalText.
-        // Current doc entities are authoritative (latest merge/reclassify state),
-        // so only add saved doc entities whose text isn't already represented.
-        let existingTexts = Set(entities.map { $0.originalText })
+
         for doc in sourceDocuments {
             for entity in doc.entities {
-                if !existingTexts.contains(entity.originalText) {
-                    entities.append(entity)
+                let key = "\(entity.originalText.lowercased())|\(entity.type)"
+                if !seen.contains(key) {
+                    seen.insert(key)
+                    var savedEntity = entity
+                    savedEntity.positions = []
+                    entities.append(savedEntity)
                 }
             }
         }
@@ -544,6 +558,12 @@ class RedactPhaseState: ObservableObject {
                     // XLM-R failure is non-fatal - continue with Apple NER results
                     print("XLM-R scan failed (non-fatal): \(error.localizedDescription)")
                 }
+            }
+
+            // Cross-document consistency: inherit types and sweep for missed entities
+            if !sourceDocuments.isEmpty {
+                analysisResult = inheritTypesFromSavedDocuments(analysisResult)
+                analysisResult = ensureSavedEntitiesRedacted(analysisResult)
             }
 
             result = analysisResult
@@ -638,9 +658,7 @@ class RedactPhaseState: ObservableObject {
         result = nil
         excludedEntityIds.removeAll()
         _excludedIds.removeAll()
-        customEntities.removeAll()
-        piiReviewFindings.removeAll()
-        deepScanFindings.removeAll()
+        supplementalEntities.removeAll()
         entitiesToRemove.removeAll()
         isReviewingPII = false
         piiReviewError = nil
@@ -703,9 +721,7 @@ class RedactPhaseState: ObservableObject {
         self.result = nil
         excludedEntityIds.removeAll()
         _excludedIds.removeAll()
-        customEntities.removeAll()
-        piiReviewFindings.removeAll()
-        deepScanFindings.removeAll()
+        supplementalEntities.removeAll()
         entitiesToRemove.removeAll()
         cachedRedactedText = ""
         redactedTextNeedsUpdate = true
@@ -882,14 +898,8 @@ class RedactPhaseState: ObservableObject {
         if let result = result, let idx = result.entities.firstIndex(where: { $0.id == primaryId }) {
             self.result?.entities[idx].positions.append(contentsOf: newPositions)
         }
-        if let idx = customEntities.firstIndex(where: { $0.id == primaryId }) {
-            customEntities[idx].positions.append(contentsOf: newPositions)
-        }
-        if let idx = piiReviewFindings.firstIndex(where: { $0.id == primaryId }) {
-            piiReviewFindings[idx].positions.append(contentsOf: newPositions)
-        }
-        if let idx = deepScanFindings.firstIndex(where: { $0.id == primaryId }) {
-            deepScanFindings[idx].positions.append(contentsOf: newPositions)
+        if let idx = supplementalEntities.firstIndex(where: { $0.id == primaryId }) {
+            supplementalEntities[idx].positions.append(contentsOf: newPositions)
         }
     }
 
@@ -921,14 +931,8 @@ class RedactPhaseState: ObservableObject {
             updateEntity(&r.entities[idx])
             result = r
         }
-        if let idx = customEntities.firstIndex(where: { $0.id == entityId }) {
-            updateEntity(&customEntities[idx])
-        }
-        if let idx = piiReviewFindings.firstIndex(where: { $0.id == entityId }) {
-            updateEntity(&piiReviewFindings[idx])
-        }
-        if let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) {
-            updateEntity(&deepScanFindings[idx])
+        if let idx = supplementalEntities.firstIndex(where: { $0.id == entityId }) {
+            updateEntity(&supplementalEntities[idx])
         }
         // Also update entities in saved source documents
         for docIdx in sourceDocuments.indices {
@@ -944,14 +948,8 @@ class RedactPhaseState: ObservableObject {
             r.entities[idx].isMergedChild = true
             result = r
         }
-        if let idx = customEntities.firstIndex(where: { $0.id == entityId }) {
-            customEntities[idx].isMergedChild = true
-        }
-        if let idx = piiReviewFindings.firstIndex(where: { $0.id == entityId }) {
-            piiReviewFindings[idx].isMergedChild = true
-        }
-        if let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) {
-            deepScanFindings[idx].isMergedChild = true
+        if let idx = supplementalEntities.firstIndex(where: { $0.id == entityId }) {
+            supplementalEntities[idx].isMergedChild = true
         }
         // Also update entities in saved source documents
         for docIdx in sourceDocuments.indices {
@@ -966,9 +964,7 @@ class RedactPhaseState: ObservableObject {
         if result != nil {
             self.result?.entities.removeAll { $0.id == entityId }
         }
-        customEntities.removeAll { $0.id == entityId }
-        piiReviewFindings.removeAll { $0.id == entityId }
-        deepScanFindings.removeAll { $0.id == entityId }
+        supplementalEntities.removeAll { $0.id == entityId }
     }
 
     /// Remove all entities matching the given text (case-insensitive)
@@ -1037,8 +1033,8 @@ class RedactPhaseState: ObservableObject {
     /// Move a deep scan finding to result.entities (after merge)
     /// This ensures the merged entity appears in the main section, not the deep scan section
     func moveDeepScanFindingToResult(_ entityId: UUID) {
-        guard let idx = deepScanFindings.firstIndex(where: { $0.id == entityId }) else { return }
-        let entity = deepScanFindings.remove(at: idx)
+        guard let idx = supplementalEntities.firstIndex(where: { $0.id == entityId && $0.source == .deepScan }) else { return }
+        let entity = supplementalEntities.remove(at: idx)
         result?.entities.append(entity)
 
         // Also remove from excluded set since user chose to merge it
@@ -1051,9 +1047,9 @@ class RedactPhaseState: ObservableObject {
     /// Find entity across all lists by ID
     private func findEntity(_ id: UUID) -> Entity? {
         if let e = result?.entities.first(where: { $0.id == id }) { return e }
-        if let e = customEntities.first(where: { $0.id == id }) { return e }
+        if let e = supplementalEntities.first(where: { $0.id == id }) { return e }
         if let e = piiReviewFindings.first(where: { $0.id == id }) { return e }
-        if let e = deepScanFindings.first(where: { $0.id == id }) { return e }
+        if let e = supplementalEntities.first(where: { $0.id == id }) { return e }
         return nil
     }
 
@@ -1061,12 +1057,8 @@ class RedactPhaseState: ObservableObject {
     private func updateEntityInLists(_ entity: Entity) {
         if let idx = result?.entities.firstIndex(where: { $0.id == entity.id }) {
             result?.entities[idx] = entity
-        } else if let idx = customEntities.firstIndex(where: { $0.id == entity.id }) {
-            customEntities[idx] = entity
-        } else if let idx = piiReviewFindings.firstIndex(where: { $0.id == entity.id }) {
-            piiReviewFindings[idx] = entity
-        } else if let idx = deepScanFindings.firstIndex(where: { $0.id == entity.id }) {
-            deepScanFindings[idx] = entity
+        } else if let idx = supplementalEntities.firstIndex(where: { $0.id == entity.id }) {
+            supplementalEntities[idx] = entity
         }
     }
 
@@ -1226,10 +1218,11 @@ class RedactPhaseState: ObservableObject {
             replacementCode: code,
             type: type,
             positions: positions,
-            confidence: 1.0
+            confidence: 1.0,
+            source: .custom
         )
 
-        customEntities.append(entity)
+        supplementalEntities.append(entity)
         redactedTextNeedsUpdate = true
 
         // Note: Cache rebuild is now handled by WorkflowViewModel.addCustomEntity()
@@ -1238,9 +1231,84 @@ class RedactPhaseState: ObservableObject {
         autoHideSuccess()
     }
 
+    // MARK: - Cross-Document Consistency
+
+    /// Inherit entity types from saved documents for cross-document consistency.
+    /// If a name was reclassified (e.g., to .personClient) in a previous doc,
+    /// new detections of the same name should use that type, not the NER default.
+    private func inheritTypesFromSavedDocuments(_ analysisResult: AnonymizationResult) -> AnonymizationResult {
+        var savedTypes: [String: EntityType] = [:]
+        for doc in sourceDocuments {
+            for entity in doc.entities {
+                let key = entity.originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                savedTypes[key] = entity.type
+            }
+        }
+
+        guard !savedTypes.isEmpty else { return analysisResult }
+
+        var updatedResult = analysisResult
+        for i in updatedResult.entities.indices {
+            let key = updatedResult.entities[i].originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            if let savedType = savedTypes[key], savedType != updatedResult.entities[i].type {
+                updatedResult.entities[i].type = savedType
+            }
+        }
+        return updatedResult
+    }
+
+    /// Sweep the new document for entities detected in saved documents but missed by NER.
+    private func ensureSavedEntitiesRedacted(_ analysisResult: AnonymizationResult) -> AnonymizationResult {
+        var savedEntities: [String: (type: EntityType, code: String)] = [:]
+        for doc in sourceDocuments {
+            for entity in doc.entities {
+                let key = entity.originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                if savedEntities[key] == nil {
+                    savedEntities[key] = (type: entity.type, code: entity.replacementCode)
+                }
+            }
+        }
+
+        guard !savedEntities.isEmpty else { return analysisResult }
+
+        let detectedNames = Set(analysisResult.entities.map {
+            $0.originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        })
+
+        var updatedResult = analysisResult
+        for (key, saved) in savedEntities {
+            guard !detectedNames.contains(key) else { continue }
+
+            // Find original casing from saved docs
+            let originalText = sourceDocuments.flatMap { $0.entities }
+                .first { $0.originalText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == key }?
+                .originalText ?? ""
+            guard !originalText.isEmpty else { continue }
+
+            let positions = findAllOccurrences(of: originalText, in: analysisResult.originalText)
+            guard !positions.isEmpty else { continue }
+
+            let code = engine.entityMapping.getReplacementCode(for: originalText, type: saved.type)
+            let entity = Entity(
+                originalText: originalText,
+                replacementCode: code,
+                type: saved.type,
+                positions: positions,
+                confidence: 0.95
+            )
+            updatedResult.entities.append(entity)
+        }
+
+        return updatedResult
+    }
+
     // MARK: - Local LLM PII Review
 
     func runLocalPIIReview() async {
+        #if REDACTOR_LITE
+        errorMessage = "Local LLM review is not available in this version."
+        return
+        #else
         guard let result = result else {
             piiReviewError = "Please analyze text first"
             return
@@ -1305,6 +1373,7 @@ class RedactPhaseState: ObservableObject {
                 errorMessage = "PII review failed: \(error.localizedDescription)"
             }
         }
+        #endif
     }
 
     private func processPIIFindings(_ findings: [PIIFinding], originalText: String) {
@@ -1361,8 +1430,9 @@ class RedactPhaseState: ObservableObject {
 
         // Merge with existing findings, avoiding duplicates
         let existingPIITexts = Set(piiReviewFindings.map { $0.originalText.lowercased() })
-        let uniqueNewEntities = newEntities.filter { !existingPIITexts.contains($0.originalText.lowercased()) }
-        piiReviewFindings.append(contentsOf: uniqueNewEntities)
+        var uniqueNewEntities = newEntities.filter { !existingPIITexts.contains($0.originalText.lowercased()) }
+        for i in uniqueNewEntities.indices { uniqueNewEntities[i].source = .piiReview }
+        supplementalEntities.append(contentsOf: uniqueNewEntities)
     }
 
     private func findPartialMatch(_ findingText: String) -> (Entity, String)? {
@@ -1468,8 +1538,9 @@ class RedactPhaseState: ObservableObject {
 
         // Merge with existing deep scan findings, avoiding duplicates
         let existingDeepTexts = Set(deepScanFindings.map { $0.originalText.lowercased() })
-        let uniqueNewEntities = newEntities.filter { !existingDeepTexts.contains($0.originalText.lowercased()) }
-        deepScanFindings.append(contentsOf: uniqueNewEntities)
+        var uniqueNewEntities = newEntities.filter { !existingDeepTexts.contains($0.originalText.lowercased()) }
+        for i in uniqueNewEntities.indices { uniqueNewEntities[i].source = .deepScan }
+        supplementalEntities.append(contentsOf: uniqueNewEntities)
     }
 
     // MARK: - Copy Actions

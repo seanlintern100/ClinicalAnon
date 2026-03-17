@@ -710,6 +710,30 @@ class EntityMapping: ObservableObject {
         return newCode
     }
 
+    /// Migrate a RedactedPerson entry from one baseId to another (e.g., PERSON_A → CLIENT_A on reclassify).
+    /// Updates the person record and refreshes all variant mappings.
+    func migratePersonBaseId(from oldBaseId: String, to newBaseId: String) {
+        guard oldBaseId != newBaseId,
+              let person = redactedPersons[oldBaseId] else { return }
+
+        let migrated = RedactedPerson(
+            baseId: newBaseId,
+            full: person.full,
+            first: person.first,
+            last: person.last,
+            middle: person.middle,
+            detectedTitle: person.detectedTitle
+        )
+        redactedPersons[newBaseId] = migrated
+        redactedPersons.removeValue(forKey: oldBaseId)
+
+        updateMappingsForPerson(migrated)
+
+        #if DEBUG
+        print("EntityMapping.migratePersonBaseId: \(oldBaseId) → \(newBaseId)")
+        #endif
+    }
+
     /// Merge one entity's mapping into another (alias → primary)
     /// Creates a RedactedPerson anchor and assigns variant-specific codes
     /// - Parameters:
