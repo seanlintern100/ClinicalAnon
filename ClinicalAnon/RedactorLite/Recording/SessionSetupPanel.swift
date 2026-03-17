@@ -54,9 +54,9 @@ struct SessionSetupPanel: View {
                 .font(DesignSystem.Typography.subheading)
                 .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-            // Client Initials
+            // Client ID
             VStack(alignment: .leading, spacing: 4) {
-                Text("Client Initials")
+                Text("Client ID")
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                 TextField("e.g. JB", text: $metadata.clientInitials)
