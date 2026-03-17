@@ -15,6 +15,34 @@ struct SessionEntityPanel: View {
     let session: LiveSession?
 
     var body: some View {
+        if let session = session {
+            SessionEntityContent(session: session)
+        } else {
+            emptyState
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            Spacer()
+            Image(systemName: "person.crop.rectangle.badge.plus")
+                .font(.system(size: 36))
+                .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
+            Text("No Entities Detected")
+                .font(DesignSystem.Typography.subheading)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+    }
+}
+
+private struct SessionEntityContent: View {
+
+    @ObservedObject var session: LiveSession
+
+    var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
@@ -22,8 +50,7 @@ struct SessionEntityPanel: View {
                     .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Spacer()
-                if let session = session {
-                    Text("\(session.detectedEntities.count)")
+                Text("\(session.detectedEntities.count)")
                         .font(DesignSystem.Typography.caption)
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
                         .padding(.horizontal, 8)
@@ -32,16 +59,24 @@ struct SessionEntityPanel: View {
                             Capsule()
                                 .fill(DesignSystem.Colors.textSecondary.opacity(0.2))
                         )
-                }
             }
             .padding(DesignSystem.Spacing.medium)
 
             Divider().opacity(0.15)
 
-            if let session = session, !session.detectedEntities.isEmpty {
+            if !session.detectedEntities.isEmpty {
                 entityList(session: session)
             } else {
-                emptyState
+                VStack {
+                    Spacer()
+                    Text("Entities will appear as they are detected")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
             }
         }
     }
@@ -92,27 +127,6 @@ struct SessionEntityPanel: View {
             }
         }
         .padding(.bottom, DesignSystem.Spacing.small)
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: DesignSystem.Spacing.medium) {
-            Spacer()
-            Image(systemName: "person.crop.rectangle.badge.plus")
-                .font(.system(size: 36))
-                .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
-            Text("No Entities Detected")
-                .font(DesignSystem.Typography.subheading)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-            Text("Entities will appear here as they are detected in the transcript")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
     }
 
     // MARK: - Helpers

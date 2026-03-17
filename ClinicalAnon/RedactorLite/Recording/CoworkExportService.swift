@@ -188,9 +188,11 @@ class CoworkExportService: ObservableObject {
             // Apply redaction using entity mapping
             for entity in session.detectedEntities {
                 let code = mapping.existingMapping(for: entity.originalText.lowercased()) ?? entity.replacementCode
+                // code may already include brackets (e.g. "[PERSON_A]") — don't double-wrap
+                let replacement = code.hasPrefix("[") && code.hasSuffix("]") ? code : "[\(code)]"
                 text = text.replacingOccurrences(
                     of: entity.originalText,
-                    with: "[\(code)]",
+                    with: replacement,
                     options: .caseInsensitive
                 )
             }

@@ -16,6 +16,36 @@ struct LiveTranscriptPanel: View {
     let phase: RecordingPhase
 
     var body: some View {
+        if let session = session {
+            LiveTranscriptContent(session: session, phase: phase)
+        } else {
+            VStack(spacing: DesignSystem.Spacing.medium) {
+                Spacer()
+                Image(systemName: "mic.circle")
+                    .font(.system(size: 48))
+                    .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.5))
+                Text("Ready to Record")
+                    .font(DesignSystem.Typography.subheading)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                Text("Fill in session details and press Start Recording")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
+        }
+    }
+}
+
+/// Inner view that can @ObservedObject the non-optional session
+private struct LiveTranscriptContent: View {
+
+    @ObservedObject var session: LiveSession
+    let phase: RecordingPhase
+
+    var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
@@ -23,18 +53,16 @@ struct LiveTranscriptPanel: View {
                     .font(DesignSystem.Typography.subheading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
                 Spacer()
-                if let session = session {
-                    Text("\(session.transcriptSegments.count) segments")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
+                Text("\(session.transcriptSegments.count) segments")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
             .padding(DesignSystem.Spacing.medium)
 
             Divider().opacity(0.15)
 
             // Content
-            if let session = session, !session.transcriptSegments.isEmpty {
+            if !session.transcriptSegments.isEmpty {
                 transcriptScrollView(session: session)
             } else {
                 emptyStateView

@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redactor — Active Session Wireframe</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    /* macOS Dark Mode palette */
+    --bg-window: #1e1e1e;
+    --bg-deep: #161616;
+    --bg-surface: #252525;
+    --bg-surface-raised: #2d2d2d;
+    --bg-hover: #333333;
+    --border: #3a3a3a;
+    --border-subtle: #2f2f2f;
+    --text-primary: #e5e5e5;
+    --text-secondary: #8e8e93;
+    --text-tertiary: #636366;
+    --teal: #64d2ff;
+    --teal-dim: rgba(100, 210, 255, 0.15);
+    --red: #ff453a;
+    --red-dim: rgba(255, 69, 58, 0.12);
+    --red-border: rgba(255, 69, 58, 0.3);
+    --orange: #ff9f0a;
+    --orange-dim: rgba(255, 159, 10, 0.12);
+    --orange-border: rgba(255, 159, 10, 0.25);
+    --green: #30d158;
+    --green-dim: rgba(48, 209, 88, 0.15);
+    --blue: #0a84ff;
+    --blue-dim: rgba(10, 132, 255, 0.15);
+    --yellow: #ffd60a;
+    --yellow-dim: rgba(255, 214, 10, 0.12);
+    --clinician-color: #5ac8fa;
+    --other-a-color: #30d158;
+    --other-b-color: #34c759;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: #0d0d0d;
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Title bar simulation */
+  .title-bar-label {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    letter-spacing: 0.3px;
+    z-index: 100;
+    text-transform: uppercase;
+  }
+
+  /* Main window */
+  .app-window {
+    width: calc(100vw - 40px);
+    height: calc(100vh - 60px);
+    max-width: 1600px;
+    background: var(--bg-window);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.06),
+      0 25px 60px rgba(0,0,0,0.5),
+      0 8px 20px rgba(0,0,0,0.3);
+    position: relative;
+  }
+
+  /* Window title bar */
+  .window-titlebar {
+    height: 38px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    flex-shrink: 0;
+    -webkit-app-region: drag;
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 8px;
+  }
+
+  .traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0,0,0,0.2);
+  }
+  .traffic-light.close { background: #ff5f57; }
+  .traffic-light.minimize { background: #febc2e; }
+  .traffic-light.maximize { background: #28c840; }
+
+  .window-title {
+    flex: 1;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+  }
+
+  /* Main layout */
+  .main-layout {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* Resize handle */
+  .resize-handle {
+    width: 1px;
+    background: var(--border);
+    cursor: col-resize;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -3px; right: -3px;
+  }
+  .resize-handle:hover { background: var(--teal); opacity: 0.5; }
+
+  /* Left side */
+  .left-panel {
+    flex: 1;
+    min-width: 500px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Retention banner */
+  .retention-banner {
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    background: var(--orange-dim);
+    border-bottom: 1px solid var(--orange-border);
+  }
+  .retention-banner .icon { font-size: 13px; }
+
+  /* Control bar */
+  .control-bar {
+    padding: 10px 16px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .session-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .session-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .session-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--red);
+    flex-shrink: 0;
+    animation: pulse-dot 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,69,58,0.5); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(255,69,58,0); }
+  }
+
+  .status-label { color: var(--red); font-weight: 500; }
+  .meta-dot { color: var(--text-tertiary); }
+  .entity-count { color: var(--teal); font-weight: 500; }
+
+  .detecting-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--text-tertiary);
+    border-top-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .control-spacer { flex: 1; }
+
+  /* Audio meters */
+  .audio-meters {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .meter-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .meter-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+  .meter-label:hover { color: var(--text-primary); }
+  .meter-label .chevron { font-size: 7px; }
+
+  .meter-bar {
+    width: 8px;
+    height: 22px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  .meter-fill {
+    border-radius: 1px;
+    transition: height 0.15s ease;
+  }
+
+  .meter-fill.mic {
+    height: 55%;
+    background: linear-gradient(to top, var(--green), var(--yellow));
+    animation: meter-bounce 0.6s ease-in-out infinite alternate;
+  }
+  .meter-fill.sys {
+    height: 35%;
+    background: linear-gradient(to top, var(--green), #66cc77);
+    animation: meter-bounce 0.8s ease-in-out infinite alternate;
+  }
+  @keyframes meter-bounce {
+    0% { height: var(--min, 30%); }
+    100% { height: var(--max, 60%); }
+  }
+  .meter-fill.mic { --min: 40%; --max: 70%; }
+  .meter-fill.sys { --min: 20%; --max: 45%; }
+
+  /* Toggle buttons */
+  .toggle-group {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-deep);
+    border-radius: var(--radius-md);
+    padding: 2px;
+  }
+
+  .toggle-btn {
+    width: 30px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+  }
+  .toggle-btn:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .toggle-btn.active {
+    color: var(--teal);
+    background: var(--teal-dim);
+  }
+  .toggle-btn .tooltip {
+    display: none;
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #444;
+    color: var(--text-primary);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .toggle-btn:hover .tooltip { display: block; }
+
+  .participants-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .participants-toggle:hover { color: var(--text-secondary); }
+  .participants-toggle.active { color: var(--teal); }
+  .participants-toggle .icon { font-size: 12px; }
+
+  /* Control buttons */
+  .control-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .ctrl-btn {
+    padding: 5px 12px;
+    border-radius: var(--radius-md);
+    border: none;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.12s ease;
+    letter-spacing: 0.1px;
+  }
+  .ctrl-btn.secondary {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .ctrl-btn.secondary:hover { background: #3d3d3d; }
+  .ctrl-btn.primary {
+    background: var(--teal);
+    color: #000;
+  }
+  .ctrl-btn.primary:hover { filter: brightness(1.1); }
+  .ctrl-btn.danger {
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1px solid var(--red-border);
+  }
+  .ctrl-btn.danger:hover { background: rgba(255,69,58,0.2); }
+  .ctrl-btn .icon { font-size: 10px; }
+
+  /* Content area */
+  .content-area {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Transcript view */
+  .transcript-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--bg-deep);
+  }
+
+  .transcript-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .transcript-scroll::-webkit-scrollbar { width: 6px; }
+  .transcript-scroll::-webkit-scrollbar-track { background: transparent; }
+  .transcript-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .segment {
+    display: flex;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    transition: background 0.1s;
+    align-items: flex-start;
+  }
+  .segment:hover { background: rgba(255,255,255,0.02); }
+
+  .speaker-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 70px;
+    text-align: center;
+  }
+  .speaker-label.clinician {
+    color: var(--clinician-color);
+    background: rgba(90, 200, 250, 0.1);
+  }
+  .speaker-label.other-a {
+    color: var(--other-a-color);
+    background: rgba(48, 209, 88, 0.1);
+  }
+  .speaker-label.other-b {
+    color: var(--other-b-color);
+    background: rgba(52, 199, 89, 0.1);
+  }
+
+  .segment-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .segment-text {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    font-weight: 300;
+  }
+
+  .entity-highlight {
+    border-bottom: 1.5px solid var(--teal);
+    padding-bottom: 0px;
+    background: var(--teal-dim);
+    border-radius: 2px;
+    padding: 0 2px;
+    cursor: help;
+    position: relative;
+  }
+  .entity-highlight::after {
+    content: attr(data-type);
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    font-size: 9px;
+    background: var(--teal);
+    color: #000;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: all 0.15s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .entity-highlight:hover::after { opacity: 1; transform: translateY(-2px); }
+
+  .segment-timestamp {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    padding-top: 2px;
+    font-weight: 300;
+  }
+
+  /* Overlap badge */
+  .overlap-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9.5px;
+    color: var(--orange);
+    background: var(--orange-dim);
+    border: 1px solid var(--orange-border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  /* Low confidence */
+  .low-confidence {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9.5px;
+    color: var(--yellow);
+    background: var(--yellow-dim);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    font-weight: 400;
+  }
+
+  /* Gap indicator */
+  .gap-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    margin: 4px 0;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .retry-btn {
+    font-size: 10px;
+    color: var(--teal);
+    background: var(--teal-dim);
+    border: none;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-weight: 500;
+  }
+  .retry-btn:hover { background: rgba(100,210,255,0.25); }
+
+  /* Typing indicator */
+  .typing-indicator {
+    display: flex;
+    gap: 10px;
+    padding: 6px 8px;
+    align-items: center;
+    opacity: 0.6;
+  }
+  .typing-dots {
+    display: flex;
+    gap: 3px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+  }
+  .typing-dots span {
+    width: 5px;
+    height: 5px;
+    background: var(--text-tertiary);
+    border-radius: 50%;
+    animation: typing 1.2s ease-in-out infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* Chat panel */
+  .chat-panel {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    transition: width 0.25s ease, opacity 0.2s ease;
+    overflow: hidden;
+  }
+  .chat-panel.collapsed {
+    width: 0;
+    border-left: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chat-header {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .chat-header .icon { color: var(--teal); font-size: 14px; }
+  .chat-header .title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .chat-header .context-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    margin-left: auto;
+  }
+  .chat-header .context-badge.on {
+    color: var(--teal);
+    background: var(--teal-dim);
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .chat-msg {
+    max-width: 85%;
+    padding: 8px 11px;
+    border-radius: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    font-weight: 300;
+  }
+  .chat-msg.user {
+    align-self: flex-end;
+    background: var(--teal);
+    color: #000;
+    border-bottom-right-radius: 4px;
+    font-weight: 400;
+  }
+  .chat-msg.ai {
+    align-self: flex-start;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-bottom-left-radius: 4px;
+  }
+
+  .chat-input-area {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .chat-input {
+    flex: 1;
+    padding: 7px 10px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    outline: none;
+  }
+  .chat-input::placeholder { color: var(--text-tertiary); }
+  .chat-input:focus { border-color: var(--teal); }
+
+  .send-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--teal);
+    border: none;
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  /* Right side — Assistant panel */
+  .assistant-panel {
+    width: 480px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-window);
+    border-left: 1px solid var(--border);
+    flex-shrink: 0;
+    transition: width 0.25s ease, opacity 0.2s ease;
+    overflow: hidden;
+  }
+  .assistant-panel.collapsed {
+    width: 0;
+    border-left: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .assistant-header {
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    background: var(--bg-surface);
+  }
+  .assistant-header .icon {
+    font-size: 16px;
+    color: var(--teal);
+  }
+  .assistant-header .title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .assistant-header .analysis-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .assistant-content {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* Parking Lot */
+  .parking-lot {
+    flex: 1.2;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .panel-sub-header {
+    padding: 8px 12px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .panel-sub-header .count {
+    font-size: 9px;
+    background: var(--bg-hover);
+    padding: 1px 5px;
+    border-radius: 8px;
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+
+  .parking-lot-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .parking-lot-scroll::-webkit-scrollbar { width: 4px; }
+  .parking-lot-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .parking-item {
+    padding: 8px 10px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .parking-item-type {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  .parking-item-type.fact { color: var(--teal); }
+  .parking-item-type.theme { color: #bf5af2; }
+  .parking-item-type.followup { color: var(--orange); }
+
+  .parking-item-text {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-primary);
+    font-weight: 300;
+  }
+
+  .parking-item-time {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+    font-weight: 300;
+  }
+
+  /* Live Feed */
+  .live-feed {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .feed-filter {
+    padding: 8px 10px;
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    align-items: center;
+  }
+
+  .filter-btn {
+    padding: 3px 10px;
+    border-radius: 10px;
+    border: none;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-tertiary);
+    transition: all 0.12s;
+  }
+  .filter-btn:hover { color: var(--text-secondary); }
+  .filter-btn.active {
+    background: var(--teal-dim);
+    color: var(--teal);
+  }
+
+  .safety-badge {
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 600;
+    background: var(--red);
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 8px;
+    letter-spacing: 0.2px;
+  }
+
+  .feed-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .feed-scroll::-webkit-scrollbar { width: 4px; }
+  .feed-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .feed-item {
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid;
+  }
+  .feed-item.safety {
+    background: var(--red-dim);
+    border-color: var(--red-border);
+  }
+  .feed-item.flag {
+    background: var(--orange-dim);
+    border-color: var(--orange-border);
+  }
+  .feed-item.tip {
+    background: rgba(255,255,255,0.02);
+    border-color: var(--border-subtle);
+  }
+
+  .feed-item-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+  }
+
+  .feed-item-icon { font-size: 11px; }
+  .feed-item.safety .feed-item-icon { color: var(--red); }
+  .feed-item.flag .feed-item-icon { color: var(--orange); }
+  .feed-item.tip .feed-item-icon { color: var(--teal); }
+
+  .feed-item-type {
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .feed-item.safety .feed-item-type { color: var(--red); }
+  .feed-item.flag .feed-item-type { color: var(--orange); }
+  .feed-item.tip .feed-item-type { color: var(--teal); }
+
+  .feed-item-time {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-weight: 300;
+  }
+
+  .feed-item-content {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-primary);
+    font-weight: 300;
+  }
+
+  .feed-item-rationale {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+    font-style: italic;
+    line-height: 1.4;
+    font-weight: 300;
+  }
+
+  /* Scrollbar defaults */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+
+  /* Section divider label */
+  .section-label {
+    position: absolute;
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    background: var(--bg-deep);
+    padding: 1px 5px;
+    border-radius: 2px;
+    opacity: 0.6;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="title-bar-label">Redactor — Active Session Wireframe</div>
+
+<div class="app-window">
+  <!-- Title bar -->
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <div class="traffic-light close"></div>
+      <div class="traffic-light minimize"></div>
+      <div class="traffic-light maximize"></div>
+    </div>
+    <div class="window-title">Session — Intake Assessment</div>
+    <div style="width:52px"></div>
+  </div>
+
+  <!-- Retention warning banner -->
+  <div class="retention-banner">
+    <span class="icon">⏱</span>
+    <span>This session expires in <strong>5 days</strong>. Export or hand off before it's deleted.</span>
+  </div>
+
+  <!-- Main layout -->
+  <div class="main-layout">
+
+    <!-- LEFT PANEL -->
+    <div class="left-panel">
+
+      <!-- Control bar -->
+      <div class="control-bar">
+        <div class="session-info">
+          <div class="session-name">Intake Assessment — 17 Feb</div>
+          <div class="session-meta">
+            <div class="status-dot"></div>
+            <span class="status-label">Recording</span>
+            <span class="meta-dot">·</span>
+            <span>24:31</span>
+            <span class="meta-dot">·</span>
+            <span class="entity-count">12 entities</span>
+          </div>
+        </div>
+
+        <div class="detecting-indicator">
+          <div class="spinner"></div>
+          <span>Detecting…</span>
+        </div>
+
+        <div class="control-spacer"></div>
+
+        <!-- Audio meters -->
+        <div class="audio-meters">
+          <div class="meter-group">
+            <div class="meter-label">🎙 <span class="chevron">▾</span></div>
+            <div class="meter-bar"><div class="meter-fill mic"></div></div>
+          </div>
+          <div class="meter-group">
+            <div class="meter-label">🔊</div>
+            <div class="meter-bar"><div class="meter-fill sys"></div></div>
+          </div>
+        </div>
+
+        <!-- Participants toggle -->
+        <button class="participants-toggle active" id="participantsToggle" onclick="this.classList.toggle('active'); this.querySelector('.lbl').textContent = this.classList.contains('active') ? 'Multiple' : 'Single'">
+          <span class="icon">👥</span>
+          <span class="lbl">Multiple</span>
+        </button>
+
+        <!-- Toggle buttons -->
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="contextToggle" onclick="this.classList.toggle('active')" title="Transcript context">
+            📄
+            <span class="tooltip">Transcript context</span>
+          </button>
+          <button class="toggle-btn active" id="chatToggle" onclick="toggleChat()" title="Chat panel">
+            💬
+            <span class="tooltip">Chat panel</span>
+          </button>
+          <button class="toggle-btn active" id="assistantToggle" onclick="toggleAssistant()" title="Session Assistant">
+            🧠
+            <span class="tooltip">Session assistant</span>
+          </button>
+        </div>
+
+        <!-- Control buttons -->
+        <div class="control-buttons">
+          <button class="ctrl-btn secondary">
+            <span class="icon">⏸</span> Pause
+          </button>
+          <button class="ctrl-btn danger">
+            <span class="icon">⏹</span> Stop
+          </button>
+        </div>
+      </div>
+
+      <!-- Content area -->
+      <div class="content-area">
+
+        <!-- Transcript -->
+        <div class="transcript-view">
+          <div class="transcript-scroll" id="transcriptScroll">
+
+            <div class="segment">
+              <span class="speaker-label clinician">Clinician</span>
+              <div class="segment-content">
+                <span class="segment-text">Good morning. Thanks for coming in today. Can you start by telling me a bit about what brings you here?</span>
+              </div>
+              <span class="segment-timestamp">00:12</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label other-a">Other A</span>
+              <div class="segment-content">
+                <span class="segment-text">Yeah, um, my GP <span class="entity-highlight" data-type="Name">[NAME_A]</span> referred me. I've been having trouble sleeping for about three months now, since around <span class="entity-highlight" data-type="Date">[DATE_A] 2025</span>.</span>
+              </div>
+              <span class="segment-timestamp">00:28</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label clinician">Clinician</span>
+              <div class="segment-content">
+                <span class="segment-text">I see. And has anything changed in your life recently — work, relationships, living situation?</span>
+              </div>
+              <span class="segment-timestamp">00:45</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label other-a">Other A</span>
+              <div class="segment-content">
+                <span class="segment-text">I moved from <span class="entity-highlight" data-type="Location">[LOCATION_A]</span> to <span class="entity-highlight" data-type="Location">[LOCATION_B]</span> for a new job at <span class="entity-highlight" data-type="Org">[ORG_A]</span>. It's been a big adjustment. I don't really know anyone here yet.</span>
+              </div>
+              <span class="segment-timestamp">01:10</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label clinician">Clinician</span>
+              <div class="segment-content">
+                <span class="segment-text">That sounds like quite a transition. Can you tell me more about the sleep difficulties? What does a typical night look like?</span>
+              </div>
+              <span class="segment-timestamp">01:32</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label other-a">Other A</span>
+              <div class="segment-content">
+                <span class="segment-text">I usually get into bed around <span class="entity-highlight" data-type="Number">[NUM]</span> but then I just lie there. My mind starts racing — thinking about work deadlines, whether I made the right decision moving. I might fall asleep by midnight but wake up at <span class="entity-highlight" data-type="Number">[NUM]</span> and can't get back to sleep.</span>
+                <span class="low-confidence">⚠ low confidence</span>
+              </div>
+              <span class="segment-timestamp">02:05</span>
+            </div>
+
+            <!-- Gap indicator -->
+            <div class="gap-indicator">
+              <span>⚡ Transcription gap (3.2s)</span>
+              <button class="retry-btn">↻ Retry</button>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label other-b">Other B</span>
+              <div class="segment-content">
+                <span class="segment-text">If I can add — I've noticed they've been more irritable lately too. Snapping at small things, which isn't really like them.</span>
+                <span class="overlap-badge">⚡ Overlap 1.2s</span>
+              </div>
+              <span class="segment-timestamp">02:41</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label clinician">Clinician</span>
+              <div class="segment-content">
+                <span class="segment-text">Thank you for sharing that. It's helpful to get that perspective. Have you tried anything to manage the sleep issues — medication, routines, supplements?</span>
+              </div>
+              <span class="segment-timestamp">03:02</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label other-a">Other A</span>
+              <div class="segment-content">
+                <span class="segment-text">My pharmacist at <span class="entity-highlight" data-type="Org">[ORG_B]</span> suggested melatonin, so I've been taking <span class="entity-highlight" data-type="Number">[NUM]</span> mg before bed. It helped a bit at first but doesn't seem to do much anymore. I also tried the <span class="entity-highlight" data-type="Name">[NAME_B]</span> meditation app but I just get frustrated with it.</span>
+              </div>
+              <span class="segment-timestamp">03:38</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label clinician">Clinician</span>
+              <div class="segment-content">
+                <span class="segment-text">Okay. And how about during the day — how are you managing at work? Any changes in appetite, energy, concentration?</span>
+              </div>
+              <span class="segment-timestamp">04:01</span>
+            </div>
+
+            <div class="segment">
+              <span class="speaker-label other-a">Other A</span>
+              <div class="segment-content">
+                <span class="segment-text">My manager <span class="entity-highlight" data-type="Name">[NAME_C]</span> actually pulled me aside last week. Said I seemed distracted in meetings. I've been living on coffee — probably <span class="entity-highlight" data-type="Number">[NUM]</span> cups a day. Appetite is down, I've lost maybe <span class="entity-highlight" data-type="Number">[NUM]</span> kilos since the move.</span>
+              </div>
+              <span class="segment-timestamp">04:34</span>
+            </div>
+
+            <!-- Typing indicator -->
+            <div class="typing-indicator">
+              <span class="speaker-label clinician" style="opacity:0.5">Clinician</span>
+              <div class="typing-dots">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Chat panel -->
+        <div class="chat-panel" id="chatPanel">
+          <div class="chat-header">
+            <span class="icon">💬</span>
+            <span class="title">Session AI</span>
+            <span class="context-badge on">Context ON</span>
+          </div>
+
+          <div class="chat-messages">
+            <div class="chat-msg user">What screening tools would be appropriate here?</div>
+            <div class="chat-msg ai">Based on the presentation so far — sleep disturbance, relocation stress, irritability, appetite changes, and concentration difficulties — consider:<br><br>• <strong>PHQ-9</strong> for depression screening<br>• <strong>GAD-7</strong> for generalised anxiety<br>• <strong>ISI</strong> (Insomnia Severity Index)<br><br>The overlapping symptoms of anxiety and depression warrant screening for both.</div>
+            <div class="chat-msg user">Any risk factors to explore?</div>
+            <div class="chat-msg ai">Key areas to assess:<br><br>• <strong>Social isolation</strong> — new city, no local support network<br>• <strong>Caffeine intake</strong> — exacerbating sleep &amp; anxiety<br>• <strong>Adjustment disorder</strong> — symptoms tied to relocation<br><br>Consider asking about alcohol use and any history of similar episodes.</div>
+          </div>
+
+          <div class="chat-input-area">
+            <input type="text" class="chat-input" placeholder="Ask about this session…" />
+            <button class="send-btn">↑</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL — Session Assistant -->
+    <div class="assistant-panel" id="assistantPanel">
+      <div class="assistant-header">
+        <span class="icon">🧠</span>
+        <span class="title">Session Assistant</span>
+        <div class="analysis-status">
+          <div class="spinner"></div>
+          <span>Analysing…</span>
+        </div>
+      </div>
+
+      <div class="assistant-content">
+
+        <!-- Parking Lot -->
+        <div class="parking-lot">
+          <div class="panel-sub-header">
+            📌 Parking Lot
+            <span class="count">7</span>
+          </div>
+          <div class="parking-lot-scroll">
+
+            <div class="parking-item">
+              <div class="parking-item-type fact">Key Fact</div>
+              <div class="parking-item-text">Sleep onset insomnia ~3 months duration. Waking at 3am with inability to return to sleep.</div>
+              <div class="parking-item-time">02:05</div>
+            </div>
+
+            <div class="parking-item">
+              <div class="parking-item-type fact">Key Fact</div>
+              <div class="parking-item-text">Relocated for new role. No local social support network established.</div>
+              <div class="parking-item-time">01:10</div>
+            </div>
+
+            <div class="parking-item">
+              <div class="parking-item-type theme">Theme</div>
+              <div class="parking-item-text">Adjustment & loss — repeated references to uncertainty about the move decision and missing previous connections.</div>
+              <div class="parking-item-time">01:10 – 03:38</div>
+            </div>
+
+            <div class="parking-item">
+              <div class="parking-item-type fact">Key Fact</div>
+              <div class="parking-item-text">Melatonin trialled (dose noted), initial response with tachyphylaxis. Meditation app attempted without benefit.</div>
+              <div class="parking-item-time">03:38</div>
+            </div>
+
+            <div class="parking-item">
+              <div class="parking-item-type fact">Key Fact</div>
+              <div class="parking-item-text">Functional impairment at work — manager has raised concerns. Weight loss, excessive caffeine intake.</div>
+              <div class="parking-item-time">04:34</div>
+            </div>
+
+            <div class="parking-item">
+              <div class="parking-item-type followup">Follow Up</div>
+              <div class="parking-item-text">Explore alcohol and substance use as coping mechanism for adjustment stress.</div>
+              <div class="parking-item-time">—</div>
+            </div>
+
+            <div class="parking-item">
+              <div class="parking-item-type followup">Follow Up</div>
+              <div class="parking-item-text">Screen for suicidal ideation given multiple risk factors (isolation, sleep deprivation, functional decline).</div>
+              <div class="parking-item-time">—</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Live Feed -->
+        <div class="live-feed">
+          <div class="feed-filter">
+            <button class="filter-btn active">All</button>
+            <button class="filter-btn" onclick="setFilter(this)">Flags</button>
+            <button class="filter-btn" onclick="setFilter(this)">Tips</button>
+            <span class="safety-badge">1</span>
+          </div>
+
+          <div class="feed-scroll">
+
+            <div class="feed-item safety">
+              <div class="feed-item-header">
+                <span class="feed-item-icon">🚨</span>
+                <span class="feed-item-type">Safety Flag</span>
+                <span class="feed-item-time">04:34</span>
+              </div>
+              <div class="feed-item-content">Multiple risk indicators present: social isolation, sleep deprivation, appetite/weight changes, functional impairment at work.</div>
+              <div class="feed-item-rationale">Combination of risk factors warrants safety assessment — consider structured risk screening.</div>
+            </div>
+
+            <div class="feed-item flag">
+              <div class="feed-item-header">
+                <span class="feed-item-icon">⚠️</span>
+                <span class="feed-item-type">Clinical Flag</span>
+                <span class="feed-item-time">04:01</span>
+              </div>
+              <div class="feed-item-content">High caffeine intake may be contributing to both insomnia and anxiety symptoms — consider exploring this as a maintaining factor.</div>
+              <div class="feed-item-rationale">Caffeine-sleep cycle can mask underlying presentation.</div>
+            </div>
+
+            <div class="feed-item tip">
+              <div class="feed-item-header">
+                <span class="feed-item-icon">💡</span>
+                <span class="feed-item-type">Suggestion</span>
+                <span class="feed-item-time">03:38</span>
+              </div>
+              <div class="feed-item-content">Melatonin tachyphylaxis suggests possible circadian rhythm disruption rather than primary insomnia. Consider sleep diary before next session.</div>
+              <div class="feed-item-rationale">Treatment response pattern may inform differential.</div>
+            </div>
+
+            <div class="feed-item flag">
+              <div class="feed-item-header">
+                <span class="feed-item-icon">⚠️</span>
+                <span class="feed-item-type">Clinical Flag</span>
+                <span class="feed-item-time">02:41</span>
+              </div>
+              <div class="feed-item-content">Collateral information from Other B notes increased irritability — validate with primary client and assess for mood changes.</div>
+              <div class="feed-item-rationale">Third-party observation adds diagnostic weight.</div>
+            </div>
+
+            <div class="feed-item tip">
+              <div class="feed-item-header">
+                <span class="feed-item-icon">💡</span>
+                <span class="feed-item-type">Suggestion</span>
+                <span class="feed-item-time">01:10</span>
+              </div>
+              <div class="feed-item-content">Consider exploring what social connections looked like before the move to understand the client's baseline attachment patterns.</div>
+              <div class="feed-item-rationale">Protective factors assessment — prior social functioning.</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Toggle chat panel
+  function toggleChat() {
+    const panel = document.getElementById('chatPanel');
+    const btn = document.getElementById('chatToggle');
+    panel.classList.toggle('collapsed');
+    btn.classList.toggle('active');
+  }
+
+  // Toggle assistant panel
+  function toggleAssistant() {
+    const panel = document.getElementById('assistantPanel');
+    const btn = document.getElementById('assistantToggle');
+    panel.classList.toggle('collapsed');
+    btn.classList.toggle('active');
+  }
+
+  // Filter buttons
+  function setFilter(el) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // Auto-scroll transcript to bottom on load
+  document.addEventListener('DOMContentLoaded', () => {
+    const scroll = document.getElementById('transcriptScroll');
+    scroll.scrollTop = scroll.scrollHeight;
+  });
+</script>
+
+</body>
+</html>
