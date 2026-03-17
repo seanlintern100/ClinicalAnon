@@ -29,6 +29,11 @@ struct RecordingWindowView: View {
     @State private var showSettings = false
     @State private var errorMessage: String?
 
+    // Timer to poll audio levels (SessionManager proxies are computed, not @Published)
+    @State private var levelRefreshTimer: Timer?
+    @State private var micLevel: Float = 0
+    @State private var sysLevel: Float = 0
+
     // MARK: - Body
 
     var body: some View {

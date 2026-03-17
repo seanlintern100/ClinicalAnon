@@ -164,14 +164,25 @@ engagement_score = (talk_time_component × 0.5)
 
 ### Step 3 — AI analysis
 
-Send the chunk + current session state + therapist goals to the AI API. Use the prompt template in `ai-prompt-template.md`.
+Send the chunk with **only the context each analysis needs** — NOT the full session state. The pipeline owns all counts and accumulation. The AI classifies and synthesises, but never re-counts.
 
-**Input to AI:**
-1. The chunk JSON (redacted — safe to send)
-2. Current session state (the full JSON object)
-3. Therapist goals from session_info.json
+**Input to AI (assembled by pipeline):**
+1. The new chunk JSON (redacted — safe to send)
+2. Therapist goals from session_info.json
+3. Current agenda items (status + evidence summaries) — so AI can update status and refine evidence
+4. Existing people list — so AI can merge, not duplicate
+5. Existing themes with phrases — so AI can assign phrases or create new themes
+6. Recent client segments (last 2–3 chunks) — for rupture detection comparison only
 
-**Output from AI:** A delta JSON object (see ai-prompt-template.md for exact format).
+**Do NOT send:** Full session state, raw utterance counts, speaker totals, engagement scores, or prior chunk text beyond the rupture lookback window. The pipeline calculates these locally.
+
+**Output from AI:** A delta JSON object (see `ai-prompt-template.md` for exact format and rules).
+
+**What the pipeline calculates locally (no AI):**
+- Speaker totals, client talk %, rolling 10m window
+- R:Q ratio (accumulated from AI's per-chunk classifications)
+- Client engagement score (word counts, turn lengths, elaboration)
+- Risk flag (rule-based keyword matching on client segments)
 
 ### Step 4 — Merge AI delta into session state
 
