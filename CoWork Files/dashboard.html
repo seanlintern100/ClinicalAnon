@@ -174,7 +174,7 @@ function AgendaItem({item,expanded,onToggle,em}) {
               background:e.type==="quote"?C.tealLight:C.panel,
               borderLeft:`3px solid ${e.type==="quote"?C.teal:C.border}`,
               padding:"6px 10px",borderRadius:"0 6px 6px 0"}}>
-              {e.type==="quote"?`\u201C${sub(e.text,em)}\u201D`:sub(e.text,em)}
+              {e.type==="quote"?`"${sub(e.text,em)}"`:sub(e.text,em)}
             </div>
           ))}
         </div>
@@ -220,7 +220,7 @@ function ThemeItem({theme,color,expanded,onToggle,em}) {
               fontFamily:"'IBM Plex Mono',monospace",
               background:C.tealLight,borderLeft:`3px solid ${C.teal}`,
               padding:"5px 10px",borderRadius:"0 6px 6px 0",lineHeight:1.4}}>
-              \u201C{sub(p,em)}\u201D
+              "{sub(p,em)}"
             </div>
           ))}
         </div>
