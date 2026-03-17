@@ -188,8 +188,12 @@ class CoworkExportService: ObservableObject {
             // Apply redaction using entity mapping
             for entity in session.detectedEntities {
                 let code = mapping.existingMapping(for: entity.originalText.lowercased()) ?? entity.replacementCode
-                // code may already include brackets (e.g. "[PERSON_A]") — don't double-wrap
-                let replacement = code.hasPrefix("[") && code.hasSuffix("]") ? code : "[\(code)]"
+                // Normalize: strip ALL brackets first, then wrap exactly once
+                var bare = code
+                while bare.hasPrefix("[") && bare.hasSuffix("]") {
+                    bare = String(bare.dropFirst().dropLast())
+                }
+                let replacement = "[\(bare)]"
                 text = text.replacingOccurrences(
                     of: entity.originalText,
                     with: replacement,
@@ -272,9 +276,9 @@ class CoworkExportService: ObservableObject {
         // allMappings returns (original, replacement) tuples
         var invertedMap: [String: String] = [:]
         for mapping in session.entityMapping.allMappings {
-            // Strip brackets from replacement for clean keys: "[PERSON_A]" → "PERSON_A"
+            // Strip all brackets from replacement for clean keys: "[PERSON_A]" → "PERSON_A"
             var code = mapping.replacement
-            if code.hasPrefix("[") && code.hasSuffix("]") {
+            while code.hasPrefix("[") && code.hasSuffix("]") {
                 code = String(code.dropFirst().dropLast())
             }
             invertedMap[code] = mapping.original

@@ -101,6 +101,7 @@
 		BF4D6AEBD3BDFB0A97A048BC /* EmailRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910964A6B0573085F191AC49 /* EmailRecognizer.swift */; };
 		C215AD0F5B89967304A3D3D8 /* TitleNameRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21809F1390306CC2272B1C1E /* TitleNameRecognizer.swift */; };
 		C459430DD92E2C888FA69914 /* SourceSans3-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0C90B3D8BDE21999F2F7150C /* SourceSans3-SemiBold.ttf */; };
+		C531F8B1642CD6313622D14C /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 304B514DF56B1A7F70285358 /* Info.plist */; };
 		C666AFFD8AEA20C304F1158F /* MemoryStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B351B12D69B32D0A4D0DCE /* MemoryStorage.swift */; };
 		C7A88A1CE629870F858269F7 /* NZAddressRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39842730A81E3E5F5BF42B6C /* NZAddressRecognizer.swift */; };
 		C8311007D93C54B334D46F52 /* HelpContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4695C3542262D3AAEE29F4DA /* HelpContent.swift */; };
@@ -169,6 +170,7 @@
 		3CE95006AD3FFE4945F0E025 /* AllNumbersRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllNumbersRecognizer.swift; sourceTree = "<group>"; };
 		3EA133E158BD6DBA3567D7F5 /* nz_places_LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = nz_places_LICENSE.txt; sourceTree = "<group>"; };
 		3F8A59F6BE8143EDC7AA4A89 /* LiteRedactorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiteRedactorView.swift; sourceTree = "<group>"; };
+		407E286307C94314B6D0A4E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4432C79664AD818C88A01D09 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		4695C3542262D3AAEE29F4DA /* HelpContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpContent.swift; sourceTree = "<group>"; };
 		46AE881138CF237547E4B849 /* TextContentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextContentCard.swift; sourceTree = "<group>"; };
@@ -309,6 +311,7 @@
 		35AE2D545592FF5F8D1680C2 /* RedactorLite */ = {
 			isa = PBXGroup;
 			children = (
+				407E286307C94314B6D0A4E3 /* Info.plist */,
 				3F8A59F6BE8143EDC7AA4A89 /* LiteRedactorView.swift */,
 				60BEDA68EDE0FAB2B737093D /* LiteViewModel.swift */,
 				A74B6A4EC74A421A5E858E8C /* RedactorLiteApp.swift */,
@@ -630,6 +633,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				217744CD6A72F04212DC21A5 /* Assets.xcassets in Resources */,
+				C531F8B1642CD6313622D14C /* Info.plist in Resources */,
 				70A057F1F85F780C3CE4AFC1 /* Lora-Bold.ttf in Resources */,
 				588D406FDB7E90C52FA32AA2 /* Lora-Italic.ttf in Resources */,
 				4BBC10F04E49A942B0975790 /* Lora-Regular.ttf in Resources */,
@@ -780,14 +784,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5N8GXZGSZ5;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include",
 					"$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include/webrtc",
 					/opt/homebrew/include,
 				);
-				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
+				INFOPLIST_FILE = ClinicalAnon/RedactorLite/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Redactor needs microphone access to record your voice during clinical sessions.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -980,14 +983,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5N8GXZGSZ5;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include",
 					"$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include/webrtc",
 					/opt/homebrew/include,
 				);
-				INFOPLIST_FILE = ClinicalAnon/Resources/Info.plist;
+				INFOPLIST_FILE = ClinicalAnon/RedactorLite/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Redactor needs microphone access to record your voice during clinical sessions.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

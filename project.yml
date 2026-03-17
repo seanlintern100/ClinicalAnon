@@ -71,7 +71,6 @@ targets:
         ENABLE_HARDENED_RUNTIME: true
         COMBINE_HIDPI_IMAGES: true
         CURRENT_PROJECT_VERSION: 1
-        GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Redactor needs microphone access to record your voice during clinical sessions."
         MARKETING_VERSION: 1.0
         SWIFT_EMIT_LOC_STRINGS: true
@@ -127,5 +126,12 @@ targets:
           - "-DWEBRTC_APM_DEBUG_DUMP=0"
         # Bridging header for Objective-C++ to Swift
         SWIFT_OBJC_BRIDGING_HEADER: "ClinicalAnon/ClinicalAnon-Bridging-Header.h"
+    info:
+      path: ClinicalAnon/RedactorLite/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.3bigthings.Redactor
+            CFBundleURLSchemes:
+              - redactor-lite
     scheme:
       gatherCoverageData: false

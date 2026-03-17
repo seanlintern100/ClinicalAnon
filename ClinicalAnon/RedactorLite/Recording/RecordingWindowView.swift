@@ -114,6 +114,11 @@ struct RecordingWindowView: View {
                   session.id == sessionId else { return }
             coworkExport.writeChunk(for: session)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .autoStartRecording)) { notification in
+            guard phase == .setup,
+                  let info = notification.userInfo as? [String: String] else { return }
+            applyURLMetadata(info)
+        }
     }
 
     // MARK: - Actions
@@ -189,6 +194,35 @@ struct RecordingWindowView: View {
         let transcript = sessionManager.handoffToRedact(session)
         NotificationCenter.default.post(name: .transferTranscript, object: transcript)
         RecordingWindowController.shared.closeRecordingWindow()
+    }
+
+    // MARK: - URL Scheme Auto-Start
+
+    /// Populates metadata from URL scheme parameters and auto-starts recording
+    private func applyURLMetadata(_ info: [String: String]) {
+        if let initials = info["initials"], !initials.isEmpty {
+            metadata.clientInitials = initials
+        }
+        if let type = info["type"], let sessionType = SessionType(rawValue: type) {
+            metadata.sessionType = sessionType
+        }
+        if let otherDesc = info["otherType"] {
+            metadata.otherTypeDescription = otherDesc
+        }
+        if let length = info["length"], let mins = Int(length) {
+            metadata.sessionLengthMinutes = max(10, min(180, mins))
+        }
+        if let goals = info["goals"] {
+            metadata.sessionGoals = goals
+        }
+        if let multi = info["multiSpeaker"] {
+            multiSpeaker = (multi == "true" || multi == "1")
+        }
+
+        // Brief delay for UI to settle, then auto-start
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            startRecording()
+        }
     }
 
     // MARK: - Level & Duration Polling

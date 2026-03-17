@@ -31,7 +31,7 @@ JSON objects delivered to a watched folder on the local Mac. Nominally 60 second
   "segments": [
     {
       "speaker": "therapist",
-      "text": "So when [PERSON_1] said that, what came up for you?",
+      "text": "So when [PERSON_A] said that, what came up for you?",
       "timestamp": "00:03:04"
     },
     {
@@ -66,7 +66,7 @@ Written once by the Swift app at session start:
 
 ### Entity map
 
-The Swift app holds the entity map in memory: `[PERSON_1] → real name`, `[LOCATION_1] → real place` etc. At session start, the Swift app passes the entity map to the Cowork dashboard webview as a local variable — no network, on-device only.
+The Swift app holds the entity map in memory: `[PERSON_A] → real name`, `[LOCATION_A] → real place` etc. At session start, the Swift app passes the entity map to the Cowork dashboard webview as a local variable — no network, on-device only.
 
 The dashboard substitutes real values at render time only. Real names and details are visible to the therapist on screen. All AI API calls receive redacted tokens only — real values never leave the Mac.
 
@@ -74,7 +74,7 @@ The dashboard substitutes real values at render time only. Real names and detail
 
 ### Redaction format
 
-Entities appear as `[ENTITY_TYPE_N]` — e.g. `[PERSON_1]`, `[LOCATION_1]`, `[DATE_1]`, `[AGE_1]`. Consistent across all chunks via the Swift app's EntityMapping service.
+Entities appear as `[ENTITY_TYPE_X]` — e.g. `[PERSON_A]`, `[LOCATION_A]`, `[DATE_A]`, `[AGE_A]`. Consistent across all chunks via the Swift app's EntityMapping service.
 
 ### Session timer
 
@@ -298,11 +298,11 @@ Transitions are one-directional: not discussed → partially → fully. No rever
 
 **Organisation:** AI groups connected information. Related details sit together:
 
-> **[PERSON_1] — partner, age [AGE_1]**
-> Lives in [LOCATION_1]. Key event: argument last week.
+> **[PERSON_A] — partner, age [AGE_A]**
+> Lives in [LOCATION_A]. Key event: argument last week.
 
 > **[PERSON_2] — mother**
-> Visiting [DATE_1].
+> Visiting [DATE_A].
 
 **Updates:** AI synthesises each chunk — enriching existing entries, connecting new details to existing people or events, pruning insignificant detail. Not append-only.
 
@@ -404,12 +404,12 @@ Lives in memory only. Discarded on session close. Never written to disk.
   "client_agenda": [
     {
       "id": "ca1",
-      "text": "Argument with [PERSON_1] last week",
+      "text": "Argument with [PERSON_A] last week",
       "status": "partially_discussed",
       "evidence": [
         {
           "type": "quote",
-          "text": "[PERSON_1] said I was being irrational and I just shut down",
+          "text": "[PERSON_A] said I was being irrational and I just shut down",
           "timestamp": "00:06:14"
         }
       ]
@@ -418,11 +418,11 @@ Lives in memory only. Discarded on session close. Never written to disk.
 
   "people": [
     {
-      "token": "[PERSON_1]",
+      "token": "[PERSON_A]",
       "role": "partner",
       "details": {
-        "age": "[AGE_1]",
-        "location": "[LOCATION_1]"
+        "age": "[AGE_A]",
+        "location": "[LOCATION_A]"
       },
       "key_events": ["Argument last week"],
       "mentions": 6
@@ -442,7 +442,7 @@ Lives in memory only. Discarded on session close. Never written to disk.
       "id": "th2",
       "text": "Shutdown under conflict",
       "phrases": [
-        "[PERSON_1] said I was being irrational and I just shut down"
+        "[PERSON_A] said I was being irrational and I just shut down"
       ]
     }
   ],
@@ -507,9 +507,9 @@ AI returns only what has changed. Pipeline merges delta into session state. Dash
 
   "people_updates": [
     {
-      "token": "[PERSON_1]",
+      "token": "[PERSON_A]",
       "role": "partner",
-      "new_details": { "age": "[AGE_1]" },
+      "new_details": { "age": "[AGE_A]" },
       "new_events": ["Argument last week"]
     }
   ],

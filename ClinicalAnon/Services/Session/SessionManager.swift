@@ -604,6 +604,8 @@ extension Notification.Name {
     static let transcriptionChunkRedacted = Notification.Name("transcriptionChunkRedacted")
     /// Posted when user transfers transcript from recording window to main redactor
     static let transferTranscript = Notification.Name("transferTranscript")
+    /// Posted by URL scheme handler — carries session metadata to auto-start recording
+    static let autoStartRecording = Notification.Name("autoStartRecording")
     #endif
 }
 

@@ -2,9 +2,51 @@
 
 ## Overview
 
-Redactor Lite exports redacted transcript chunks to a watched folder during live recording sessions. Your job is to process each chunk, run local calculations and AI analysis, maintain session state, and render the live dashboard.
+Redactor Lite exports redacted transcript chunks to a watched folder during live recording sessions. Your job is to collect session setup info from the therapist, launch the app, process each chunk, run local calculations and AI analysis, maintain session state, and render the live dashboard.
 
 **Privacy rule:** The `entity_map.json` file maps redaction codes to real names. Use it ONLY for dashboard display. Never include real names in AI API calls — all AI receives redacted text only.
+
+---
+
+## Session Setup (Before Recording)
+
+When the therapist asks to start a session, collect the following information conversationally before launching the app. Ask one question at a time.
+
+### Required fields
+
+1. **Client ID** — Initials used to identify the client (e.g. "JB"). Ask: *"What are the client's initials?"*
+2. **Session type** — One of: `Therapy`, `Coaching`, `Supervision`, `Other`. If Other, ask for a brief description. Ask: *"What type of session is this — therapy, coaching, supervision, or other?"*
+3. **Session length** — Duration in minutes (default 50, range 10–180, step 5). Ask: *"How long is the session? (default 50 minutes)"*
+4. **Session goals** — What the therapist wants to focus on. Ask: *"What are your goals for this session?"*
+5. **Multiple speakers** — Whether more than one person is on the remote end (couples, family, group). This enables speaker diarization. Ask: *"Is anyone else joining the client today, or is it a 1:1 session?"*
+
+### Defaults
+
+- **Session date**: today (no need to ask unless the therapist wants to back-date)
+- **Session length**: 50 minutes — confirm rather than ask from scratch
+- **Multiple speakers**: off unless told otherwise
+
+### Launching the app
+
+Once you have all the info, launch Redactor Lite directly into recording mode using the URL scheme:
+
+```bash
+open "redactor-lite://record?initials=JB&type=Therapy&length=50&goals=Explore+anxiety+triggers&multiSpeaker=false"
+```
+
+**Parameter encoding:** URL-encode the `goals` value (spaces → `+` or `%20`). All other values are simple strings.
+
+**What happens:** The app opens, the recording window appears with pre-filled metadata, and recording starts automatically. The therapist doesn't need to touch the app at all.
+
+If the app is not installed or the URL scheme doesn't work, fall back to:
+```bash
+open -a "Redactor"
+```
+Then instruct the therapist to fill in the setup form manually and click "Start Recording".
+
+### After launch
+
+Once the app is recording, it will begin writing chunk files to the watched export folder. Proceed to **Folder Watching** below to start the pipeline.
 
 ---
 

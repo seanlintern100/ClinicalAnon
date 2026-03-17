@@ -20,6 +20,9 @@ struct RedactorLiteApp: App {
         WindowGroup {
             LiteRedactorView(viewModel: viewModel)
                 .frame(minWidth: 1100, minHeight: 600)
+                .onOpenURL { url in
+                    handleRecordingURL(url)
+                }
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1400, height: 800)
@@ -30,6 +33,34 @@ struct RedactorLiteApp: App {
 
         Settings {
             LiteSettingsView()
+        }
+    }
+
+    // MARK: - URL Scheme Handler
+
+    /// Handles `redactor-lite://record?initials=JB&type=Therapy&length=50&goals=...&multiSpeaker=false`
+    private func handleRecordingURL(_ url: URL) {
+        guard url.scheme == "redactor-lite",
+              url.host == "record" else { return }
+
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let params = components?.queryItems ?? []
+
+        var info: [String: String] = [:]
+        for item in params {
+            if let value = item.value {
+                info[item.name] = value
+            }
+        }
+
+        // Open recording window, then post notification with metadata params
+        RecordingWindowController.shared.showRecordingWindow()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NotificationCenter.default.post(
+                name: .autoStartRecording,
+                object: nil,
+                userInfo: info
+            )
         }
     }
 }
