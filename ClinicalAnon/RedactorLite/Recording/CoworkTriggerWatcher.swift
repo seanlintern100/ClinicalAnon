@@ -48,6 +48,10 @@ final class CoworkTriggerWatcher {
     func startWatching() {
         guard !isRunning else { return }
         isRunning = true
+        print("[CoworkTriggerWatcher] Started watching for trigger files")
+
+        // Log which folder we're watching
+        logWatchedFolder()
 
         pollTimer?.invalidate()
         let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -67,6 +71,17 @@ final class CoworkTriggerWatcher {
     }
 
     // MARK: - Private Methods
+
+    private func logWatchedFolder() {
+        guard let bookmarkData = UserDefaults.standard.data(forKey: "cowork.exportFolderBookmark") else {
+            print("[CoworkTriggerWatcher] WARNING: No export folder bookmark set")
+            return
+        }
+        var isStale = false
+        if let url = try? URL(resolvingBookmarkData: bookmarkData, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &isStale) {
+            print("[CoworkTriggerWatcher] Watching folder: \(url.path)")
+        }
+    }
 
     private func checkForTrigger() {
         // Get the export root folder from UserDefaults bookmark
