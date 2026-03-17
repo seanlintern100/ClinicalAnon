@@ -34,6 +34,7 @@ class SessionManager: ObservableObject {
 
     // MARK: - Session Assistant
 
+    #if !REDACTOR_LITE
     private(set) lazy var assistantService: SessionAssistantService = {
         let bedrockService = BedrockService()
         let preferencesManager = ClinicianPreferencesManager()
@@ -42,6 +43,7 @@ class SessionManager: ObservableObject {
 
     /// Cache of assistant state per session (for restoring when switching sessions)
     private var assistantStateCache: [UUID: SessionAssistantStateData] = [:]
+    #endif
 
     // MARK: - Duration Timer
 
@@ -109,7 +111,9 @@ class SessionManager: ObservableObject {
         // Model loading happens in background when first audio chunk is ready
 
         // Reset assistant for new session
+        #if !REDACTOR_LITE
         assistantService.reset()
+        #endif
 
         // Reset speaker tracking for new session (ensures consistent speaker IDs within session)
         SpeakerDiarizationService.shared.resetSpeakerTracking()
@@ -243,20 +247,26 @@ class SessionManager: ObservableObject {
         // Stop audio capture
         audioCaptureService.stopCapture()
 
+        #if !REDACTOR_LITE
         // Save assistant learnings from this session
         Task {
             await assistantService.endSession()
         }
+        #endif
 
         // Mark session complete
         session.state = .complete
 
+        #if !REDACTOR_LITE
         // Save final state with AI assistant content (parking lot)
         let assistantState = assistantService.state.stateData
         try? await storageService.saveSession(session, assistantState: assistantState)
 
         // Cache the assistant state for this session
         assistantStateCache[session.id] = assistantState
+        #else
+        try? await storageService.saveSession(session)
+        #endif
 
         if activeSession?.id == session.id {
             activeSession = nil
@@ -322,6 +332,13 @@ class SessionManager: ObservableObject {
         // createdAt is immutable on LiveSession, so we recreate the session
         // from its data with a fresh createdAt to reset the retention clock.
         let data = session.sessionData
+
+        #if !REDACTOR_LITE
+        let cachedAssistant = assistantStateCache[session.id]
+        #else
+        let cachedAssistant: SessionAssistantStateData? = nil
+        #endif
+
         let freshData = LiveSessionData(
             id: data.id,
             createdAt: Date(),  // Reset creation date
@@ -335,7 +352,7 @@ class SessionManager: ObservableObject {
             lastTranscriptUpdate: data.lastTranscriptUpdate,
             detectedEntities: data.detectedEntities,
             audioChunkPaths: data.audioChunkPaths,
-            assistantStateData: assistantStateCache[session.id],
+            assistantStateData: cachedAssistant,
             chatMessages: data.chatMessages,
             hasMultipleParticipants: data.hasMultipleParticipants
         )
@@ -347,9 +364,10 @@ class SessionManager: ObservableObject {
         }
 
         // Save to disk
-        try? await storageService.saveSession(freshSession, assistantState: assistantStateCache[session.id])
+        try? await storageService.saveSession(freshSession, assistantState: cachedAssistant)
     }
 
+    #if !REDACTOR_LITE
     // MARK: - Assistant State Management
 
     /// Restore assistant state for a session (called when session is selected in UI)
@@ -371,6 +389,7 @@ class SessionManager: ObservableObject {
         assistantStateCache[sessionId] = currentState
         print("SessionManager: Cached assistant state for session \(sessionId)")
     }
+    #endif
 
     // MARK: - Recovery
 
@@ -399,10 +418,12 @@ class SessionManager: ObservableObject {
                 sessions.append(session)
             }
 
+            #if !REDACTOR_LITE
             // Cache the assistant states for later restoration
             for (sessionId, assistantState) in loadResult.assistantStates {
                 assistantStateCache[sessionId] = assistantState
             }
+            #endif
 
             // Sort by creation date (newest first)
             sessions.sort { $0.createdAt > $1.createdAt }
@@ -476,13 +497,14 @@ class SessionManager: ObservableObject {
         }
 
         // Trigger incremental entity detection, then AI assistant (sequential for privacy)
-        print("SessionManager: [DEBUG] Spawning LiveRedactor + SessionAssistant task for \(result.segments.count) segments")
+        print("SessionManager: [DEBUG] Spawning LiveRedactor task for \(result.segments.count) segments")
         Task {
             // Step 1: LiveRedactor detects entities FIRST
             print("SessionManager: [DEBUG] LiveRedactor task starting...")
             await LiveRedactor.shared.processNewSegments(for: session, segments: result.segments)
             print("SessionManager: [DEBUG] LiveRedactor task completed")
 
+            #if !REDACTOR_LITE
             // Step 2: SessionAssistant runs AFTER entities detected
             // This ensures session.redactedTranscript includes all detected entities
             await assistantService.processNewSegments(result.segments, for: session)
@@ -490,6 +512,15 @@ class SessionManager: ObservableObject {
             // Auto-save with current AI state (parking lot)
             let assistantState = self.assistantService.state.stateData
             try? await self.storageService.saveSession(session, assistantState: assistantState)
+            #else
+            // Notify recording window that a new chunk is ready for Cowork export
+            NotificationCenter.default.post(
+                name: .transcriptionChunkRedacted,
+                object: nil,
+                userInfo: ["sessionId": session.id]
+            )
+            try? await self.storageService.saveSession(session)
+            #endif
         }
     }
 
@@ -568,6 +599,12 @@ extension Notification.Name {
     static let sessionNeedsNaming = Notification.Name("sessionNeedsNaming")
     static let expiredSessionsFound = Notification.Name("expiredSessionsFound")
     static let sessionSecurityAdvisory = Notification.Name("sessionSecurityAdvisory")
+    #if REDACTOR_LITE
+    /// Posted after LiveRedactor completes entity detection on a chunk — triggers Cowork export
+    static let transcriptionChunkRedacted = Notification.Name("transcriptionChunkRedacted")
+    /// Posted when user transfers transcript from recording window to main redactor
+    static let transferTranscript = Notification.Name("transferTranscript")
+    #endif
 }
 
 // MARK: - Preview Helpers

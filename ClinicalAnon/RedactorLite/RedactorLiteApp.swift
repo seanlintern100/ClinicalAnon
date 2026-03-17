@@ -36,15 +36,17 @@ struct RedactorLiteApp: App {
 
 // MARK: - Lite Settings View
 
-/// Simplified settings — only detection, exclusions, and inclusions
+/// Settings — detection, exclusions, inclusions, and recording
 struct LiteSettingsView: View {
     private enum Tab: String, Hashable {
         case detection = "Detection"
         case exclusions = "Exclusions"
         case inclusions = "Inclusions"
+        case recording = "Recording"
     }
 
     @State private var selectedTab: Tab = .detection
+    @StateObject private var coworkExport = CoworkExportService()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -59,7 +61,11 @@ struct LiteSettingsView: View {
             InclusionSettingsView()
                 .tabItem { Label("Inclusions", systemImage: "plus.circle") }
                 .tag(Tab.inclusions)
+
+            RecordingSettingsView(coworkExport: coworkExport)
+                .tabItem { Label("Recording", systemImage: "mic.circle") }
+                .tag(Tab.recording)
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 500, height: 500)
     }
 }

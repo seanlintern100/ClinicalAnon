@@ -26,14 +26,78 @@ Redactor is a macOS app for anonymizing clinical documentation. It detects and r
 ## Targets
 
 - **Redactor** — Full-featured app with AI analysis (Bedrock), live sessions, transcription
-- **Redactor Lite** — Simplified 3-panel app for colleagues: Redact → Copy out → Paste back → Restore. No AI integration, no live sessions. Shares all engine code (recognizers, entity mapping, overlap resolution) with the full app.
+- **Redactor Lite** — 3-panel paste-back workflow + live session recording with Cowork export. Shares all engine code (recognizers, entity mapping, overlap resolution) and session recording infrastructure with the full app.
 
 Lite-specific files live in `ClinicalAnon/RedactorLite/`:
 - `RedactorLiteApp.swift` — App entry point
-- `LiteViewModel.swift` — Coordinates RedactPhaseState + restore
+- `LiteViewModel.swift` — Coordinates RedactPhaseState + restore + recording transfer
 - `LiteRedactorView.swift` — 3-panel UI with entity sidebar
+- `Recording/` — Live session recording with Cowork export:
+  - `RecordingWindowController.swift` — Manages recording window
+  - `RecordingWindowView.swift` — 3-panel recording layout (Setup | Transcript | Entities)
+  - `SessionSetupPanel.swift` — Session metadata form + recording controls
+  - `LiveTranscriptPanel.swift` — Auto-scrolling transcript with speaker labels
+  - `SessionEntityPanel.swift` — Detected entities panel
+  - `RecordingSettingsView.swift` — Transcription model, audio, export folder settings
+  - `CoworkExportService.swift` — Saves redacted JSON chunks to Cowork-monitored folder
+  - `SessionMetadata.swift` — Session info model (initials, type, goals, date, length)
 
-The Lite target excludes full-app Views (MainContentView, phase views, session views) and ViewModels (WorkflowViewModel, ImprovePhaseState) but shares everything else.
+The Lite target excludes full-app Views (MainContentView, phase views, session views), ViewModels (WorkflowViewModel, ImprovePhaseState), and AI services (SessionAssistantService, SessionAIService, LocalLLMService). It includes all audio/session/transcription services.
+
+Lite includes WhisperKit, FluidAudio, and WebRTC dependencies. Uses `REDACTOR_LITE` compilation flag — `SessionManager.swift` uses `#if !REDACTOR_LITE` to skip Bedrock AI calls and post Cowork export notifications instead.
+
+## Cowork Integration (Lite)
+
+Live session recording saves redacted transcript chunks to a user-selected folder that Claude Cowork monitors.
+
+**File output structure:**
+```
+{root_folder}/
+  JB_2026-03-17_1430/
+    session_info.json     ← metadata
+    chunk_001.json        ← redacted transcript
+    chunk_002.json
+```
+
+**Chunk JSON format:**
+```json
+{
+  "chunk_index": 1,
+  "timestamp_start": 60.0,
+  "timestamp_end": 120.0,
+  "segments": [
+    { "speaker": "therapist", "text": "So [PERSON_1]...", "start": 60.5, "end": 63.2 },
+    { "speaker": "client", "text": "[PERSON_1] has been...", "start": 64.0, "end": 67.8 }
+  ]
+}
+```
+
+Speaker labels: `therapist` (mic), `client` / `client_1`/`client_2` (auto-detected via diarization). Entity mapping ensures consistent `[PERSON_1]` codes across all chunks.
+
+## Distribution (Lite)
+
+```bash
+# 1. Archive
+xcodebuild -project Redactor.xcodeproj -scheme "Redactor Lite" -configuration Release archive \
+  -archivePath /tmp/RedactorLite.xcarchive ARCHS=arm64 CODE_SIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM=5N8GXZGSZ5 "CODE_SIGN_IDENTITY=Developer ID Application"
+
+# 2. Export (needs exportOptions.plist with method=developer-id, teamID=5N8GXZGSZ5)
+xcodebuild -exportArchive -archivePath /tmp/RedactorLite.xcarchive \
+  -exportPath /tmp/RedactorLiteExport -exportOptionsPlist /tmp/exportOptions.plist
+
+# 3. Create & sign DMG
+hdiutil create -volname "Redactor Lite" -srcfolder "/tmp/RedactorLiteExport/Redactor Lite.app" \
+  -ov -format UDZO /tmp/RedactorLite.dmg
+codesign --force --sign EFEE30A6ED0D62B8BB3970C39D09D1AFE0D1D474 /tmp/RedactorLite.dmg
+
+# 4. Notarize & staple
+xcrun notarytool submit /tmp/RedactorLite.dmg --keychain-profile "RedactorNotary" --wait
+xcrun stapler staple /tmp/RedactorLite.dmg
+```
+
+Notarization keychain profile: `RedactorNotary` (Apple ID: sean.versteegh@gmail.com, Team: 5N8GXZGSZ5).
+Signing cert hash: `EFEE30A6ED0D62B8BB3970C39D09D1AFE0D1D474` (use hash to avoid ambiguity with duplicate certs).
 
 ## Feature Branches
 

@@ -120,6 +120,9 @@ class LiteViewModel: ObservableObject {
         cancellable = redactState.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+
+        // Listen for transcript transfers from recording window
+        setupTransferListener()
     }
 
     // MARK: - Analysis
@@ -475,6 +478,32 @@ class LiteViewModel: ObservableObject {
         restoredText = ""
         justCopiedRedacted = false
         justCopiedRestored = false
+    }
+
+    // MARK: - Recording Transfer
+
+    private var transferCancellable: AnyCancellable?
+
+    /// Set up listener for transcript transfer from recording window
+    func setupTransferListener() {
+        transferCancellable = NotificationCenter.default
+            .publisher(for: .transferTranscript)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let transcript = notification.object as? String,
+                      !transcript.isEmpty else { return }
+                self.acceptTranscriptFromRecording(transcript)
+            }
+    }
+
+    /// Accept raw transcript from recording session and start fresh redaction
+    func acceptTranscriptFromRecording(_ rawTranscript: String) {
+        startNewSession()
+        redactState.inputText = rawTranscript
+        Task {
+            await analyze()
+        }
     }
 
     // MARK: - Debug Logging

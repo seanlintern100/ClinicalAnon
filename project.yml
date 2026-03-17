@@ -165,6 +165,7 @@ targets:
           - "**/*.md"
           - "**/Tests"
           - "**/GLiNERBundle/**"
+          # Full app entry point & views
           - ClinicalAnonApp.swift
           - Views/MainContentView.swift
           - Views/RedactPhaseView.swift
@@ -180,17 +181,17 @@ targets:
           - Views/Components/StatusBar.swift
           - ViewModels/WorkflowViewModel.swift
           - ViewModels/ImprovePhaseState.swift
+          - Views/TranscriptionSettingsView.swift
+          - Views/LocalLLMSettingsView.swift
+          - Views/AISettingsView.swift
+          # AI assistant service (replaced by Cowork export in Lite)
+          - Services/Session/SessionAssistantService.swift
+          - Services/Session/SessionAIService.swift
+          # Heavy services not needed for Lite
+          - Services/LocalLLMService.swift
     dependencies:
-      - package: AWSSDKSwift
-        product: AWSBedrockRuntime
       - package: WhisperKit
       - package: FluidAudio
-      - package: mlx-swift-lm
-        product: MLXLLM
-      - package: mlx-swift-lm
-        product: MLXLMCommon
-      - package: swift-transformers
-        product: Hub
     resources:
       - path: ClinicalAnon/Resources/Fonts
       - path: ClinicalAnon/Resources/Assets.xcassets
@@ -209,9 +210,13 @@ targets:
         COMBINE_HIDPI_IMAGES: true
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Redactor Lite needs microphone access to record your voice during clinical sessions."
         MARKETING_VERSION: 1.0
         SWIFT_EMIT_LOC_STRINGS: true
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "REDACTOR_LITE"
+        # C++17 required by abseil (WebRTC dependency)
         CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+        # WebRTC Audio Processing library configuration
         HEADER_SEARCH_PATHS:
           - "$(inherited)"
           - "$(PROJECT_DIR)/Vendor/webrtc-audio-processing/include"
@@ -224,6 +229,7 @@ targets:
         OTHER_LDFLAGS:
           - "$(inherited)"
           - "-lc++"
+          # WebRTC audio processing libraries
           - "-lwebrtc-audio-processing-2"
           - "-lcommon_audio"
           - "-llibbase"
@@ -232,6 +238,7 @@ targets:
           - "-llibpffft"
           - "-llibrnnoise"
           - "-llibfft"
+          # Abseil libraries (WebRTC dependency)
           - "-labsl_base"
           - "-labsl_raw_logging_internal"
           - "-labsl_log_severity"
@@ -247,13 +254,16 @@ targets:
           - "-labsl_strings_internal"
           - "-labsl_int128"
           - "-labsl_throw_delegate"
+          # System frameworks
           - "-framework CoreFoundation"
+        # WebRTC macros for proper compilation
         OTHER_CPLUSPLUSFLAGS:
           - "$(inherited)"
           - "-std=c++17"
           - "-DWEBRTC_MAC"
           - "-DWEBRTC_POSIX"
           - "-DWEBRTC_APM_DEBUG_DUMP=0"
+        # Bridging header for Objective-C++ to Swift
         SWIFT_OBJC_BRIDGING_HEADER: "ClinicalAnon/ClinicalAnon-Bridging-Header.h"
 
   RedactorTests:

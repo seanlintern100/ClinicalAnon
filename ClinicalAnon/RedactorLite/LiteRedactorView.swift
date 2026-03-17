@@ -118,6 +118,19 @@ struct LiteRedactorView: View {
 
     private var toolbar: some View {
         HStack {
+            // Start Recording button
+            Button(action: {
+                RecordingWindowController.shared.showRecordingWindow()
+            }) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "record.circle")
+                        .foregroundStyle(.red)
+                    Text("Record Session")
+                }
+                .font(DesignSystem.Typography.caption)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
             Spacer()
 
             // Document count indicator
