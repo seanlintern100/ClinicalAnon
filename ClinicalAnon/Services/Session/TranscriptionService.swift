@@ -773,33 +773,20 @@ class TranscriptionService: ObservableObject {
         var echoIds = Set<UUID>()
 
         for mic in clinicianSegments {
-            let micStart = mic.startTime
-            let micEnd = mic.endTime
-            let micDuration = max(micEnd - micStart, 0.1)
+            let micMid = (mic.startTime + mic.endTime) / 2.0
 
-            // Calculate how much of this clinician segment overlaps with ANY system audio.
-            // Shrink system audio windows by 2s on each end — Whisper timestamps are imprecise
-            // and extend beyond actual speech, which would incorrectly clip the next speaker.
-            let boundary: TimeInterval = 2.0
-            var totalOverlap: TimeInterval = 0
-            for sys in otherSegments {
-                let trimmedStart = sys.startTime + boundary
-                let trimmedEnd = sys.endTime - boundary
-                guard trimmedEnd > trimmedStart else { continue } // Skip very short segments
-                let overlapStart = max(micStart, trimmedStart)
-                let overlapEnd = min(micEnd, trimmedEnd)
-                if overlapEnd > overlapStart {
-                    totalOverlap += overlapEnd - overlapStart
-                }
+            // Simple check: is the midpoint of this clinician segment within any
+            // system audio segment's time window? If yes, the client was speaking
+            // at this time so the mic content is echo.
+            // Use a tight 0.5s buffer to avoid clipping at speaker transitions.
+            let isEcho = otherSegments.contains { sys in
+                micMid >= sys.startTime + 0.5 && micMid <= sys.endTime - 0.5
             }
 
-            let overlapRatio = totalOverlap / micDuration
-
-            if overlapRatio > 0.3 {
-                // >30% of the clinician segment's time is covered by system audio = echo
+            if isEcho {
                 echoIds.insert(mic.id)
                 #if DEBUG
-                print("TranscriptionService: [ECHO] Dropping clinician segment (overlap=\(String(format: "%.0f%%", overlapRatio * 100))): \"\(mic.text.prefix(60))\"")
+                print("TranscriptionService: [ECHO] Dropping clinician segment (midpoint in sys audio): \"\(mic.text.prefix(60))\"")
                 #endif
             }
         }
