@@ -614,6 +614,17 @@ class AudioCaptureService: NSObject, ObservableObject {
 
     private var micBufferCount: Int = 0
 
+    /// Atomic flag: true when system audio (client) has energy — mic should be suppressed.
+    /// Written by system audio callback (background thread), read by mic callback (audio thread).
+    private let _systemAudioActive: UnsafeMutablePointer<Int32> = {
+        let ptr = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
+        ptr.initialize(to: 0)
+        return ptr
+    }()
+
+    /// Energy threshold for considering system audio "active" (client speaking)
+    private let systemAudioGateThreshold: Float = 0.003
+
     /// Mono buffer for AEC processing (reused to avoid allocations)
     private var monoBuffer: AVAudioPCMBuffer?
     private var monoFormat: AVAudioFormat?
@@ -663,6 +674,14 @@ class AudioCaptureService: NSObject, ObservableObject {
         // Apply software echo cancellation if enabled
         if let aec = aecProcessor {
             aec.process(samples: monoSamples, count: frameCount)
+        }
+
+        // Audio gate: if system audio (client) is active, zero out mic to prevent echo.
+        // This is the Teams/Krisp approach — suppress mic during remote speaker activity.
+        // AEC reduces echo but Whisper still transcribes faint residual. Gating eliminates it.
+        if OSAtomicCompareAndSwap32Barrier(1, 1, _systemAudioActive) {
+            // System audio is active — zero out mic samples
+            memset(monoSamples, 0, frameCount * MemoryLayout<Float>.size)
         }
 
         // Throttle UI level updates (every 10 buffers ~= 85ms at 4096 samples/48kHz)
@@ -1130,8 +1149,18 @@ extension AudioCaptureService: SCStreamOutput {
         let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
 
         // Feed AEC reference directly on this background thread
-        // Using try_lock to avoid blocking if capture is processing
         aecBridge?.processReferenceFrame(floatPointer, count: Int32(floatCount))
+
+        // Update system-audio-active gate (atomic write, read by mic callback)
+        // If system audio has energy above threshold, client is speaking → suppress mic
+        var energy: Float = 0
+        let checkCount = min(floatCount, 480)
+        for i in 0..<checkCount {
+            energy += floatPointer[i] * floatPointer[i]
+        }
+        energy = sqrtf(energy / Float(max(checkCount, 1)))
+        let active: Int32 = energy > systemAudioGateThreshold ? 1 : 0
+        OSAtomicCompareAndSwap32Barrier(1 - active, active, _systemAudioActive)
 
         // Copy sample buffer for writing (must happen before callback returns)
         var copiedBuffer: CMSampleBuffer?
