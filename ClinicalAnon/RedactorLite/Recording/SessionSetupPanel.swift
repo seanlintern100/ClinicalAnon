@@ -17,6 +17,7 @@ struct SessionSetupPanel: View {
     @Binding var metadata: SessionMetadata
     @Binding var errorMessage: String?
     @Binding var showSettings: Bool
+    @Binding var multiSpeaker: Bool
 
     @ObservedObject var sessionManager: SessionManager
     @ObservedObject var transcriptionService: TranscriptionService
@@ -29,6 +30,7 @@ struct SessionSetupPanel: View {
     var onTransferToRedactor: () -> Void
 
     @State private var showModelDownload = false
+    @State private var showMultiSpeakerInfo: Bool = false
 
     var body: some View {
         ScrollView {
@@ -119,31 +121,44 @@ struct SessionSetupPanel: View {
                     )
             }
 
-            Divider()
-
-            // Export Folder
+            // Multiple Speakers
             VStack(alignment: .leading, spacing: 4) {
-                Text("Export Folder")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                HStack {
+                    Toggle(isOn: $multiSpeaker) {
+                        HStack(spacing: 6) {
+                            Image(systemName: multiSpeaker ? "person.3.fill" : "person.3")
+                                .foregroundStyle(multiSpeaker ? DesignSystem.Colors.primaryTeal : DesignSystem.Colors.textSecondary)
+                            Text("Multiple Speakers")
+                                .font(DesignSystem.Typography.body)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
 
-                if let folderURL = coworkExport.exportRootFolderURL {
-                    Text(folderURL.lastPathComponent)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    Button(action: { showMultiSpeakerInfo.toggle() }) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showMultiSpeakerInfo) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("When to enable")
+                                .font(DesignSystem.Typography.bodyBold)
+                            Text("Turn this on when more than one person is speaking on the remote end — e.g. family therapy, group supervision, or couples sessions.")
+                                .font(DesignSystem.Typography.caption)
+                            Text("The app will use voice analysis to identify and label each speaker separately (Client A, Client B, etc.).")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                            Text("Leave off for standard 1:1 sessions.")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        }
+                        .padding(12)
+                        .frame(width: 260)
+                    }
                 }
-
-                Button("Choose Folder...") {
-                    selectExportFolder()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
-
-            // Whisper Model Status
-            modelStatusView
 
             // Error Message
             if let error = errorMessage {
@@ -349,60 +364,4 @@ struct SessionSetupPanel: View {
         }
     }
 
-    // MARK: - Model Status
-
-    private var modelStatusView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Transcription Model")
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-            if transcriptionService.isModelLoaded {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text(transcriptionService.loadedModelSize?.rawValue ?? "Ready")
-                        .font(DesignSystem.Typography.caption)
-                }
-            } else if transcriptionService.isDownloading {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressView(value: max(0, transcriptionService.downloadProgress))
-                    Text(transcriptionService.downloadStatus)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-                }
-            } else if transcriptionService.isLoading {
-                HStack {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading model...")
-                        .font(DesignSystem.Typography.caption)
-                }
-            } else {
-                Button("Download Model") {
-                    Task {
-                        try? await transcriptionService.downloadModel(size: transcriptionService.selectedModelSize)
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-    }
-
-    // MARK: - Folder Picker
-
-    private func selectExportFolder() {
-        let panel = NSOpenPanel()
-        panel.title = "Select Cowork Export Folder"
-        panel.message = "Choose the root folder where session data will be saved"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-
-        if panel.runModal() == .OK, let url = panel.url {
-            coworkExport.setRootFolder(url)
-        }
-    }
 }
