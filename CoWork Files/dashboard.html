@@ -394,7 +394,7 @@ function Dashboard() {
         </div>
         {complete&&<span style={{fontSize:11,color:C.green,fontFamily:"'IBM Plex Mono',monospace",
           background:"rgba(45,157,94,0.08)",padding:"3px 10px",borderRadius:6,fontWeight:600}}>
-          COMPLETE</span>}
+          COMPLETE · {fmt(elapsed)}</span>}
         <span style={{marginLeft:"auto",fontSize:12,color:C.textSec}}>
           {s.session_type} · {s.session_date}</span>
       </div>
@@ -407,7 +407,7 @@ function Dashboard() {
         </div>
         <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:16,color:pColor,
           fontWeight:700,minWidth:120,textAlign:"right"}}>
-          {complete?"Complete":`${fmt(remaining)} left`}
+          {complete?`${fmt(elapsed)} session`:`${fmt(remaining)} left`}
         </div>
       </div>
 
