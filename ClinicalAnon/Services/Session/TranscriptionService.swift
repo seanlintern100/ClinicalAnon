@@ -827,8 +827,8 @@ class TranscriptionService: ObservableObject {
                     // Check if this is a small gap between active regions
                     let lookBack = max(0, f - minGapFrames)
                     let lookAhead = min(totalFrames - 1, f + minGapFrames)
-                    let hasActiveBefore = (lookBack..<f).contains { gateTimeline[$0] }
-                    let hasActiveAfter = ((f+1)...lookAhead).contains { gateTimeline[$0] }
+                    let hasActiveBefore = lookBack < f && (lookBack..<f).contains { gateTimeline[$0] }
+                    let hasActiveAfter = f + 1 <= lookAhead && ((f+1)...lookAhead).contains { gateTimeline[$0] }
                     if hasActiveBefore && hasActiveAfter {
                         gateTimeline[f] = true  // Fill the gap
                     }
