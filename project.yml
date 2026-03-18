@@ -133,5 +133,6 @@ targets:
           - CFBundleURLName: com.3bigthings.Redactor
             CFBundleURLSchemes:
               - redactor-lite
+        NSMicrophoneUsageDescription: "Redactor needs microphone access to record your voice during clinical sessions."
     scheme:
       gatherCoverageData: false

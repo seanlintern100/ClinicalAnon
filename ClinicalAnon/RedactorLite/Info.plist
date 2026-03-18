@@ -29,5 +29,7 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Redactor needs microphone access to record your voice during clinical sessions.</string>
 </dict>
 </plist>
