@@ -314,6 +314,10 @@ class CoworkExportService: ObservableObject {
     private func speakerLabel(for segment: TranscriptSegment) -> String {
         switch segment.speaker {
         case .clinician:
+            // Use diarization speaker ID if available for multi-therapist
+            if let speakerId = segment.speakerId {
+                return "therapist_\(speakerId)"
+            }
             return "therapist"
         case .other:
             // Use diarization speaker ID if available for multi-client

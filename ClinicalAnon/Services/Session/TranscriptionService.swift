@@ -465,6 +465,16 @@ class TranscriptionService: ObservableObject {
                 tempFilesToClean.append(decryptedMicPath)
             }
 
+            // Diarize raw mic BEFORE gating — gated audio has silence gaps that confuse
+            // the speaker detector. Diarization needs continuous speech context.
+            var micSpeakerSegments: [SpeakerSegment]?
+            if SpeakerDiarizationService.isEnabled && hasMultipleParticipants {
+                micSpeakerSegments = await applyMicDiarization(
+                    audioPath: decryptedMicPath,
+                    chunkStartTime: chunkStartTime
+                )
+            }
+
             // Post-capture gate: use system audio energy to silence mic during client speech.
             // Both files are from the same 60s chunk with matched timing — no latency mismatch.
             if let sysPath = decryptedSysPath {
@@ -476,13 +486,27 @@ class TranscriptionService: ObservableObject {
                 }
             }
 
-            let micSegments = try await transcribeFile(
+            var micSegments = try await transcribeFile(
                 whisper: whisper,
                 audioPath: decryptedMicPath,
                 speaker: .clinician,
                 chunkIndex: chunkIndex,
                 chunkStartTime: chunkStartTime
             )
+
+            // Merge mic diarization results (assign speakerIds to clinician segments)
+            if let speakerSegs = micSpeakerSegments {
+                let diarizationService = SpeakerDiarizationService.shared
+                micSegments = diarizationService.mergeWithTranscript(
+                    transcriptSegments: micSegments,
+                    speakerSegments: speakerSegs
+                )
+                let uniqueSpeakers = Set(micSegments.compactMap { $0.speakerId })
+                if uniqueSpeakers.count > 1 {
+                    print("TranscriptionService: Mic diarization identified \(uniqueSpeakers.count) distinct speakers")
+                }
+            }
+
             allSegments.append(contentsOf: micSegments)
         }
 
@@ -976,6 +1000,39 @@ class TranscriptionService: ObservableObject {
             print("TranscriptionService: Speaker diarization failed (non-fatal): \(error)")
             // Return original segments if diarization fails
             return segments
+        }
+    }
+
+    /// Diarize mic audio to identify multiple in-room speakers (therapist + supervisor).
+    /// Returns speaker segments with global timestamps, or nil if diarization fails.
+    private func applyMicDiarization(
+        audioPath: URL,
+        chunkStartTime: TimeInterval
+    ) async -> [SpeakerSegment]? {
+        do {
+            let diarizationService = SpeakerDiarizationService.shared
+            let speakerSegments = try await diarizationService.diarize(audioURL: audioPath)
+
+            // Offset to global session time
+            let offsetSegments = speakerSegments.map { segment in
+                SpeakerSegment(
+                    speakerId: segment.speakerId,
+                    startTime: segment.startTime + chunkStartTime,
+                    endTime: segment.endTime + chunkStartTime,
+                    confidence: segment.confidence,
+                    embedding: segment.embedding
+                )
+            }
+
+            #if DEBUG
+            let uniqueSpeakers = Set(offsetSegments.map { $0.speakerId })
+            print("TranscriptionService: [MIC DIARIZATION] Found \(uniqueSpeakers.count) speaker(s) in mic audio")
+            #endif
+
+            return offsetSegments
+        } catch {
+            print("TranscriptionService: Mic diarization failed (non-fatal): \(error)")
+            return nil
         }
     }
 

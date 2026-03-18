@@ -193,6 +193,15 @@ private struct LiveTranscriptContent: View {
     private func speakerDisplayLabel(for segment: TranscriptSegment) -> String {
         switch segment.speaker {
         case .clinician:
+            if let speakerId = segment.speakerId {
+                let number = speakerId.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+                if let index = Int(number) {
+                    let letterIndex = index > 0 ? index - 1 : index
+                    if letterIndex < 26 {
+                        return "Therapist \(String(UnicodeScalar(65 + letterIndex)!))"
+                    }
+                }
+            }
             return "Therapist"
         case .other:
             if let speakerId = segment.speakerId {
@@ -210,7 +219,13 @@ private struct LiveTranscriptContent: View {
 
     private func speakerColor(for segment: TranscriptSegment) -> Color {
         switch segment.speaker {
-        case .clinician: return .blue
+        case .clinician:
+            if let speakerId = segment.speakerId,
+               let num = Int(speakerId.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()),
+               num > 1 {
+                return .purple  // Secondary clinician (supervisor)
+            }
+            return .blue  // Primary clinician (therapist)
         case .other: return .green
         }
     }

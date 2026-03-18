@@ -254,15 +254,11 @@ class SpeakerDiarizationService: ObservableObject {
         }
 #endif
 
-        // Only process "Other" segments (system audio)
-        // Clinician segments are already correctly attributed
+        // Process segments to assign speaker IDs from diarization
         var matchCount = 0
         var noMatchCount = 0
 
         let result = transcriptSegments.map { segment in
-            guard segment.speaker == .other else {
-                return segment // Clinician segments unchanged
-            }
 
             // Find the speaker segment that overlaps most with this transcript segment
             let bestMatch = findBestSpeakerMatch(
@@ -299,7 +295,7 @@ class SpeakerDiarizationService: ObservableObject {
         }
 
 #if DEBUG
-        print("SpeakerDiarizationService: [MERGE SUMMARY] \(matchCount) matched, \(noMatchCount) unmatched out of \(transcriptSegments.filter { $0.speaker == .other }.count) Other segments")
+        print("SpeakerDiarizationService: [MERGE SUMMARY] \(matchCount) matched, \(noMatchCount) unmatched out of \(transcriptSegments.count) segments")
 #endif
 
         return result
