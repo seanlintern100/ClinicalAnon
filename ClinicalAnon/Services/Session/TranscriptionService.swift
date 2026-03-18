@@ -434,19 +434,46 @@ class TranscriptionService: ObservableObject {
             stage: .loading
         )
 
+        currentProgress = TranscriptionProgress(
+            sessionId: sessionId,
+            chunkIndex: chunkIndex,
+            progress: 0.1,
+            stage: .processing
+        )
+
+        // Decrypt system audio first — needed for both transcription AND mic gating
+        var decryptedSysPath: URL?
+        let sysExists = FileManager.default.fileExists(atPath: systemAudioPath.path)
+        let sysFileSize = sysExists ? ((try? FileManager.default.attributesOfItem(atPath: systemAudioPath.path)[.size] as? Int64) ?? 0) : 0
+        let sysHasContent = sysExists && sysFileSize > 1000
+
+        if sysHasContent {
+            do {
+                let path = try SessionEncryptionService.shared.decryptFileToTemp(at: systemAudioPath, for: sessionId)
+                if path != systemAudioPath { tempFilesToClean.append(path) }
+                decryptedSysPath = path
+            } catch {
+                print("TranscriptionService: System audio decryption failed (non-fatal): \(error)")
+            }
+        }
+
         // Process microphone audio (clinician)
         if FileManager.default.fileExists(atPath: microphonePath.path) {
-            currentProgress = TranscriptionProgress(
-                sessionId: sessionId,
-                chunkIndex: chunkIndex,
-                progress: 0.1,
-                stage: .processing
-            )
-
-            // Decrypt audio chunk to temp file for transcription
-            let decryptedMicPath = try SessionEncryptionService.shared.decryptFileToTemp(at: microphonePath, for: sessionId)
+            // Decrypt mic audio
+            var decryptedMicPath = try SessionEncryptionService.shared.decryptFileToTemp(at: microphonePath, for: sessionId)
             if decryptedMicPath != microphonePath {
                 tempFilesToClean.append(decryptedMicPath)
+            }
+
+            // Post-capture gate: use system audio energy to silence mic during client speech.
+            // Both files are from the same 60s chunk with matched timing — no latency mismatch.
+            if let sysPath = decryptedSysPath {
+                let gatedPath = decryptedMicPath.deletingLastPathComponent()
+                    .appendingPathComponent("gated_\(decryptedMicPath.lastPathComponent)")
+                if applyPostCaptureGate(micPath: decryptedMicPath, sysPath: sysPath, outputPath: gatedPath) {
+                    tempFilesToClean.append(gatedPath)
+                    decryptedMicPath = gatedPath
+                }
             }
 
             let micSegments = try await transcribeFile(
@@ -466,44 +493,34 @@ class TranscriptionService: ObservableObject {
             stage: .processing
         )
 
-        // Process system audio (other participants) - only if file exists and has content
-        if FileManager.default.fileExists(atPath: systemAudioPath.path) {
-            // Check file size - skip if empty
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: systemAudioPath.path)[.size] as? Int64) ?? 0
-            if fileSize > 1000 {  // Skip files smaller than 1KB (likely empty/headers only)
-                do {
-                    // Decrypt audio chunk to temp file for transcription
-                    let decryptedSysPath = try SessionEncryptionService.shared.decryptFileToTemp(at: systemAudioPath, for: sessionId)
-                    if decryptedSysPath != systemAudioPath {
-                        tempFilesToClean.append(decryptedSysPath)
-                    }
+        // Process system audio (other participants)
+        if let sysPath = decryptedSysPath {
+            do {
+                var sysSegments = try await transcribeFile(
+                    whisper: whisper,
+                    audioPath: sysPath,
+                    speaker: .other,
+                    chunkIndex: chunkIndex,
+                    chunkStartTime: chunkStartTime
+                )
 
-                    var sysSegments = try await transcribeFile(
-                        whisper: whisper,
-                        audioPath: decryptedSysPath,
-                        speaker: .other,
-                        chunkIndex: chunkIndex,
+                // Apply speaker diarization if enabled AND session has multiple participants
+                if SpeakerDiarizationService.isEnabled && hasMultipleParticipants {
+                    sysSegments = await applySpeakerDiarization(
+                        segments: sysSegments,
+                        audioPath: sysPath,
                         chunkStartTime: chunkStartTime
                     )
-
-                    // Apply speaker diarization if enabled AND session has multiple participants
-                    // Global setting must be ON (enables the feature) AND session toggle must be ON (user indicated multiple participants)
-                    if SpeakerDiarizationService.isEnabled && hasMultipleParticipants {
-                        sysSegments = await applySpeakerDiarization(
-                            segments: sysSegments,
-                            audioPath: decryptedSysPath,
-                            chunkStartTime: chunkStartTime
-                        )
-                    }
-
-                    allSegments.append(contentsOf: sysSegments)
-                } catch {
-                    print("TranscriptionService: System audio transcription failed (non-fatal): \(error)")
-                    // Continue without system audio - mic transcript is still valid
                 }
-            } else {
-                print("TranscriptionService: System audio file is empty, skipping")
+
+                allSegments.append(contentsOf: sysSegments)
+            } catch {
+                print("TranscriptionService: System audio transcription failed (non-fatal): \(error)")
             }
+        } else if sysHasContent {
+            print("TranscriptionService: System audio file has content but decryption failed, skipping")
+        } else if sysExists {
+            print("TranscriptionService: System audio file is empty, skipping")
         }
 
         // Sort by start time
@@ -756,6 +773,114 @@ class TranscriptionService: ObservableObject {
     /// Detect and annotate overlapping speech in segments
     /// - Parameter segments: Segments from transcription
     /// - Returns: Segments with overlap annotations
+    // MARK: - Post-Capture Audio Gate
+
+    /// Gate mic audio using system audio energy — silences mic during client speech.
+    /// Both files are from the same 60s chunk so timing is perfectly aligned.
+    /// Returns true if gated file was written successfully.
+    private func applyPostCaptureGate(micPath: URL, sysPath: URL, outputPath: URL) -> Bool {
+        do {
+            // Load system audio to build energy timeline
+            let sysFile = try AVAudioFile(forReading: sysPath)
+            let sysFormat = sysFile.processingFormat
+            let sysFrameCount = AVAudioFrameCount(sysFile.length)
+            guard sysFrameCount > 0 else { return false }
+
+            let sysBuffer = AVAudioPCMBuffer(pcmFormat: sysFormat, frameCapacity: sysFrameCount)!
+            try sysFile.read(into: sysBuffer)
+            guard let sysData = sysBuffer.floatChannelData?[0] else { return false }
+
+            let sysSampleRate = sysFormat.sampleRate
+            let frameSizeMs: Double = 10.0  // 10ms frames
+            let frameSamples = Int(sysSampleRate * frameSizeMs / 1000.0)
+            let totalFrames = Int(sysFrameCount) / frameSamples
+
+            // Build energy timeline: true = client speaking (gate mic)
+            // Use adaptive threshold: 3x the noise floor of the quietest 20% of frames
+            var frameEnergies: [Float] = []
+            for f in 0..<totalFrames {
+                let offset = f * frameSamples
+                var energy: Float = 0
+                for i in 0..<frameSamples {
+                    let s = sysData[offset + i]
+                    energy += s * s
+                }
+                energy = sqrtf(energy / Float(frameSamples))
+                frameEnergies.append(energy)
+            }
+
+            // Adaptive threshold: sort energies, take 20th percentile as noise floor
+            let sorted = frameEnergies.sorted()
+            let noiseFloorIdx = max(0, Int(Double(sorted.count) * 0.2) - 1)
+            let noiseFloor = sorted.isEmpty ? Float(0.003) : sorted[noiseFloorIdx]
+            let gateThreshold = max(noiseFloor * 3.0, 0.002)  // At least 0.002 to avoid gating on silence
+
+            var gateTimeline = [Bool](repeating: false, count: totalFrames)
+            for f in 0..<totalFrames {
+                gateTimeline[f] = frameEnergies[f] > gateThreshold
+            }
+
+            // Smooth the gate: fill small gaps (< 200ms) to avoid choppy gating
+            let minGapFrames = Int(200.0 / frameSizeMs)  // 20 frames = 200ms
+            for f in 0..<totalFrames {
+                if !gateTimeline[f] {
+                    // Check if this is a small gap between active regions
+                    let lookBack = max(0, f - minGapFrames)
+                    let lookAhead = min(totalFrames - 1, f + minGapFrames)
+                    let hasActiveBefore = (lookBack..<f).contains { gateTimeline[$0] }
+                    let hasActiveAfter = ((f+1)...lookAhead).contains { gateTimeline[$0] }
+                    if hasActiveBefore && hasActiveAfter {
+                        gateTimeline[f] = true  // Fill the gap
+                    }
+                }
+            }
+
+            // Count gated frames for logging
+            let gatedFrameCount = gateTimeline.filter { $0 }.count
+            let gatedPercent = totalFrames > 0 ? Float(gatedFrameCount) / Float(totalFrames) * 100 : 0
+
+            #if DEBUG
+            print("TranscriptionService: [GATE] threshold=\(String(format: "%.4f", gateThreshold)) noise_floor=\(String(format: "%.4f", noiseFloor)) gated=\(String(format: "%.0f%%", gatedPercent)) of \(totalFrames) frames")
+            #endif
+
+            // Now load mic audio and apply gate
+            let micFile = try AVAudioFile(forReading: micPath)
+            let micFormat = micFile.processingFormat
+            let micFrameCount = AVAudioFrameCount(micFile.length)
+            guard micFrameCount > 0 else { return false }
+
+            let micBuffer = AVAudioPCMBuffer(pcmFormat: micFormat, frameCapacity: micFrameCount)!
+            try micFile.read(into: micBuffer)
+            guard let micData = micBuffer.floatChannelData?[0] else { return false }
+
+            let micSampleRate = micFormat.sampleRate
+
+            // Apply gate: zero mic samples where system audio is active
+            // Map mic samples to system audio timeline (may have different sample rates)
+            let timeRatio = sysSampleRate / micSampleRate
+            let fadeSamples = Int(micSampleRate * 0.02)  // 20ms fade for smooth transitions
+
+            for i in 0..<Int(micFrameCount) {
+                // Map mic sample index to system audio frame index
+                let sysTimeSeconds = Double(i) / micSampleRate
+                let sysFrameIdx = Int(sysTimeSeconds / frameSizeMs * 1000.0)
+
+                if sysFrameIdx < totalFrames && gateTimeline[sysFrameIdx] {
+                    micData[i] = 0  // Silence mic during client speech
+                }
+            }
+
+            // Write gated mic audio
+            let outputFile = try AVAudioFile(forWriting: outputPath, settings: micFile.fileFormat.settings)
+            try outputFile.write(from: micBuffer)
+
+            return true
+        } catch {
+            print("TranscriptionService: [GATE] Failed to apply post-capture gate: \(error)")
+            return false
+        }
+    }
+
     // MARK: - Echo Removal
 
     /// Remove clinician segments that are actually echo of client speech picked up by the mic.
