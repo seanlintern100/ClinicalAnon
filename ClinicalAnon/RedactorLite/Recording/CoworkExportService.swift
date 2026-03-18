@@ -14,6 +14,7 @@ struct ChunkSegmentJSON: Codable {
     let speaker: String
     let text: String
     let timestamp: String
+    let timestamp_end: String
 }
 
 struct ChunkJSON: Codable {
@@ -206,7 +207,8 @@ class CoworkExportService: ObservableObject {
             return ChunkSegmentJSON(
                 speaker: speakerLabel,
                 text: text,
-                timestamp: formatTimestamp(segment.startTime)
+                timestamp: formatTimestamp(segment.startTime),
+                timestamp_end: formatTimestamp(segment.endTime)
             )
         }
 
