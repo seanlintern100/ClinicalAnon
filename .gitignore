@@ -133,3 +133,15 @@ ClinicalAnon/Resources/BERT/tokenizer/
 
 # GLiNER Python bundle (~1.3GB) - created with python-build-standalone
 ClinicalAnon/Resources/GLiNERBundle/
+
+# Session transcripts — contains client clinical data, NEVER commit
+TEMP Transcripts/
+
+# Python virtual environment
+CoWork Files/.venv/
+
+# Cowork skill files (binary zips)
+*.skill
+
+# Workspace data (created at runtime in ~/Library/Application Support/Redactor/)
+Workspace/

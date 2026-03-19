@@ -1,5 +1,5 @@
 //
-//  SessionExportService.swift
+//  TranscriptExportService.swift
 //  ClinicalAnon
 //
 //  Purpose: Handles export of session transcripts and audio files
@@ -66,11 +66,11 @@ enum ExportError: LocalizedError {
 
 /// Handles export of session transcripts and audio files
 @MainActor
-class SessionExportService {
+class TranscriptExportService {
 
     // MARK: - Singleton
 
-    static let shared = SessionExportService()
+    static let shared = TranscriptExportService()
 
     private init() {}
 
@@ -414,7 +414,7 @@ class SessionExportService {
                     try micTrack.insertTimeRange(timeRange, of: sourceTrack, at: currentTime)
                     currentTime = CMTimeAdd(currentTime, duration)
                 } catch {
-                    print("SessionExportService: Failed to load mic chunk: \(error)")
+                    print("TranscriptExportService: Failed to load mic chunk: \(error)")
                 }
             }
         }
@@ -439,7 +439,7 @@ class SessionExportService {
                     try sysTrack.insertTimeRange(timeRange, of: sourceTrack, at: currentTime)
                     currentTime = CMTimeAdd(currentTime, duration)
                 } catch {
-                    print("SessionExportService: Failed to load sys chunk: \(error)")
+                    print("TranscriptExportService: Failed to load sys chunk: \(error)")
                 }
             }
         }
@@ -499,7 +499,7 @@ class SessionExportService {
                 currentTime = CMTimeAdd(currentTime, duration)
             } catch {
                 // Skip this chunk if it fails to load
-                print("SessionExportService: Failed to load chunk \(url.lastPathComponent): \(error)")
+                print("TranscriptExportService: Failed to load chunk \(url.lastPathComponent): \(error)")
                 continue
             }
         }

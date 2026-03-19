@@ -2,7 +2,7 @@
 //  FirstTimeSetupView.swift
 //  Redactor
 //
-//  Purpose: One-time setup modal for export folder and transcription model
+//  Purpose: One-time setup modal for transcription model download
 //  Organization: 3 Big Things
 //
 
@@ -13,7 +13,7 @@ import AppKit
 
 struct FirstTimeSetupView: View {
 
-    @ObservedObject var coworkExport: CoworkExportService
+    @ObservedObject var exportService: SessionExportService
     @ObservedObject var transcriptionService: TranscriptionService
 
     @Environment(\.dismiss) private var dismiss
@@ -30,7 +30,7 @@ struct FirstTimeSetupView: View {
                     .font(DesignSystem.Typography.heading)
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
 
-                Text("These settings are saved and only need to be configured once. You can change them later in Settings > Recording.")
+                Text("A speech-to-text model is needed before recording. You can change the model later in Settings > Recording.")
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -40,35 +40,6 @@ struct FirstTimeSetupView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
-
-                // MARK: - Export Folder
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                    Label("Export Folder", systemImage: "folder")
-                        .font(DesignSystem.Typography.subheading)
-                        .foregroundStyle(DesignSystem.Colors.textPrimary)
-
-                    Text("Choose where session transcripts are saved. Point this at the folder Claude Cowork monitors.")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary)
-
-                    if let folderURL = coworkExport.exportRootFolderURL {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text(folderURL.path)
-                                .font(DesignSystem.Typography.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                    }
-
-                    Button(coworkExport.hasRootFolder ? "Change Folder..." : "Choose Folder...") {
-                        selectExportFolder()
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Divider()
 
                 // MARK: - Transcription Model
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
@@ -129,24 +100,10 @@ struct FirstTimeSetupView: View {
             }
             .padding()
         }
-        .frame(width: 440, height: 480)
+        .frame(width: 440, height: 400)
     }
 
     private var canDismiss: Bool {
-        coworkExport.hasRootFolder
-    }
-
-    private func selectExportFolder() {
-        let panel = NSOpenPanel()
-        panel.title = "Select Cowork Export Folder"
-        panel.message = "Choose the folder that Claude Cowork monitors"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-
-        if panel.runModal() == .OK, let url = panel.url {
-            coworkExport.setRootFolder(url)
-        }
+        transcriptionService.isModelLoaded || transcriptionService.isModelCached(size: transcriptionService.selectedModelSize)
     }
 }

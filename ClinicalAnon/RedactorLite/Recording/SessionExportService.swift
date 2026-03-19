@@ -1,8 +1,8 @@
 //
-//  CoworkExportService.swift
+//  SessionExportService.swift
 //  Redactor Lite
 //
-//  Purpose: Saves redacted transcript chunks as JSON to a Cowork-monitored folder
+//  Purpose: Saves redacted transcript chunks as JSON to the workspace
 //  Organization: 3 Big Things
 //
 
@@ -25,14 +25,15 @@ struct ChunkJSON: Codable {
     let segments: [ChunkSegmentJSON]
 }
 
-// MARK: - Cowork Export Service
+// MARK: - Session Export Service
 
 @MainActor
-class CoworkExportService: ObservableObject {
+class SessionExportService: ObservableObject {
 
     // MARK: - Published State
 
     @Published var exportRootFolderURL: URL?
+    @Published private(set) var privateFolderURL: URL?
     @Published private(set) var sessionFolderURL: URL?
     @Published private(set) var chunksExported: Int = 0
     @Published private(set) var lastExportError: String?
@@ -42,25 +43,118 @@ class CoworkExportService: ObservableObject {
     private var chunkCounter: Int = 0
     private var lastExportedSegmentCount: Int = 0
     private var sessionId: String = ""
+    private var currentInitials: String = ""
 
     // MARK: - UserDefaults Keys
 
-    private static let rootFolderBookmarkKey = "cowork.exportFolderBookmark"
+    private static let rootFolderBookmarkKey = "export.customFolderBookmark"
+
+    // MARK: - Workspace Paths
+
+    /// Fixed workspace root at ~/Library/Application Support/Redactor/Workspace/
+    private static var defaultWorkspaceURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport
+            .appendingPathComponent("Redactor", isDirectory: true)
+            .appendingPathComponent("Workspace", isDirectory: true)
+    }
+
+    /// The workspace root directory
+    var workspaceURL: URL {
+        Self.defaultWorkspaceURL
+    }
+
+    /// Whether workspace exists (always true after init)
+    var hasRootFolder: Bool {
+        true
+    }
 
     // MARK: - Initialization
 
     init() {
-        restoreRootFolder()
+        ensureWorkspace()
+        exportRootFolderURL = workspaceURL.appendingPathComponent("Sessions", isDirectory: true)
+        privateFolderURL = workspaceURL.appendingPathComponent("Private", isDirectory: true)
     }
 
-    // MARK: - Root Folder Management
+    // MARK: - Workspace Setup
 
-    /// Whether a root folder has been selected
-    var hasRootFolder: Bool {
-        exportRootFolderURL != nil
+    /// Creates the 3-folder workspace structure if it doesn't exist
+    private func ensureWorkspace() {
+        let fm = FileManager.default
+        let sessionsURL = workspaceURL.appendingPathComponent("Sessions", isDirectory: true)
+        let privateURL = workspaceURL.appendingPathComponent("Private", isDirectory: true)
+        let coworkFilesURL = workspaceURL.appendingPathComponent("CoWork Files", isDirectory: true)
+
+        do {
+            try fm.createDirectory(at: sessionsURL, withIntermediateDirectories: true)
+            try fm.createDirectory(at: privateURL, withIntermediateDirectories: true)
+            try fm.createDirectory(at: coworkFilesURL, withIntermediateDirectories: true)
+        } catch {
+            print("SessionExportService: Failed to create workspace: \(error)")
+        }
+
+        // Write INSTRUCTIONS.md if it doesn't exist
+        let instructionsURL = coworkFilesURL.appendingPathComponent("INSTRUCTIONS.md")
+        if !fm.fileExists(atPath: instructionsURL.path) {
+            writeInstructions(to: instructionsURL)
+        }
     }
 
-    /// Set the root export folder (from NSOpenPanel) and persist as bookmark
+    /// Writes the AI copilot instructions file
+    private func writeInstructions(to url: URL) {
+        let content = """
+        # Live Session Analysis — Folder Instructions
+
+        ## CRITICAL: Use MCP Tools Only
+
+        You have a connected MCP server called "redactor" with tools to control the Redactor app. **DO NOT write files, create folders, or use bash commands to interact with the app.** Everything goes through MCP tool calls.
+
+        **DO NOT** write trigger files. **DO NOT** look for session folders on disk. **DO NOT** run python scripts. Use the MCP tools listed below.
+
+        ## When the user says "start a session" (or similar)
+
+        ### Step 1: Collect session details
+        Ask for: Client initials, Session type, Session length, Number of speakers, Session goals
+
+        ### Step 2: Launch recording via MCP
+        Call: `start_recording(initials="XX", session_type="Therapy", length=50, goals="...", multi_speaker=false)`
+
+        ### Step 3: Analysis loop (repeat until session ends)
+        Every ~10 seconds:
+        1. `get_new_chunks(since_index=N)` — get new transcript chunks
+        2. Analyse each chunk (utterance classification, agenda tracking, themes, people, rupture, risk)
+        3. `get_session_state()` — get current metrics
+        4. Merge your analysis into the state
+        5. `write_session_state(updated_json)` — push to dashboard
+        6. `is_session_complete()` — if true, final summary and stop
+
+        ## MCP Tools
+        | Tool | Purpose |
+        |------|---------|
+        | `health_check()` | Check if app is running |
+        | `start_recording(initials, session_type, length, goals, multi_speaker)` | Launch app + start recording |
+        | `stop_recording()` | Stop recording |
+        | `get_session_state()` | Get current metrics/analysis |
+        | `get_new_chunks(since_index)` | Get transcript chunks since index N |
+        | `write_session_state(state_json)` | Write updated session state |
+        | `is_session_complete()` | Check if recording stopped |
+
+        ## Privacy
+        All transcript text is redacted. Entity codes like [PERSON_A] are placeholders. Never attempt to resolve these to real names.
+        """
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            print("SessionExportService: Wrote INSTRUCTIONS.md")
+        } catch {
+            print("SessionExportService: Failed to write INSTRUCTIONS.md: \(error)")
+        }
+    }
+
+    // MARK: - Custom Folder (Bookmark Fallback)
+
+    /// Set a custom root export folder (from NSOpenPanel) and persist as bookmark
     func setRootFolder(_ url: URL) {
         exportRootFolderURL = url
         persistRootFolder(url)
@@ -76,7 +170,7 @@ class CoworkExportService: ObservableObject {
             )
             UserDefaults.standard.set(bookmark, forKey: Self.rootFolderBookmarkKey)
         } catch {
-            print("CoworkExportService: Failed to save bookmark: \(error)")
+            print("SessionExportService: Failed to save bookmark: \(error)")
         }
     }
 
@@ -94,43 +188,53 @@ class CoworkExportService: ObservableObject {
                 bookmarkDataIsStale: &isStale
             )
             if isStale {
-                // Re-persist to refresh
                 persistRootFolder(url)
             }
             exportRootFolderURL = url
         } catch {
-            print("CoworkExportService: Failed to restore bookmark: \(error)")
+            print("SessionExportService: Failed to restore bookmark: \(error)")
         }
     }
 
     // MARK: - Session Lifecycle
 
-    /// Start a new export session — creates folder and writes session_info.json + entity_map.json
+    /// Start a new export session — creates session folder and writes session_info.json + entity_map.json
     func startSession(metadata: SessionMetadata) throws {
-        guard let rootURL = exportRootFolderURL else {
-            throw CoworkExportError.noRootFolder
+        guard let sessionsRoot = exportRootFolderURL else {
+            throw SessionExportError.noRootFolder
         }
 
-        // Start accessing security-scoped resource
-        guard rootURL.startAccessingSecurityScopedResource() else {
-            throw CoworkExportError.accessDenied
-        }
+        let initials = metadata.clientInitials.trimmingCharacters(in: .whitespaces).uppercased()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HHmm"
+        let dateStr = dateFormatter.string(from: metadata.sessionDate)
 
-        let folderURL = rootURL.appendingPathComponent(metadata.folderName, isDirectory: true)
+        // Sessions/{initials}/{date}/
+        let folderURL = sessionsRoot
+            .appendingPathComponent(initials, isDirectory: true)
+            .appendingPathComponent(dateStr, isDirectory: true)
 
         // Create session folder
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
 
+        // Private/{initials}/
+        guard let privateRoot = privateFolderURL else {
+            throw SessionExportError.noRootFolder
+        }
+        let privateFolderForClient = privateRoot.appendingPathComponent(initials, isDirectory: true)
+        try FileManager.default.createDirectory(at: privateFolderForClient, withIntermediateDirectories: true)
+
         sessionFolderURL = folderURL
-        sessionId = metadata.folderName
+        sessionId = "\(initials)_\(dateStr)"
+        currentInitials = initials
         chunkCounter = 0
         chunksExported = 0
         lastExportedSegmentCount = 0
         lastExportError = nil
 
-        // Write session_info.json (spec-compliant format)
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
+        // Write session_info.json
+        let infoDateFormatter = DateFormatter()
+        infoDateFormatter.dateFormat = "yyyy-MM-dd"
 
         let goals = metadata.sessionGoals
             .components(separatedBy: .newlines)
@@ -140,7 +244,7 @@ class CoworkExportService: ObservableObject {
         let sessionInfo: [String: Any] = [
             "session_id": sessionId,
             "session_type": metadata.sessionType.rawValue.lowercased(),
-            "session_date": dateFormatter.string(from: metadata.sessionDate),
+            "session_date": infoDateFormatter.string(from: metadata.sessionDate),
             "session_duration_minutes": metadata.sessionLengthMinutes,
             "therapist_goals": goals,
             "entity_map_version": "1"
@@ -150,17 +254,17 @@ class CoworkExportService: ObservableObject {
         let infoURL = folderURL.appendingPathComponent("session_info.json")
         try infoData.write(to: infoURL, options: .atomic)
 
-        // Write initial entity_map.json (empty)
+        // Write initial entity_map.json to Private/{initials}/
         let initialMap: [String: Any] = [
             "version": "1",
             "mappings": [String: String]()
         ]
         let mapData = try JSONSerialization.data(withJSONObject: initialMap, options: [.prettyPrinted, .sortedKeys])
-        let mapURL = folderURL.appendingPathComponent("entity_map.json")
+        let mapURL = privateFolderForClient.appendingPathComponent("entity_map.json")
         try mapData.write(to: mapURL, options: .atomic)
 
         metadata.saveAsLastUsed()
-        print("CoworkExportService: Session started at \(folderURL.path)")
+        print("SessionExportService: Session started at \(folderURL.path)")
     }
 
     /// Write a new chunk of redacted transcript
@@ -230,10 +334,10 @@ class CoworkExportService: ObservableObject {
             try chunkData.write(to: chunkURL, options: .atomic)
             chunksExported = chunkCounter
             lastExportError = nil
-            print("CoworkExportService: Wrote \(filename) (\(newSegments.count) segments)")
+            print("SessionExportService: Wrote \(filename) (\(newSegments.count) segments)")
         } catch {
             lastExportError = "Failed to write chunk: \(error.localizedDescription)"
-            print("CoworkExportService: Error writing chunk: \(error)")
+            print("SessionExportService: Error writing chunk: \(error)")
         }
 
         // Update entity_map.json with current mappings
@@ -242,7 +346,7 @@ class CoworkExportService: ObservableObject {
 
     /// Finalize the session export — writes session_complete.json marker
     func finalizeSession() {
-        // Write completion marker so Cowork knows to stop polling
+        // Write completion marker
         if let folderURL = sessionFolderURL {
             let marker: [String: Any] = [
                 "session_id": sessionId,
@@ -260,25 +364,22 @@ class CoworkExportService: ObservableObject {
             }
         }
 
-        if let rootURL = exportRootFolderURL {
-            rootURL.stopAccessingSecurityScopedResource()
-        }
         sessionFolderURL = nil
         sessionId = ""
-        print("CoworkExportService: Session finalized (\(chunksExported) chunks exported)")
+        currentInitials = ""
+        print("SessionExportService: Session finalized (\(chunksExported) chunks exported)")
     }
 
     // MARK: - Entity Map Export
 
-    /// Write current entity mappings to entity_map.json (replacement code → original text)
+    /// Write current entity mappings to Private/{initials}/entity_map.json
     private func updateEntityMap(for session: LiveSession) {
-        guard let folderURL = sessionFolderURL else { return }
+        guard let privateRoot = privateFolderURL, !currentInitials.isEmpty else { return }
 
-        // Build inverted mapping: replacement code → original text
-        // allMappings returns (original, replacement) tuples
+        // Build inverted mapping: replacement code -> original text
         var invertedMap: [String: String] = [:]
         for mapping in session.entityMapping.allMappings {
-            // Strip all brackets from replacement for clean keys: "[PERSON_A]" → "PERSON_A"
+            // Strip all brackets from replacement for clean keys: "[PERSON_A]" -> "PERSON_A"
             var code = mapping.replacement
             while code.hasPrefix("[") && code.hasSuffix("]") {
                 code = String(code.dropFirst().dropLast())
@@ -293,10 +394,12 @@ class CoworkExportService: ObservableObject {
 
         do {
             let mapData = try JSONSerialization.data(withJSONObject: entityMap, options: [.prettyPrinted, .sortedKeys])
-            let mapURL = folderURL.appendingPathComponent("entity_map.json")
+            let mapURL = privateRoot
+                .appendingPathComponent(currentInitials, isDirectory: true)
+                .appendingPathComponent("entity_map.json")
             try mapData.write(to: mapURL, options: .atomic)
         } catch {
-            print("CoworkExportService: Failed to update entity map: \(error)")
+            print("SessionExportService: Failed to update entity map: \(error)")
         }
     }
 
@@ -314,13 +417,11 @@ class CoworkExportService: ObservableObject {
     private func speakerLabel(for segment: TranscriptSegment) -> String {
         switch segment.speaker {
         case .clinician:
-            // Use diarization speaker ID if available for multi-therapist
             if let speakerId = segment.speakerId {
                 return "therapist_\(speakerId)"
             }
             return "therapist"
         case .other:
-            // Use diarization speaker ID if available for multi-client
             if let speakerId = segment.speakerId {
                 return "client_\(speakerId)"
             }
@@ -331,16 +432,16 @@ class CoworkExportService: ObservableObject {
 
 // MARK: - Errors
 
-enum CoworkExportError: Error, LocalizedError {
+enum SessionExportError: Error, LocalizedError {
     case noRootFolder
     case accessDenied
 
     var errorDescription: String? {
         switch self {
         case .noRootFolder:
-            return "No export folder selected. Please choose a folder in settings."
+            return "Workspace folder not available."
         case .accessDenied:
-            return "Cannot access the export folder. Please re-select it in settings."
+            return "Cannot access the export folder."
         }
     }
 }

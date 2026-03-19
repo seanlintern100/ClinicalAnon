@@ -13,7 +13,7 @@ import AppKit
 
 struct RecordingSettingsView: View {
 
-    @ObservedObject var coworkExport: CoworkExportService
+    @ObservedObject var exportService: SessionExportService
     @ObservedObject private var transcriptionService = TranscriptionService.shared
     @ObservedObject private var sessionManager = SessionManager.shared
 
@@ -131,24 +131,19 @@ struct RecordingSettingsView: View {
                         .controlSize(.small)
                     }
 
-                    // MARK: - Export Folder
-                    settingsSection("Cowork Export") {
-                        if let folderURL = coworkExport.exportRootFolderURL {
-                            HStack {
-                                Image(systemName: "folder.fill")
-                                    .foregroundStyle(.blue)
-                                Text(folderURL.path)
-                                    .font(DesignSystem.Typography.caption)
-                                    .lineLimit(2)
-                                    .truncationMode(.middle)
-                            }
-                        } else {
-                            Text("No export folder selected")
-                                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    // MARK: - Export
+                    settingsSection("Export") {
+                        HStack {
+                            Image(systemName: "folder.fill")
+                                .foregroundStyle(.blue)
+                            Text(exportService.workspaceURL.path)
+                                .font(DesignSystem.Typography.caption)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
                         }
 
-                        Button("Choose Folder...") {
-                            selectExportFolder()
+                        Button("Reveal in Finder") {
+                            NSWorkspace.shared.open(exportService.workspaceURL)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -171,16 +166,4 @@ struct RecordingSettingsView: View {
         }
     }
 
-    private func selectExportFolder() {
-        let panel = NSOpenPanel()
-        panel.title = "Select Cowork Export Folder"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-
-        if panel.runModal() == .OK, let url = panel.url {
-            coworkExport.setRootFolder(url)
-        }
-    }
 }

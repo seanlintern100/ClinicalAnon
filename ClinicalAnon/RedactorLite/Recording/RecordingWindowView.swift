@@ -16,15 +16,21 @@ enum RecordingPhase {
     case stopped    // Recording complete, review + transfer
 }
 
+enum RecordingTab {
+    case transcript
+    case dashboard
+}
+
 // MARK: - Recording Window View
 
 struct RecordingWindowView: View {
 
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var transcriptionService = TranscriptionService.shared
-    @StateObject private var coworkExport = CoworkExportService()
+    @StateObject private var exportService = SessionExportService()
 
     @State private var phase: RecordingPhase = .setup
+    @State private var activeTab: RecordingTab = .transcript
     @State private var metadata = SessionMetadata.fromLastUsed()
     @State private var showSettings = false
     @State private var showFirstTimeSetup = false
@@ -40,9 +46,9 @@ struct RecordingWindowView: View {
     @State private var sysLevel: Float = 0
     @State private var displayDuration: String = "0:00"
 
-    /// Whether first-time setup (folder + model) is needed
+    /// Whether first-time setup (model download) is needed
     private var needsFirstTimeSetup: Bool {
-        !coworkExport.hasRootFolder || !transcriptionService.isModelCached(size: transcriptionService.selectedModelSize)
+        !transcriptionService.isModelCached(size: transcriptionService.selectedModelSize)
     }
 
     // MARK: - Body
@@ -51,48 +57,22 @@ struct RecordingWindowView: View {
         ZStack {
             GradientPageBackground()
 
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                // Panel 1: Session Setup / Controls
-                SessionSetupPanel(
-                    phase: $phase,
-                    metadata: $metadata,
-                    errorMessage: $errorMessage,
-                    showSettings: $showSettings,
-                    multiSpeaker: $multiSpeaker,
-                    micLevel: micLevel,
-                    sysLevel: sysLevel,
-                    displayDuration: displayDuration,
-                    sessionManager: sessionManager,
-                    transcriptionService: transcriptionService,
-                    coworkExport: coworkExport,
-                    onStartRecording: startRecording,
-                    onStopRecording: stopRecording,
-                    onPauseRecording: pauseRecording,
-                    onResumeRecording: resumeRecording,
-                    onTransferToRedactor: transferToRedactor,
-                    onNewSession: newSession
-                )
-                .frame(minWidth: 280, maxWidth: 320)
-                .glassPanel()
+            VStack(spacing: 0) {
+                // Tab bar (only shows Dashboard when copilot is active)
+                if CopilotHTTPServer.shared.isRunning {
+                    tabBar
+                        .padding(.horizontal, DesignSystem.Spacing.medium)
+                        .padding(.top, DesignSystem.Spacing.small)
+                }
 
-                // Panel 2: Live Transcript
-                LiveTranscriptPanel(
-                    session: currentSession,
-                    phase: phase
-                )
-                .frame(maxWidth: .infinity)
-                .glassPanel()
-
-                // Panel 3: Detected Entities
-                SessionEntityPanel(
-                    session: currentSession
-                )
-                .frame(minWidth: 240, maxWidth: 280)
-                .glassPanel()
+                // Content
+                switch activeTab {
+                case .transcript:
+                    transcriptContent
+                case .dashboard:
+                    dashboardContent
+                }
             }
-            .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.bottom, DesignSystem.Spacing.medium)
-            .padding(.top, DesignSystem.Spacing.small)
         }
         .onAppear {
             if needsFirstTimeSetup {
@@ -101,24 +81,118 @@ struct RecordingWindowView: View {
         }
         .sheet(isPresented: $showFirstTimeSetup) {
             FirstTimeSetupView(
-                coworkExport: coworkExport,
+                exportService: exportService,
                 transcriptionService: transcriptionService
             )
         }
         .sheet(isPresented: $showSettings) {
-            RecordingSettingsView(coworkExport: coworkExport)
+            RecordingSettingsView(exportService: exportService)
         }
         .onReceive(NotificationCenter.default.publisher(for: .transcriptionChunkRedacted)) { notification in
             guard let sessionId = notification.userInfo?["sessionId"] as? UUID,
                   let session = currentSession,
                   session.id == sessionId else { return }
-            coworkExport.writeChunk(for: session)
+            exportService.writeChunk(for: session)
         }
         .onReceive(NotificationCenter.default.publisher(for: .autoStartRecording)) { notification in
             guard phase == .setup,
                   let info = notification.userInfo as? [String: String] else { return }
             applyURLMetadata(info)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mcpStopRecording)) { _ in
+            stopRecording()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mcpPauseRecording)) { _ in
+            pauseRecording()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mcpResumeRecording)) { _ in
+            resumeRecording()
+        }
+    }
+
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            tabButton("Transcript", tab: .transcript, icon: "text.quote")
+            tabButton("Dashboard", tab: .dashboard, icon: "gauge")
+            Spacer()
+        }
+    }
+
+    private func tabButton(_ title: String, tab: RecordingTab, icon: String) -> some View {
+        Button {
+            activeTab = tab
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(activeTab == tab ? Color.white.opacity(0.15) : Color.clear)
+            .cornerRadius(6)
+            .foregroundColor(activeTab == tab ? .white : .white.opacity(0.6))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Transcript Content (3-panel layout)
+
+    private var transcriptContent: some View {
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            SessionSetupPanel(
+                phase: $phase,
+                metadata: $metadata,
+                errorMessage: $errorMessage,
+                showSettings: $showSettings,
+                multiSpeaker: $multiSpeaker,
+                micLevel: micLevel,
+                sysLevel: sysLevel,
+                displayDuration: displayDuration,
+                sessionManager: sessionManager,
+                transcriptionService: transcriptionService,
+                exportService: exportService,
+                onStartRecording: startRecording,
+                onStopRecording: stopRecording,
+                onPauseRecording: pauseRecording,
+                onResumeRecording: resumeRecording,
+                onTransferToRedactor: transferToRedactor,
+                onNewSession: newSession
+            )
+            .frame(minWidth: 280, maxWidth: 320)
+            .glassPanel()
+
+            LiveTranscriptPanel(
+                session: currentSession,
+                phase: phase
+            )
+            .frame(maxWidth: .infinity)
+            .glassPanel()
+
+            SessionEntityPanel(
+                session: currentSession
+            )
+            .frame(minWidth: 240, maxWidth: 280)
+            .glassPanel()
+        }
+        .padding(.horizontal, DesignSystem.Spacing.medium)
+        .padding(.bottom, DesignSystem.Spacing.medium)
+        .padding(.top, DesignSystem.Spacing.small)
+    }
+
+    // MARK: - Dashboard Content (Copilot)
+
+    private var dashboardContent: some View {
+        CopilotDashboardView(
+            sessionFolder: exportService.sessionFolderURL,
+            privateFolderURL: exportService.privateFolderURL
+        )
+        .padding(.horizontal, DesignSystem.Spacing.medium)
+        .padding(.bottom, DesignSystem.Spacing.medium)
+        .padding(.top, DesignSystem.Spacing.small)
     }
 
     // MARK: - Actions
@@ -128,15 +202,15 @@ struct RecordingWindowView: View {
             errorMessage = "Please enter client initials"
             return
         }
-        guard coworkExport.hasRootFolder else {
+        guard exportService.hasRootFolder else {
             errorMessage = "Please select an export folder"
             return
         }
 
         Task {
             do {
-                // Start Cowork export
-                try coworkExport.startSession(metadata: metadata)
+                // Start session export
+                try exportService.startSession(metadata: metadata)
 
                 // Enable diarization if multi-speaker selected
                 if multiSpeaker {
@@ -151,13 +225,10 @@ struct RecordingWindowView: View {
                 errorMessage = nil
                 startLevelTimer()
 
-                // Start HTTP server and open dashboard in browser
-                if let sessionFolder = coworkExport.sessionFolderURL {
-                    SessionHTTPServer.shared.start(sessionFolder: sessionFolder)
-                    // Brief delay for server to bind, then open dashboard
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        SessionHTTPServer.shared.openDashboard()
-                    }
+                // Activate HTTP server session (listener already running in standby)
+                if let sessionFolder = exportService.sessionFolderURL {
+                    CopilotHTTPServer.shared.privateFolderURL = exportService.privateFolderURL
+                    CopilotHTTPServer.shared.start(sessionFolder: sessionFolder)
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -169,14 +240,12 @@ struct RecordingWindowView: View {
         guard let session = currentSession else { return }
         Task {
             await sessionManager.stopSession(session)
-            coworkExport.finalizeSession()
+            exportService.finalizeSession()
             stopLevelTimer()
             phase = .stopped
 
-            // Keep server alive briefly for final dashboard view, then stop
-            DispatchQueue.main.asyncAfter(deadline: .now() + 120) {
-                SessionHTTPServer.shared.stop()
-            }
+            // Deactivate session but keep server listening in standby
+            CopilotHTTPServer.shared.deactivateSession()
         }
     }
 

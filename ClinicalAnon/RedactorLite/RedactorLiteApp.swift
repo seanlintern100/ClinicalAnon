@@ -24,7 +24,7 @@ struct RedactorLiteApp: App {
                     handleRecordingURL(url)
                 }
                 .onAppear {
-                    CoworkTriggerWatcher.shared.startWatching()
+                    CopilotHTTPServer.shared.startListening()
                 }
         }
         .windowStyle(.titleBar)
@@ -80,7 +80,7 @@ struct LiteSettingsView: View {
     }
 
     @State private var selectedTab: Tab = .detection
-    @StateObject private var coworkExport = CoworkExportService()
+    @StateObject private var exportService = SessionExportService()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -96,7 +96,7 @@ struct LiteSettingsView: View {
                 .tabItem { Label("Inclusions", systemImage: "plus.circle") }
                 .tag(Tab.inclusions)
 
-            RecordingSettingsView(coworkExport: coworkExport)
+            RecordingSettingsView(exportService: exportService)
                 .tabItem { Label("Recording", systemImage: "mic.circle") }
                 .tag(Tab.recording)
         }

@@ -57,6 +57,7 @@ targets:
     resources:
       - path: ClinicalAnon/Resources/Fonts
       - path: ClinicalAnon/Resources/Assets.xcassets
+      - path: ClinicalAnon/Resources/CopilotMCP
     settings:
       base:
         PRODUCT_NAME: Redactor

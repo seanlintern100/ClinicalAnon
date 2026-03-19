@@ -180,7 +180,7 @@ struct TranscriptExportView: View {
 
         Task {
             do {
-                let url = try await SessionExportService.shared.exportTranscript(
+                let url = try await TranscriptExportService.shared.exportTranscript(
                     session: session,
                     format: format,
                     redacted: includeRedactions
@@ -396,7 +396,7 @@ struct AudioExportView: View {
 
         Task {
             do {
-                let url = try await SessionExportService.shared.exportCombinedAudio(session: session)
+                let url = try await TranscriptExportService.shared.exportCombinedAudio(session: session)
                 print("Audio exported to: \(url.path)")
                 dismiss()
             } catch ExportError.cancelled {

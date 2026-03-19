@@ -25,7 +25,7 @@ struct SessionSetupPanel: View {
 
     @ObservedObject var sessionManager: SessionManager
     @ObservedObject var transcriptionService: TranscriptionService
-    @ObservedObject var coworkExport: CoworkExportService
+    @ObservedObject var exportService: SessionExportService
 
     var onStartRecording: () -> Void
     var onStopRecording: () -> Void
@@ -227,16 +227,16 @@ struct SessionSetupPanel: View {
             }
 
             // Export status
-            if coworkExport.chunksExported > 0 {
+            if exportService.chunksExported > 0 {
                 HStack {
                     Image(systemName: "doc.text")
-                    Text("\(coworkExport.chunksExported) chunks exported")
+                    Text("\(exportService.chunksExported) chunks exported")
                 }
                 .font(DesignSystem.Typography.caption)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
             }
 
-            if let error = coworkExport.lastExportError {
+            if let error = exportService.lastExportError {
                 Text(error)
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(.red)
@@ -286,7 +286,7 @@ struct SessionSetupPanel: View {
                     summaryRow("Duration", session.formattedDuration)
                     summaryRow("Segments", "\(session.transcriptSegments.count)")
                     summaryRow("Entities", "\(session.detectedEntities.count)")
-                    summaryRow("Chunks Exported", "\(coworkExport.chunksExported)")
+                    summaryRow("Chunks Exported", "\(exportService.chunksExported)")
                 }
             }
 
@@ -314,7 +314,7 @@ struct SessionSetupPanel: View {
 
     private var canStartRecording: Bool {
         !metadata.clientInitials.trimmingCharacters(in: .whitespaces).isEmpty &&
-        coworkExport.hasRootFolder
+        exportService.hasRootFolder
     }
 
     private var metadataSummary: some View {
