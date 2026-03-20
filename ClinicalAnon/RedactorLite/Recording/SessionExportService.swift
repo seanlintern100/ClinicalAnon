@@ -108,6 +108,19 @@ class SessionExportService: ObservableObject {
         // Always overwrite so app updates propagate to colleagues
         writeSkillFile(to: skillURL)
 
+        // Write .claude/skills/clinical-notes/SKILL.md for on-demand note generation
+        let notesSkillDir = coworkFilesURL
+            .appendingPathComponent(".claude", isDirectory: true)
+            .appendingPathComponent("skills", isDirectory: true)
+            .appendingPathComponent("clinical-notes", isDirectory: true)
+        let notesSkillURL = notesSkillDir.appendingPathComponent("SKILL.md")
+        do {
+            try fm.createDirectory(at: notesSkillDir, withIntermediateDirectories: true)
+        } catch {
+            print("SessionExportService: Failed to create clinical-notes skill directory: \(error)")
+        }
+        writeClinicalNotesSkillFile(to: notesSkillURL)
+
         // Write CLAUDE.md in CoWork Files root — Cowork reads this on session start
         let claudeMdURL = coworkFilesURL.appendingPathComponent("CLAUDE.md")
         writeClaudeMd(to: claudeMdURL)
@@ -118,9 +131,13 @@ class SessionExportService: ObservableObject {
         let content = """
         # Redactor — Cowork Workspace
 
-        When the user says "start a session", "record a session", "begin recording", or anything similar, use the /live-session skill. Do not ask clarifying questions about what kind of session — it is always a clinical recording session via the Redactor app.
-
         You have MCP tools from the "redactor" server. Use ONLY those tools to interact with the app. Do not write files, create folders, or use bash commands.
+
+        ## Skills
+
+        - **`/live-session`** — When the user says "start a session", "record a session", "begin recording", or anything similar. Do not ask clarifying questions about what kind of session — it is always a clinical recording session via the Redactor app. Clinical notes are auto-generated at the end of the session.
+
+        - **`/clinical-notes`** — When the user says "write notes", "edit notes", "regenerate notes", "clinical notes", or wants to create/modify session notes after a recording. Reads the transcript and any existing notes, then generates or edits notes conversationally.
         """
 
         do {
@@ -188,6 +205,55 @@ class SessionExportService: ObservableObject {
         - Process any remaining chunks
         - Write final state
         - Tell the user the session is complete with a brief summary
+        - Proceed immediately to Step 5
+
+        ### Step 5: Generate Clinical Notes
+
+        After writing the final session state, generate clinical notes from the full transcript you have accumulated during the analysis loop.
+
+        **Voice:** Write warmly and directly. Plain language over jargon. 'Practical and human' rather than 'formal and distant.' Avoid pathologising terms where plain alternatives exist.
+
+        **Rules:**
+        - ONLY include content explicitly present in the transcript
+        - NEVER infer diagnoses, formulations, or clinical interpretations not stated by the therapist
+        - NEVER add qualifiers (e.g., 'significantly,' 'severely') unless spoken in session
+        - If something is ambiguous or unclear, flag with [UNCLEAR: description] rather than guessing
+        - If the therapist asked a question but it wasn't resolved, note it as a query, not a finding
+        - Preserve the client's own words for significant statements (in quotation marks)
+        - Retain clinical uncertainty — use 'query' or 'to explore' rather than asserting formulations
+        - Distinguish between what the client reported, what the therapist observed, and what was mutually agreed
+
+        **Person references:**
+        - Use only person placeholders that appear in the redacted text (e.g. [PERSON_A])
+        - You may add variant suffixes: _FIRST, _LAST, _FIRST_LAST, _FULL
+        - Use _FIRST suffix throughout for natural reading
+        - Use [THERAPIST] where therapist attribution is needed
+
+        **Output three sections:**
+
+        **Section 1 — Clinical Notes** (for therapist / clinical record):
+        Begin with a header block: Session date, Attendees, Risk (one line — state any risk content explicitly present, or 'No risk content documented'). Then thematic sections — identify the main themes and write one section per theme. Each theme section: short descriptive label heading, summary prose, direct client quotes for significant statements, clinical observations/queries, agreed strategies. Close with Follow-up Actions: therapist actions, client actions/homework, next session.
+
+        **Section 2 — Client Summary** (to share with client):
+        Second person ('you'), warm and encouraging. 150-250 words. Cover: what we talked about, what you shared, what we explored together, what you're taking away, what's next. No clinical terminology, risk language, or labelling.
+
+        **Section 3 — Clinical Review** (for chat only, not documentation):
+        FLAG content only — do not formulate or recommend. Cover: unclear/ambiguous content, risk-related content, content for clinician's attention.
+
+        Call `write_clinical_notes()` with this JSON schema:
+        ```json
+        {
+          "session_id": "JB_2026-03-20_0937",
+          "generated_at": "2026-03-20T10:35:00Z",
+          "sections": {
+            "clinical_notes": "Session date: ...\\nAttendees: ...\\n...",
+            "client_summary": "In today's session, you...",
+            "clinical_review": "FLAG: ..."
+          }
+        }
+        ```
+
+        Tell the user their clinical notes are ready and visible in the Notes tab.
 
         ---
 
@@ -205,6 +271,8 @@ class SessionExportService: ObservableObject {
         | `get_new_chunks(since_index)` | Get transcript chunks since index N |
         | `write_session_state(state_json)` | Write updated session state to dashboard |
         | `is_session_complete()` | Check if recording stopped |
+        | `write_clinical_notes(notes_json)` | Write clinical notes to session folder |
+        | `get_clinical_notes()` | Read existing clinical notes (if any) |
 
         ---
 
@@ -415,6 +483,118 @@ class SessionExportService: ObservableObject {
             print("SessionExportService: Wrote SKILL.md")
         } catch {
             print("SessionExportService: Failed to write SKILL.md: \(error)")
+        }
+    }
+
+    /// Writes the Cowork skill file for /clinical-notes slash command
+    private func writeClinicalNotesSkillFile(to url: URL) {
+        let content = """
+        ---
+        name: clinical-notes
+        description: Generate or edit clinical notes from a completed session. Use when user says "write notes", "edit notes", "regenerate notes", "clinical notes", or wants to create/modify session documentation. Reads the redacted transcript and any existing notes via MCP tools.
+        ---
+
+        # Clinical Notes
+
+        ## CRITICAL: Use MCP Tools Only
+
+        You have a connected MCP server called "redactor" with tools to control the Redactor app. **DO NOT write files, create folders, or use bash commands.** Everything goes through MCP tool calls.
+
+        ---
+
+        ## When the user asks for clinical notes
+
+        ### Step 1: Read existing data
+
+        1. Call `get_session_info()` to get session metadata (initials, type, date, duration)
+        2. Call `get_new_chunks(since_index=0)` to get the FULL transcript (all chunks)
+        3. Call `get_clinical_notes()` to check for existing notes
+
+        If existing notes are found, show the user a brief summary of what's there and ask what they'd like to change. If no notes exist, proceed to generate them.
+
+        ### Step 2: Generate or edit notes
+
+        **Voice:** Write warmly and directly. Plain language over jargon. 'Practical and human' rather than 'formal and distant.' Avoid pathologising terms where plain alternatives exist.
+
+        **Rules:**
+        - ONLY include content explicitly present in the transcript
+        - NEVER infer diagnoses, formulations, or clinical interpretations not stated by the therapist
+        - NEVER add qualifiers (e.g., 'significantly,' 'severely') unless spoken in session
+        - If something is ambiguous or unclear, flag with [UNCLEAR: description] rather than guessing
+        - If the therapist asked a question but it wasn't resolved, note it as a query, not a finding
+        - Preserve the client's own words for significant statements (in quotation marks)
+        - Retain clinical uncertainty — use 'query' or 'to explore' rather than asserting formulations
+        - Distinguish between what the client reported, what the therapist observed, and what was mutually agreed
+
+        **Person references:**
+        - Use only person placeholders that appear in the redacted text (e.g. [PERSON_A])
+        - You may add variant suffixes: _FIRST, _LAST, _FIRST_LAST, _FULL
+        - Use _FIRST suffix throughout for natural reading
+        - Use [THERAPIST] where therapist attribution is needed
+
+        **Output three sections:**
+
+        **Section 1 — Clinical Notes** (for therapist / clinical record):
+        Begin with a header block: Session date, Attendees, Risk (one line — state any risk content explicitly present, or 'No risk content documented'). Then thematic sections — identify the main themes and write one section per theme. Each theme section: short descriptive label heading, summary prose, direct client quotes for significant statements, clinical observations/queries, agreed strategies. Close with Follow-up Actions: therapist actions, client actions/homework, next session.
+
+        **Section 2 — Client Summary** (to share with client):
+        Second person ('you'), warm and encouraging. 150-250 words. Cover: what we talked about, what you shared, what we explored together, what you're taking away, what's next. No clinical terminology, risk language, or labelling.
+
+        **Section 3 — Clinical Review** (for chat only, not documentation):
+        FLAG content only — do not formulate or recommend. Cover: unclear/ambiguous content, risk-related content, content for clinician's attention.
+
+        ### Step 3: Write notes
+
+        Call `write_clinical_notes()` with this JSON schema:
+        ```json
+        {
+          "session_id": "JB_2026-03-20_0937",
+          "generated_at": "2026-03-20T10:35:00Z",
+          "sections": {
+            "clinical_notes": "Session date: ...\\nAttendees: ...\\n...",
+            "client_summary": "In today's session, you...",
+            "clinical_review": "FLAG: ..."
+          }
+        }
+        ```
+
+        Tell the user their notes are ready in the Notes tab.
+
+        ### Editing existing notes
+
+        If the user wants to modify specific sections, read existing notes via `get_clinical_notes()`, make the requested changes, and write the full updated notes via `write_clinical_notes()`. Always preserve sections the user didn't ask to change.
+
+        The user may ask things like:
+        - "Make the client summary shorter"
+        - "Add a section about the medication discussion"
+        - "Rewrite this in a more formal tone"
+        - "Remove the section about [topic]"
+
+        Make the change and write the updated notes. Show the user what changed.
+
+        ---
+
+        ## MCP Tools
+
+        | Tool | Purpose |
+        |------|---------|
+        | `get_session_info()` | Get session metadata |
+        | `get_new_chunks(since_index)` | Get transcript chunks (use 0 for all) |
+        | `get_clinical_notes()` | Read existing clinical notes |
+        | `write_clinical_notes(notes_json)` | Write/update clinical notes |
+
+        ## Privacy & Entity Code Format
+
+        All transcript text is redacted. Entity codes like `[PERSON_A]`, `[LOCATION_B]` are placeholders for real names. You must NEVER attempt to resolve these codes. The app handles re-substitution for display only.
+
+        **CRITICAL: When writing entity codes in notes, ALWAYS use square brackets.** Write `[PERSON_A]` not `PERSON_A`. The app uses these brackets to find and replace codes with real names for display.
+        """
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            print("SessionExportService: Wrote clinical-notes SKILL.md")
+        } catch {
+            print("SessionExportService: Failed to write clinical-notes SKILL.md: \(error)")
         }
     }
 

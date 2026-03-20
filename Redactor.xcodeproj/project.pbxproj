@@ -47,6 +47,7 @@
 		3C67313E85E77557D9019463 /* RedactPhaseState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DECCF16F2FCFC7186EBC13E0 /* RedactPhaseState.swift */; };
 		3D4AA30906504CD254B65D89 /* xlmr_config.json in Resources */ = {isa = PBXBuildFile; fileRef = 33D8A4F5075E781E5F739092 /* xlmr_config.json */; };
 		41293CE548F057201164566C /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4432C79664AD818C88A01D09 /* Theme.swift */; };
+		43BA96ED35BCEC19353C1CBE /* ClinicalNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7962815059E198ADFD3BDFC /* ClinicalNotesView.swift */; };
 		46382D538A3CDC8D77067984 /* FirstNameDictionaryRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E479F1D929E5266C3CB5AE6 /* FirstNameDictionaryRecognizer.swift */; };
 		46B3661D8075A450F132BE07 /* nz_places_LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3EA133E158BD6DBA3567D7F5 /* nz_places_LICENSE.txt */; };
 		476E374AEC34563A0CEC5042 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA30D891D8461DC2A1007544 /* TranscriptionService.swift */; };
@@ -271,6 +272,7 @@
 		F110215B1181B8B98076418E /* TextReplacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReplacer.swift; sourceTree = "<group>"; };
 		F4EB5D0BB09A05D1303BDBBF /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 		F6C687FE880EAE820CCA3F73 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
+		F7962815059E198ADFD3BDFC /* ClinicalNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalNotesView.swift; sourceTree = "<group>"; };
 		FA24BD0938D20ED7735C9890 /* ClientSuggestionModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSuggestionModal.swift; sourceTree = "<group>"; };
 		FB41846B75D193A49481A1CA /* SessionExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExportService.swift; sourceTree = "<group>"; };
 		FEE09AC0EE82FA4C87F8ECF9 /* XLMRobertaNERService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLMRobertaNERService.swift; sourceTree = "<group>"; };
@@ -449,6 +451,7 @@
 		713A9821306679D890087FE0 /* Recording */ = {
 			isa = PBXGroup;
 			children = (
+				F7962815059E198ADFD3BDFC /* ClinicalNotesView.swift */,
 				B545401A3C155C8D01D1225A /* CopilotDashboardView.swift */,
 				AA6B9B8491CFCD67E3EE7A7E /* CopilotHTTPServer.swift */,
 				3921D8C41A155681994E077B /* FirstTimeSetupView.swift */,
@@ -705,6 +708,7 @@
 				F57E72A07D699161BA65F824 /* ClientDetail.swift in Sources */,
 				4B16B64A5D8A1C2C8F88591D /* ClientSessionsView.swift in Sources */,
 				CAC237CE417849E4132B1F97 /* ClientSuggestionModal.swift in Sources */,
+				43BA96ED35BCEC19353C1CBE /* ClinicalNotesView.swift in Sources */,
 				92823565A8FE9F602B5AEC24 /* ClinicianPreferences.swift in Sources */,
 				11A6882D62CE83FEDA3B85C1 /* ClinicianPreferencesManager.swift in Sources */,
 				80E1AA7DEECC4557167AFAD9 /* ClipboardHelper.swift in Sources */,

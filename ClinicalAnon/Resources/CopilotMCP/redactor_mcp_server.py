@@ -242,6 +242,43 @@ async def write_session_state(state_json: str) -> str:
 
 
 @mcp.tool()
+async def write_clinical_notes(notes_json: str) -> str:
+    """Write clinical notes generated from the session transcript.
+
+    Args:
+        notes_json: Full clinical_notes.json content as a JSON string.
+                    Should include session_id, generated_at, and sections
+                    (clinical_notes, client_summary, clinical_review).
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{BASE}/notes",
+                content=notes_json,
+                headers={**_headers(), "Content-Type": "application/json"},
+                timeout=10,
+            )
+            return resp.text
+    except httpx.ConnectError:
+        return json.dumps({"error": "Cannot connect to Redactor"})
+
+
+@mcp.tool()
+async def get_clinical_notes() -> str:
+    """Get existing clinical notes for the current session (if any).
+    Returns the clinical_notes.json content, or a 404 error if no notes exist yet.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{BASE}/notes", params={"token": _find_token()}, timeout=5
+            )
+            return resp.text
+    except httpx.ConnectError:
+        return json.dumps({"error": "Cannot connect to Redactor"})
+
+
+@mcp.tool()
 async def is_session_complete() -> str:
     """Check if recording has stopped. Returns {complete: true/false}."""
     try:

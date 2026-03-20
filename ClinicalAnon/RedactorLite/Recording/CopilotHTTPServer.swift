@@ -18,6 +18,7 @@ extension Notification.Name {
     static let mcpStopRecording = Notification.Name("mcpStopRecording")
     static let mcpPauseRecording = Notification.Name("mcpPauseRecording")
     static let mcpResumeRecording = Notification.Name("mcpResumeRecording")
+    static let clinicalNotesReceived = Notification.Name("clinicalNotesReceived")
 }
 
 // MARK: - Copilot HTTP Server
@@ -233,6 +234,12 @@ final class CopilotHTTPServer: ObservableObject {
         case ("GET", "/chunks"):
             handleGetChunks(query: query, connection: connection)
 
+        case ("POST", "/notes"):
+            handlePostNotes(request: request, connection: connection)
+
+        case ("GET", "/notes"):
+            serveSessionFile(connection: connection, filename: "clinical_notes.json")
+
         default:
             sendResponse(connection: connection, status: 404, body: "{\"error\":\"not found\"}")
         }
@@ -315,6 +322,33 @@ final class CopilotHTTPServer: ObservableObject {
             } else {
                 try body.write(to: stateURL, atomically: true, encoding: .utf8)
             }
+            sendJSON(connection: connection, json: "{\"status\":\"ok\"}")
+        } catch {
+            sendResponse(connection: connection, status: 500, body: "{\"error\":\"write failed\"}")
+        }
+    }
+
+    // MARK: - POST /notes Handler
+
+    private func handlePostNotes(request: String, connection: NWConnection) {
+        guard let folder = sessionFolder else {
+            sendResponse(connection: connection, status: 500, body: "{\"error\":\"no session folder\"}")
+            return
+        }
+        let body = extractBody(from: request)
+        guard !body.isEmpty else {
+            sendResponse(connection: connection, status: 400, body: "{\"error\":\"empty body\"}")
+            return
+        }
+        let notesURL = folder.appendingPathComponent("clinical_notes.json")
+        do {
+            if let parsed = try? JSONSerialization.jsonObject(with: Data(body.utf8)),
+               let pretty = try? JSONSerialization.data(withJSONObject: parsed, options: [.prettyPrinted, .sortedKeys]) {
+                try pretty.write(to: notesURL, options: .atomic)
+            } else {
+                try body.write(to: notesURL, atomically: true, encoding: .utf8)
+            }
+            NotificationCenter.default.post(name: .clinicalNotesReceived, object: nil)
             sendJSON(connection: connection, json: "{\"status\":\"ok\"}")
         } catch {
             sendResponse(connection: connection, status: 500, body: "{\"error\":\"write failed\"}")

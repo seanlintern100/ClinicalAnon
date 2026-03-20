@@ -92,5 +92,9 @@ private class RecordingWindowDelegate: NSObject, NSWindowDelegate {
 extension RecordingWindowController {
     fileprivate func windowDidClose() {
         recordingWindow = nil
+        // Deactivate HTTP session when window closes so stale sessions don't linger
+        Task { @MainActor in
+            CopilotHTTPServer.shared.deactivateSession()
+        }
     }
 }

@@ -146,7 +146,45 @@ The dashboard (`CopilotDashboardView.swift`) supports bidirectional communicatio
 
 ## Future: Clinical Notes (not yet implemented)
 
-Planned: post-session clinical note generation triggered from Cowork or app button. Notes would be stored as `clinical_notes.json` in the session folder (redacted), with entity substitution at display/export time. New MCP tool `write_clinical_notes()` and `POST /notes` HTTP endpoint needed.
+Post-session clinical note generation from the redacted transcript. Triggered by therapist request in Cowork ("write clinical notes") or via app button that writes `therapist_request: "generate clinical notes"` to `session_state.json`.
+
+**Flow:**
+1. Session ends → therapist requests notes (Cowork or app button)
+2. Cowork has all redacted chunks in context from analysis loop
+3. Cowork generates structured clinical notes
+4. Cowork writes via new MCP tool `write_clinical_notes(notes_json)`
+5. App receives notes, stores in session folder, substitutes entity codes → real names for display
+6. Notes viewable/exportable from the app
+
+**Storage:** `Sessions/{initials}/{date}/clinical_notes.json` (redacted, same as all Cowork-written data)
+
+**Notes schema:**
+```json
+{
+  "session_id": "JB_2026-03-20_0937",
+  "generated_at": "2026-03-20T10:35:00Z",
+  "format": "clinical",
+  "sections": {
+    "presenting_concerns": "Client discussed ongoing conflict with [PERSON_B] at work...",
+    "session_content": "Explored themes of autonomy and workplace powerlessness...",
+    "therapeutic_interventions": "Used reflective listening and open questions to...",
+    "client_response": "Client showed increasing engagement, elaborating on...",
+    "risk_assessment": "No risk indicators identified during session",
+    "plan": "Continue exploring workplace dynamics. Follow up on...",
+    "therapist_reflections": "Strong therapeutic alliance. Client responded well to..."
+  },
+  "raw_summary": "50-minute therapy session. Key themes: workplace powerlessness, autonomy..."
+}
+```
+
+**Components to build:**
+- **MCP server** — New tool `write_clinical_notes(notes_json)` writes to session folder
+- **CopilotHTTPServer** — New `POST /notes` endpoint writes `clinical_notes.json`
+- **SKILL.md** — Add post-session notes generation section to `writeSkillFile()`
+- **ClinicalNotesView** — SwiftUI view to display/export notes with entity substitution
+- **RecordingWindowView** — "View Notes" button when `clinical_notes.json` exists after session stops
+
+**Export:** Notes view reads redacted `clinical_notes.json`, applies entity substitution (real names from `Private/`), formats as document. Exported version has real names — never leaves local machine via AI, only via therapist's explicit export action.
 
 ## Distribution (Lite)
 

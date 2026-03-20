@@ -19,6 +19,7 @@ enum RecordingPhase {
 enum RecordingTab {
     case transcript
     case dashboard
+    case notes
 }
 
 // MARK: - Recording Window View
@@ -38,6 +39,7 @@ struct RecordingWindowView: View {
     @State private var multiSpeaker: Bool = false
     /// Retains session reference after stop so transcript/entities stay visible
     @State private var currentSession: LiveSession?
+    @State private var notesAvailable = false
 
     // Timer to poll audio levels and duration (SessionManager level proxies are computed, not @Published,
     // and session.recordingDuration changes don't propagate through sessionManager's objectWillChange)
@@ -71,12 +73,19 @@ struct RecordingWindowView: View {
                     transcriptContent
                 case .dashboard:
                     dashboardContent
+                case .notes:
+                    notesContent
                 }
             }
         }
         .onAppear {
             if needsFirstTimeSetup {
                 showFirstTimeSetup = true
+            }
+            // Check if clinical notes already exist (e.g. window reopened after notes were written)
+            if let folder = exportService.sessionFolderURL,
+               FileManager.default.fileExists(atPath: folder.appendingPathComponent("clinical_notes.json").path) {
+                notesAvailable = true
             }
         }
         .sheet(isPresented: $showFirstTimeSetup) {
@@ -108,6 +117,9 @@ struct RecordingWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mcpResumeRecording)) { _ in
             resumeRecording()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .clinicalNotesReceived)) { _ in
+            notesAvailable = true
+        }
     }
 
     // MARK: - Tab Bar
@@ -116,6 +128,9 @@ struct RecordingWindowView: View {
         HStack(spacing: 2) {
             tabButton("Transcript", tab: .transcript, icon: "text.quote")
             tabButton("Dashboard", tab: .dashboard, icon: "gauge")
+            if notesAvailable {
+                tabButton("Notes", tab: .notes, icon: "doc.text")
+            }
             Spacer()
         }
     }
@@ -196,6 +211,19 @@ struct RecordingWindowView: View {
         .padding(.top, DesignSystem.Spacing.small)
     }
 
+    // MARK: - Notes Content
+
+    private var notesContent: some View {
+        ClinicalNotesView(
+            sessionFolder: exportService.sessionFolderURL,
+            privateFolderURL: exportService.privateFolderURL
+        )
+        .id("clinical-notes")
+        .padding(.horizontal, DesignSystem.Spacing.medium)
+        .padding(.bottom, DesignSystem.Spacing.medium)
+        .padding(.top, DesignSystem.Spacing.small)
+    }
+
     // MARK: - Actions
 
     private func startRecording() {
@@ -245,8 +273,8 @@ struct RecordingWindowView: View {
             stopLevelTimer()
             phase = .stopped
 
-            // Deactivate session but keep server listening in standby
-            CopilotHTTPServer.shared.deactivateSession()
+            // Keep session active so Cowork can write clinical notes after session ends.
+            // Session deactivates when user starts a new session or closes the window.
         }
     }
 
@@ -263,10 +291,12 @@ struct RecordingWindowView: View {
     }
 
     private func newSession() {
+        CopilotHTTPServer.shared.deactivateSession()
         currentSession = nil
         phase = .setup
         metadata = SessionMetadata.fromLastUsed()
         multiSpeaker = false
+        notesAvailable = false
         displayDuration = "0:00"
     }
 
