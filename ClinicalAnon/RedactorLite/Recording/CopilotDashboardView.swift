@@ -216,9 +216,14 @@ struct CopilotDashboardView: View {
     private func loadState() {
         guard let folder = sessionFolder else { return }
         let url = folder.appendingPathComponent("session_state.json")
-        guard let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(DashboardState.self, from: data) else { return }
-        state = decoded
+        guard let data = try? Data(contentsOf: url) else { return }
+        do {
+            let decoded = try JSONDecoder().decode(DashboardState.self, from: data)
+            state = decoded
+        } catch {
+            print("[Dashboard] Failed to decode session_state.json: \(error)")
+            return
+        }
 
         // Load entity map from Private/ folder for display substitution (codes → real names)
         guard let privateFolder = privateFolderURL else { return }
