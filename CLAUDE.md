@@ -39,40 +39,85 @@ Lite-specific files live in `ClinicalAnon/RedactorLite/`:
   - `LiveTranscriptPanel.swift` — Auto-scrolling transcript with speaker labels
   - `SessionEntityPanel.swift` — Detected entities panel
   - `RecordingSettingsView.swift` — Transcription model, audio, export folder settings
-  - `CoworkExportService.swift` — Saves redacted JSON chunks to Cowork-monitored folder
+  - `SessionExportService.swift` — Writes redacted chunks to Sessions/, entity maps to Private/
   - `SessionMetadata.swift` — Session info model (initials, type, goals, date, length)
+  - `CopilotHTTPServer.swift` — HTTP server for MCP tool integration (port 8787)
+  - `CopilotDashboardView.swift` — Native SwiftUI dashboard with arc gauges, entity substitution
 
 The Lite target excludes full-app Views (MainContentView, phase views, session views), ViewModels (WorkflowViewModel, ImprovePhaseState), and AI services (SessionAssistantService, SessionAIService, LocalLLMService). It includes all audio/session/transcription services.
 
 Lite includes WhisperKit, FluidAudio, and WebRTC dependencies. Uses `REDACTOR_LITE` compilation flag — `SessionManager.swift` uses `#if !REDACTOR_LITE` to skip Bedrock AI calls and post Cowork export notifications instead.
 
-## Cowork Integration (Lite)
+## Architecture: Core vs Copilot
 
-Live session recording saves redacted transcript chunks to a user-selected folder that Claude Cowork monitors.
+Recording is CORE (always works standalone). AI analysis is an optional COPILOT layer.
 
-**File output structure:**
+**Core files** (no AI dependency): RecordingWindowView, SessionSetupPanel, LiveTranscriptPanel, SessionEntityPanel, SessionMetadata, RecordingSettingsView, FirstTimeSetupView, SessionExportService
+
+**Copilot files** (walled off, can be compiled out): CopilotHTTPServer, CopilotDashboardView, MCP server (bundled resource)
+
+**Coupling point:** One notification (`.transcriptionChunkRedacted`). Everything else is pluggable. Dashboard tab only appears when CopilotHTTPServer is running.
+
+## Workspace Structure
+
+App auto-creates workspace at `~/Library/Application Support/Redactor/Workspace/`:
+
 ```
-{root_folder}/
-  JB_2026-03-17_1430/
-    session_info.json     ← metadata
-    chunk_001.json        ← redacted transcript
-    chunk_002.json
+Workspace/
+  Sessions/                    ← Redacted data (Cowork reads via MCP)
+    JB/
+      2026-03-20_0937/
+        session_info.json
+        chunk_001.json         ← text uses [PERSON_A] codes
+        session_state.json     ← AI writes analysis here via MCP
+        .server_token
+  Private/                     ← App only, AI CANNOT access
+    JB/
+      entity_map.json          ← [PERSON_A] → real names
+  CoWork Files/                ← Cowork working folder
+    .claude/skills/live-session/SKILL.md  ← auto-generated skill
+    CLAUDE.md                  ← directs Cowork to use the skill
 ```
 
-**Chunk JSON format:**
+**Privacy model:** Entity maps with real names live in `Private/`. Cowork only sees redacted data in `Sessions/` via MCP tools. The dashboard reads from both locations to substitute codes back to real names for display only.
+
+**IMPORTANT:** Entity codes MUST always use square brackets `[PERSON_A]` not bare `PERSON_A`. The dashboard `sub()` function handles both formats, but the SKILL.md instructs Cowork to always use brackets.
+
+## Cowork Integration
+
+Cowork connects via MCP server (`ClinicalAnon/Resources/CopilotMCP/redactor_mcp_server.py`).
+
+**How instructions reach Cowork:**
+1. `SessionExportService` writes `SKILL.md` to `CoWork Files/.claude/skills/live-session/` on app launch
+2. `SessionExportService` writes `CLAUDE.md` to `CoWork Files/` directing Cowork to use the skill
+3. User selects `CoWork Files/` as working folder in Cowork
+4. Cowork discovers `/live-session` as a slash command from the skill
+5. When user says "start a session", the skill provides the full MCP workflow
+
+**MCP server config** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
 {
-  "chunk_index": 1,
-  "timestamp_start": 60.0,
-  "timestamp_end": 120.0,
-  "segments": [
-    { "speaker": "therapist", "text": "So [PERSON_1]...", "start": 60.5, "end": 63.2 },
-    { "speaker": "client", "text": "[PERSON_1] has been...", "start": 64.0, "end": 67.8 }
-  ]
+  "mcpServers": {
+    "redactor": {
+      "command": "<workspace>/.venv/bin/python3",
+      "args": ["<path-to>/redactor_mcp_server.py"],
+      "env": {
+        "REDACTOR_EXPORT_ROOT": "<workspace>/Sessions"
+      }
+    }
+  }
 }
 ```
 
-Speaker labels: `therapist` (mic), `client` / `client_1`/`client_2` (auto-detected via diarization). Entity mapping ensures consistent `[PERSON_1]` codes across all chunks.
+**MCP tools:** health_check, start_recording, stop_recording, pause_recording, resume_recording, get_session_info, get_session_state, get_new_chunks, write_session_state, is_session_complete
+
+**DO NOT** add `get_entity_map` as an MCP tool — entity maps contain real names and must not be exposed to AI.
+
+**HTTP server notes:**
+- Starts in standby mode on app launch (only `/health` responds)
+- `/start` endpoint is auth-free (creates the session and token)
+- All other endpoints require token (query string or Authorization header)
+- Body parsing accumulates TCP packets using Content-Length for reliable large POST bodies
 
 ## Distribution (Lite)
 

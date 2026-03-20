@@ -188,8 +188,7 @@ struct CopilotDashboardView: View {
 
     enum ViewMode { case session, rolling }
 
-    private let pollTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
-    private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var timer: Timer?
 
     var body: some View {
         ZStack {
@@ -204,12 +203,20 @@ struct CopilotDashboardView: View {
         .onAppear {
             startTime = Date()
             loadState()
+            // Foundation Timer — fires reliably regardless of SwiftUI lifecycle
+            timer?.invalidate()
+            let t = Timer(timeInterval: 2, repeats: true) { _ in
+                Task { @MainActor in
+                    wallElapsed = Int(Date().timeIntervalSince(startTime))
+                    loadState()
+                }
+            }
+            RunLoop.main.add(t, forMode: .common)
+            timer = t
         }
-        .onReceive(pollTimer) { _ in
-            loadState()
-        }
-        .onReceive(clockTimer) { _ in
-            wallElapsed = Int(Date().timeIntervalSince(startTime))
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 
@@ -235,11 +242,17 @@ struct CopilotDashboardView: View {
         }
     }
 
-    /// Substitute entity codes like [PERSON_A] with real names for display
+    /// Substitute entity codes with real names for display
+    /// Handles both bracketed [PERSON_A] and bare PERSON_A formats
     private func sub(_ text: String) -> String {
         var result = text
-        for (code, name) in entityMap {
+        // Sort by longest code first to avoid partial matches (e.g. PERSON_A_FIRST before PERSON_A)
+        let sorted = entityMap.sorted { $0.key.count > $1.key.count }
+        for (code, name) in sorted {
+            // Replace bracketed version first: [PERSON_A]
             result = result.replacingOccurrences(of: "[\(code)]", with: name)
+            // Replace bare version: PERSON_A (only if it looks like a standalone code)
+            result = result.replacingOccurrences(of: code, with: name)
         }
         return result
     }
@@ -395,7 +408,7 @@ struct CopilotDashboardView: View {
                     label: "Rupture",
                     activeColor: DashColors.orange,
                     icon: "\u{26A0}",
-                    detail: s.rupture?.type
+                    detail: s.rupture?.type.map { sub($0) }
                 )
                 DashSignalCard(
                     isActive: s.risk?.flagged ?? false,
@@ -707,7 +720,7 @@ struct CopilotDashboardView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(DashColors.teal)
                 if let role = person.role, !role.isEmpty {
-                    Text(role)
+                    Text(sub(role))
                         .font(.system(size: 12))
                         .foregroundColor(DashColors.textSecondary)
                 }

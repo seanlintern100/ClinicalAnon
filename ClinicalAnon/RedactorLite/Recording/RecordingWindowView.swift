@@ -28,7 +28,6 @@ struct RecordingWindowView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var transcriptionService = TranscriptionService.shared
     @StateObject private var exportService = SessionExportService()
-    @ObservedObject private var copilotServer = CopilotHTTPServer.shared
 
     @State private var phase: RecordingPhase = .setup
     @State private var activeTab: RecordingTab = .transcript
@@ -60,7 +59,7 @@ struct RecordingWindowView: View {
 
             VStack(spacing: 0) {
                 // Tab bar (only shows Dashboard when copilot is active)
-                if copilotServer.isRunning {
+                if CopilotHTTPServer.shared.isRunning {
                     tabBar
                         .padding(.horizontal, DesignSystem.Spacing.medium)
                         .padding(.top, DesignSystem.Spacing.small)
@@ -191,6 +190,7 @@ struct RecordingWindowView: View {
             sessionFolder: exportService.sessionFolderURL,
             privateFolderURL: exportService.privateFolderURL
         )
+        .id("copilot-dashboard")  // Stable identity — prevents SwiftUI from recreating the view
         .padding(.horizontal, DesignSystem.Spacing.medium)
         .padding(.bottom, DesignSystem.Spacing.medium)
         .padding(.top, DesignSystem.Spacing.small)

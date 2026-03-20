@@ -122,16 +122,37 @@ final class CopilotHTTPServer: ObservableObject {
 
     private func handleConnection(_ connection: NWConnection) {
         connection.start(queue: .main)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, error in
-            guard let self = self, let data = data, error == nil else {
-                connection.cancel()
-                return
-            }
-            let request = String(data: data, encoding: .utf8) ?? ""
-            Task { @MainActor in
-                self.handleRequest(request, connection: connection)
+        // Accumulate data until we have the full HTTP request (headers + body)
+        var accumulated = Data()
+        func readMore() {
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+                guard let self = self else { connection.cancel(); return }
+                if let data = data { accumulated.append(data) }
+                if error != nil { connection.cancel(); return }
+
+                let request = String(data: accumulated, encoding: .utf8) ?? ""
+
+                // Check if we have the full body by reading Content-Length
+                if let clRange = request.range(of: "Content-Length: "),
+                   let endRange = request[clRange.upperBound...].range(of: "\r\n") {
+                    let clStr = String(request[clRange.upperBound..<endRange.lowerBound])
+                    if let contentLength = Int(clStr),
+                       let bodyStart = request.range(of: "\r\n\r\n") {
+                        let bodyBytes = request[bodyStart.upperBound...].utf8.count
+                        if bodyBytes < contentLength && !isComplete {
+                            // Need more data
+                            readMore()
+                            return
+                        }
+                    }
+                }
+
+                Task { @MainActor in
+                    self.handleRequest(request, connection: connection)
+                }
             }
         }
+        readMore()
     }
 
     private func handleRequest(_ request: String, connection: NWConnection) {

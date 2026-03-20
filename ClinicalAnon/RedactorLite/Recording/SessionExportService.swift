@@ -339,9 +339,11 @@ class SessionExportService: ObservableObject {
         }
         ```
 
-        ## Privacy
+        ## Privacy & Entity Code Format
 
         All transcript text is redacted. Entity codes like `[PERSON_A]`, `[LOCATION_B]` are placeholders for real names. You must NEVER attempt to resolve these codes. The app handles re-substitution for display only.
+
+        **CRITICAL: When writing entity codes in session state, ALWAYS use square brackets.** Write `[PERSON_A]` not `PERSON_A`. Write `[ORG_B]` not `ORG_B`. The dashboard uses these brackets to find and replace codes with real names. If you omit brackets, the real name will not display.
         """
 
         do {
