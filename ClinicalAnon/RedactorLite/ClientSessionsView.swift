@@ -17,6 +17,7 @@ struct SessionInfo: Identifiable {
     let type: String
     let duration: Int
     let hasAnalysis: Bool
+    let hasNotes: Bool
     let folderURL: URL
 }
 
@@ -29,55 +30,85 @@ struct ClientSessionsView: View {
     let onBack: () -> Void
 
     @State private var sessions: [SessionInfo] = []
+    @State private var selectedSession: SessionInfo?
 
     var body: some View {
         ZStack {
             GradientPageBackground()
 
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    Button(action: onBack) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Home")
-                                .font(DesignSystem.Typography.button)
+            if let session = selectedSession {
+                // Notes view for selected session
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        Button {
+                            selectedSession = nil
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("Sessions")
+                                    .font(DesignSystem.Typography.button)
+                            }
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
                         }
-                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+                        .buttonStyle(.plain)
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
-
-                    Spacer()
-                }
-                .padding(.horizontal, DesignSystem.Spacing.large)
-                .padding(.top, DesignSystem.Spacing.medium)
-
-                Text("Sessions for \(initials)")
-                    .font(DesignSystem.Typography.heading)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
                     .padding(.horizontal, DesignSystem.Spacing.large)
                     .padding(.top, DesignSystem.Spacing.medium)
-                    .padding(.bottom, DesignSystem.Spacing.medium)
 
-                if sessions.isEmpty {
-                    VStack {
-                        Spacer()
-                        Text("No sessions found")
-                            .font(DesignSystem.Typography.body)
-                            .foregroundColor(.secondary)
+                    ClinicalNotesView(
+                        sessionFolder: session.folderURL,
+                        privateFolderURL: privateFolderURL
+                    )
+                }
+            } else {
+                // Session list
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        Button(action: onBack) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("Home")
+                                    .font(DesignSystem.Typography.button)
+                            }
+                            .foregroundColor(DesignSystem.Colors.primaryTeal)
+                        }
+                        .buttonStyle(.plain)
+
                         Spacer()
                     }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: DesignSystem.Spacing.medium) {
-                            ForEach(sessions) { session in
-                                sessionCard(session)
-                            }
-                        }
+                    .padding(.horizontal, DesignSystem.Spacing.large)
+                    .padding(.top, DesignSystem.Spacing.medium)
+
+                    Text("Sessions for \(initials)")
+                        .font(DesignSystem.Typography.heading)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
                         .padding(.horizontal, DesignSystem.Spacing.large)
-                        .padding(.bottom, DesignSystem.Spacing.large)
+                        .padding(.top, DesignSystem.Spacing.medium)
+                        .padding(.bottom, DesignSystem.Spacing.medium)
+
+                    if sessions.isEmpty {
+                        VStack {
+                            Spacer()
+                            Text("No sessions found")
+                                .font(DesignSystem.Typography.body)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: DesignSystem.Spacing.medium) {
+                                ForEach(sessions) { session in
+                                    sessionCard(session)
+                                }
+                            }
+                            .padding(.horizontal, DesignSystem.Spacing.large)
+                            .padding(.bottom, DesignSystem.Spacing.large)
+                        }
                     }
                 }
             }
@@ -87,38 +118,62 @@ struct ClientSessionsView: View {
         }
     }
 
+    /// Derive Private/{initials}/ path from the client folder URL
+    private var privateFolderURL: URL {
+        // folderURL is Sessions/{initials}/, workspace root is 2 levels up
+        let workspaceRoot = folderURL
+            .deletingLastPathComponent()  // remove {initials}
+            .deletingLastPathComponent()  // remove "Sessions"
+        return workspaceRoot
+            .appendingPathComponent("Private", isDirectory: true)
+            .appendingPathComponent(initials, isDirectory: true)
+    }
+
     // MARK: - Session Card
 
     private func sessionCard(_ session: SessionInfo) -> some View {
-        HStack(spacing: DesignSystem.Spacing.medium) {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text(session.displayDate)
-                    .font(DesignSystem.Typography.subheading)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+        Button {
+            if session.hasNotes {
+                selectedSession = session
+            }
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.medium) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text(session.displayDate)
+                        .font(DesignSystem.Typography.subheading)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
 
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    Text(session.type)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(.secondary)
-
-                    if session.duration > 0 {
-                        Text("\(session.duration) min")
-                            .font(DesignSystem.Typography.caption)
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        Text(session.type)
+                            .font(DesignSystem.Typography.body)
                             .foregroundColor(.secondary)
+
+                        if session.duration > 0 {
+                            Text("\(session.duration) min")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
-            }
 
-            Spacer()
+                Spacer()
 
-            if session.hasAnalysis {
-                Label("Analysed", systemImage: "checkmark.circle.fill")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.primaryTeal)
+                if session.hasNotes {
+                    Label("Notes", systemImage: "doc.text.fill")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+                }
+
+                if session.hasAnalysis {
+                    Label("Analysed", systemImage: "checkmark.circle.fill")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.primaryTeal)
+                }
             }
+            .padding(DesignSystem.Spacing.medium)
+            .glassPanel()
         }
-        .padding(DesignSystem.Spacing.medium)
-        .glassPanel()
+        .buttonStyle(.plain)
     }
 
     // MARK: - Data Loading
@@ -176,12 +231,17 @@ struct ClientSessionsView: View {
             let stateURL = folder.appendingPathComponent("session_state.json")
             let hasAnalysis = fm.fileExists(atPath: stateURL.path)
 
+            // Check for clinical_notes.json
+            let notesURL = folder.appendingPathComponent("clinical_notes.json")
+            let hasNotes = fm.fileExists(atPath: notesURL.path)
+
             loaded.append(SessionInfo(
                 date: folderName,
                 displayDate: displayDate,
                 type: sessionType,
                 duration: duration,
                 hasAnalysis: hasAnalysis,
+                hasNotes: hasNotes,
                 folderURL: folder
             ))
         }
