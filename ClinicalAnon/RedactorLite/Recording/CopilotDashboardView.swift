@@ -188,7 +188,7 @@ struct CopilotDashboardView: View {
 
     enum ViewMode { case session, rolling }
 
-    private let pollTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
+    private let pollTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -205,7 +205,9 @@ struct CopilotDashboardView: View {
             startTime = Date()
             loadState()
         }
-        .onReceive(pollTimer) { _ in loadState() }
+        .onReceive(pollTimer) { _ in
+            loadState()
+        }
         .onReceive(clockTimer) { _ in
             wallElapsed = Int(Date().timeIntervalSince(startTime))
         }
@@ -329,23 +331,26 @@ struct CopilotDashboardView: View {
 
     private func instrumentsCard(_ s: DashboardState) -> some View {
         HStack(spacing: 0) {
-            // 4 arc gauges
-            HStack(spacing: 8) {
+            // 4 arc gauges — spread evenly across available space
+            HStack(spacing: 0) {
                 DashArcGauge(
                     value: effectiveValue(s, \.speaker_totals?.client_talk_pct),
                     maxValue: 100, label: "Client Talk", unit: "%",
                     zones: [(0, 50, DashColors.red), (50, 65, DashColors.amber), (65, 100, DashColors.green)]
                 )
+                .frame(maxWidth: .infinity)
                 DashArcGauge(
                     value: effectiveValue(s, \.utterance_counts?.rq_ratio),
                     maxValue: 4, label: "R:Q Ratio", unit: ":1",
                     zones: [(0, 1, DashColors.red), (1, 2, DashColors.amber), (2, 4, DashColors.green)]
                 )
+                .frame(maxWidth: .infinity)
                 DashArcGauge(
                     value: effectiveValue(s, \.utterance_counts?.ex_pct),
                     maxValue: 100, label: "Expert", unit: "%",
                     zones: [(0, 20, DashColors.green), (20, 40, DashColors.amber), (40, 100, DashColors.red)]
                 )
+                .frame(maxWidth: .infinity)
                 DashArcGauge(
                     value: viewMode == .session
                         ? (s.engagement?.session_score ?? 0)
@@ -353,10 +358,11 @@ struct CopilotDashboardView: View {
                     maxValue: 100, label: "Engagement", unit: "%",
                     zones: [(0, 45, DashColors.red), (45, 65, DashColors.amber), (65, 100, DashColors.green)]
                 )
+                .frame(maxWidth: .infinity)
             }
 
             verticalDivider()
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
 
             // View toggle pill
             VStack(spacing: 6) {
@@ -370,9 +376,9 @@ struct CopilotDashboardView: View {
                     viewToggleButton("10m", mode: .rolling, isLeft: false)
                 }
                 .background(DashColors.trackGray)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            .frame(width: 70)
+            .frame(width: 90)
 
             verticalDivider()
                 .padding(.horizontal, 12)
@@ -397,6 +403,7 @@ struct CopilotDashboardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
         .dashCard()
     }
 
@@ -430,23 +437,32 @@ struct CopilotDashboardView: View {
     // MARK: - Content Grid
 
     private func contentGrid(_ s: DashboardState) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Left column: 3 stacked cards
-            VStack(spacing: 12) {
-                agendaCard("Therapist Focus", items: s.therapist_agenda ?? [])
-                    .frame(maxHeight: .infinity)
-                agendaCard("Client Agenda", items: s.client_agenda ?? [])
-                    .frame(maxHeight: .infinity)
-                themesCard(s.themes ?? [])
-                    .frame(maxHeight: .infinity)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        let tAgenda = s.therapist_agenda ?? []
+        let cAgenda = s.client_agenda ?? []
+        let themes = s.themes ?? []
+        let people = s.people ?? []
 
-            // Right column: single full-height card
-            peopleCard(s.people ?? [])
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        return HStack(alignment: .top, spacing: 12) {
+            // Left column
+            ScrollView {
+                VStack(spacing: 12) {
+                    if !tAgenda.isEmpty {
+                        agendaCard("Therapist Focus", items: tAgenda)
+                    }
+                    if !cAgenda.isEmpty {
+                        agendaCard("Client Agenda", items: cAgenda)
+                    }
+                    themesCard(themes)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // Right column
+            ScrollView {
+                peopleCard(people)
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxHeight: .infinity)
     }
 
     // MARK: - Agenda Card

@@ -20,39 +20,33 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("redactor")
 
 BASE = "http://127.0.0.1:8787"
-_token: str | None = None
 
 
 # ─── Token Discovery ───────────────────────────────────────────────
 
 
 def _find_token() -> str:
-    """Find the auth token from .server_token file or environment variable."""
-    global _token
-    if _token:
-        return _token
-
+    """Find the auth token from .server_token file. Always reads fresh from disk."""
     # Check environment variable first
     env_token = os.environ.get("REDACTOR_TOKEN")
     if env_token:
-        _token = env_token
-        return _token
+        return env_token
 
-    # Search for .server_token in the most recent session folder
+    # Search for most recent .server_token in session folders
     export_root = os.environ.get("REDACTOR_EXPORT_ROOT")
     if export_root:
         root = Path(export_root)
-        # Find most recent session folder containing .server_token
-        folders = sorted(
-            [d for d in root.iterdir() if d.is_dir() and (d / ".server_token").exists()],
-            key=lambda d: d.stat().st_mtime,
-            reverse=True,
-        )
-        if folders:
-            token_file = folders[0] / ".server_token"
-            data = json.loads(token_file.read_text())
-            _token = data.get("token", "")
-            return _token
+        try:
+            token_files = sorted(
+                root.rglob(".server_token"),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            )
+            if token_files:
+                data = json.loads(token_files[0].read_text())
+                return data.get("token", "")
+        except Exception:
+            pass
 
     return ""
 
@@ -65,9 +59,8 @@ def _headers() -> dict:
 
 
 def _reset_token():
-    """Reset cached token (e.g. when a new session starts)."""
-    global _token
-    _token = None
+    """No-op — token is always read fresh from disk now."""
+    pass
 
 
 # ─── App Lifecycle ─────────────────────────────────────────────────
@@ -257,6 +250,94 @@ async def is_session_complete() -> str:
             return resp.text
     except httpx.ConnectError:
         return json.dumps({"error": "Cannot connect to Redactor"})
+
+
+# ─── MCP Prompt (appears as /live-session in Claude) ───────────────
+
+
+@mcp.prompt()
+def live_session() -> str:
+    """Start a live clinical session analysis with real-time dashboard"""
+    return """You are running a live clinical session analysis using MCP tools connected to the Redactor app. Follow this workflow exactly. Do not write files, create folders, or use bash commands. Everything goes through MCP tool calls.
+
+STEP 1 — COLLECT SESSION DETAILS
+
+Ask these as separate questions, one at a time:
+1. "What are the client's initials?" (free text, e.g. "JB")
+2. "What type of session?" — Therapy / Coaching / Supervision
+3. "How long?" — 30 / 50 / 80 / 90 minutes (default 50)
+4. "Anyone else joining?" — 1:1 (default) or Multiple speakers
+5. "What are your goals for this session?" (free text, or "General check-in")
+
+STEP 2 — LAUNCH RECORDING
+
+Call start_recording() with the collected details. This automatically launches the app if not running.
+Example: start_recording(initials="JB", session_type="Therapy", length=50, goals="Explore work stress", multi_speaker=false)
+
+Tell the user recording has started. DO NOT STOP OR WAIT. Immediately begin Step 3.
+
+STEP 3 — ANALYSIS LOOP
+
+You ARE the loop. Do not stop. Do not ask the user anything. Do not wait for prompts. Keep polling continuously until the session ends. Repeat every ~10 seconds:
+
+1. get_new_chunks(since_index=N) — N starts at 0, then use latest_index from response
+2. If new chunks arrived, analyse each one (see ANALYSIS RULES below)
+3. get_session_state() — get current state with metrics
+4. Merge your analysis into the state (see MERGING below)
+5. write_session_state(updated_json) — push to the dashboard
+6. is_session_complete() — if true, do final analysis and stop
+7. Wait ~10 seconds, go to step 1
+
+STEP 4 — SESSION COMPLETE
+
+When is_session_complete() returns true: process remaining chunks, write final state, tell user session is complete with brief summary.
+
+─── ANALYSIS RULES ───
+
+For each new chunk, analyse the redacted transcript. All text uses entity codes like [PERSON_A] — never attempt to resolve these to real names.
+
+UTTERANCE CLASSIFICATION (therapist segments only):
+- Q = Question
+- SR = Simple Reflection — restates surface content
+- CR = Complex Reflection — adds meaning, pursues implication, reflects deeper emotion
+- EX = Expert Statement — information, advice, direction, psychoeducation
+- O = Other — greetings, admin (not counted)
+
+AGENDA TRACKING:
+- Track progress on therapist goals: not_discussed → partially_discussed → fully_discussed (one-directional)
+- Evidence: synthesised one-liners (max 5 "discussed" + 1-2 "gap" items)
+- Replace full evidence list each time (synthesise, don't append)
+
+CLIENT AGENDA: Only surface items explicitly stated by client. No duplicates.
+
+PEOPLE & DETAILS: Extract people by entity codes with roles, details, events. Merge into existing.
+
+THEMES: Verbatim client phrases, emotionally loaded. Theme names 2-5 words. Maintain 3-7 themes.
+
+RUPTURE DETECTION:
+- Withdrawal: turn length drops 40%+, monosyllabic responses
+- Confrontation: challenges therapist, frustration
+
+RISK MONITORING: Suicidal ideation, self-harm, harm to others, child safety. Clinical judgment. Persistent once flagged.
+
+ECHO DETECTION: Same speech as both therapist and client at near-identical timestamps = echo. Skip entirely.
+
+─── MERGING INTO STATE ───
+
+After get_session_state(), add your analysis to the existing state:
+- utterance_counts: increment therapist_questions/sr/cr/ex. Recalculate rq_ratio = (sr+cr)/questions, ex_pct = ex/(q+sr+cr+ex)*100
+- therapist_agenda: update status and evidence
+- client_agenda: add new items
+- themes: add phrases, create/rename/merge
+- people: add/update entries
+- rupture: set detected + type if signal found
+- risk: set flagged if signal found
+
+Call write_session_state() with the COMPLETE merged JSON.
+
+─── PRIVACY ───
+
+All transcript text is redacted. Entity codes like [PERSON_A] are placeholders. Never attempt to resolve these to real names."""
 
 
 if __name__ == "__main__":

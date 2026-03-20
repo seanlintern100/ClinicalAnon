@@ -23,7 +23,7 @@ extension Notification.Name {
 // MARK: - Copilot HTTP Server
 
 @MainActor
-final class CopilotHTTPServer {
+final class CopilotHTTPServer: ObservableObject {
 
     // MARK: - Shared Instance
 
@@ -34,7 +34,7 @@ final class CopilotHTTPServer {
     private var listener: NWListener?
     private var sessionFolder: URL?
     private(set) var authToken: String = ""
-    private(set) var isRunning = false
+    @Published private(set) var isRunning = false
     private(set) var port: UInt16 = 8787
 
     /// Private folder URL for entity_map.json (separate from session folder)

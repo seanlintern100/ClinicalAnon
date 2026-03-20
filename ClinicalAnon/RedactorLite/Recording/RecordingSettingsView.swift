@@ -148,6 +148,43 @@ struct RecordingSettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
+
+                    // MARK: - AI Copilot
+                    settingsSection("AI Copilot (Cowork)") {
+                        Text("To connect Claude Cowork, open a new task and select this folder:")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                        HStack {
+                            Text(exportService.workspaceURL.appendingPathComponent("CoWork Files").path)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+
+                            Button {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(
+                                    exportService.workspaceURL.appendingPathComponent("CoWork Files").path,
+                                    forType: .string
+                                )
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 11))
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Copy path to clipboard")
+                        }
+
+                        Text("In Cowork's folder picker, press \u{2318}\u{21E7}G and paste the path above.")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+                        Text("Then say \"start a session\" to begin.")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    }
                 }
                 .padding()
             }

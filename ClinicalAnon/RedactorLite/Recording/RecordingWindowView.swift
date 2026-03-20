@@ -28,6 +28,7 @@ struct RecordingWindowView: View {
     @StateObject private var sessionManager = SessionManager.shared
     @StateObject private var transcriptionService = TranscriptionService.shared
     @StateObject private var exportService = SessionExportService()
+    @ObservedObject private var copilotServer = CopilotHTTPServer.shared
 
     @State private var phase: RecordingPhase = .setup
     @State private var activeTab: RecordingTab = .transcript
@@ -59,7 +60,7 @@ struct RecordingWindowView: View {
 
             VStack(spacing: 0) {
                 // Tab bar (only shows Dashboard when copilot is active)
-                if CopilotHTTPServer.shared.isRunning {
+                if copilotServer.isRunning {
                     tabBar
                         .padding(.horizontal, DesignSystem.Spacing.medium)
                         .padding(.top, DesignSystem.Spacing.small)

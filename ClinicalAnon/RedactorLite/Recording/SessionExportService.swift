@@ -94,61 +94,261 @@ class SessionExportService: ObservableObject {
             print("SessionExportService: Failed to create workspace: \(error)")
         }
 
-        // Write INSTRUCTIONS.md if it doesn't exist
-        let instructionsURL = coworkFilesURL.appendingPathComponent("INSTRUCTIONS.md")
-        if !fm.fileExists(atPath: instructionsURL.path) {
-            writeInstructions(to: instructionsURL)
+        // Write .claude/skills/live-session/SKILL.md for Cowork slash-command discovery
+        let skillDir = coworkFilesURL
+            .appendingPathComponent(".claude", isDirectory: true)
+            .appendingPathComponent("skills", isDirectory: true)
+            .appendingPathComponent("live-session", isDirectory: true)
+        let skillURL = skillDir.appendingPathComponent("SKILL.md")
+        do {
+            try fm.createDirectory(at: skillDir, withIntermediateDirectories: true)
+        } catch {
+            print("SessionExportService: Failed to create skills directory: \(error)")
+        }
+        // Always overwrite so app updates propagate to colleagues
+        writeSkillFile(to: skillURL)
+
+        // Write CLAUDE.md in CoWork Files root — Cowork reads this on session start
+        let claudeMdURL = coworkFilesURL.appendingPathComponent("CLAUDE.md")
+        writeClaudeMd(to: claudeMdURL)
+    }
+
+    /// Writes CLAUDE.md so Cowork knows to use /live-session
+    private func writeClaudeMd(to url: URL) {
+        let content = """
+        # Redactor — Cowork Workspace
+
+        When the user says "start a session", "record a session", "begin recording", or anything similar, use the /live-session skill. Do not ask clarifying questions about what kind of session — it is always a clinical recording session via the Redactor app.
+
+        You have MCP tools from the "redactor" server. Use ONLY those tools to interact with the app. Do not write files, create folders, or use bash commands.
+        """
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            print("SessionExportService: Failed to write CLAUDE.md: \(error)")
         }
     }
 
-    /// Writes the AI copilot instructions file
-    private func writeInstructions(to url: URL) {
+    /// Writes the Cowork skill file for /live-session slash command
+    private func writeSkillFile(to url: URL) {
         let content = """
-        # Live Session Analysis — Folder Instructions
+        ---
+        name: live-session
+        description: Start a live clinical recording session. Use when user says "start a session", "record a session", or "begin recording". Captures audio, transcribes, redacts PII, and analyses therapy/assessment sessions in real-time via MCP tools connected to the Redactor app.
+        ---
+
+        # Live Session Analysis
 
         ## CRITICAL: Use MCP Tools Only
 
         You have a connected MCP server called "redactor" with tools to control the Redactor app. **DO NOT write files, create folders, or use bash commands to interact with the app.** Everything goes through MCP tool calls.
 
-        **DO NOT** write trigger files. **DO NOT** look for session folders on disk. **DO NOT** run python scripts. Use the MCP tools listed below.
+        **DO NOT** write trigger files. **DO NOT** look for session folders on disk. **DO NOT** run python scripts. **DO NOT** try to access TEMP Transcripts or any other folder. Use ONLY the MCP tools listed below.
+
+        ---
 
         ## When the user says "start a session" (or similar)
 
         ### Step 1: Collect session details
-        Ask for: Client initials, Session type, Session length, Number of speakers, Session goals
+
+        Ask these as **separate questions**, one at a time:
+
+        1. "What are the client's initials?" (free text, e.g. "JB")
+        2. "What type of session?" — Therapy / Coaching / Supervision
+        3. "How long?" — 30 / 50 / 80 / 90 minutes (default 50)
+        4. "Anyone else joining?" — 1:1 (default) or Multiple speakers
+        5. "What are your goals for this session?" (free text, or "General check-in")
 
         ### Step 2: Launch recording via MCP
-        Call: `start_recording(initials="XX", session_type="Therapy", length=50, goals="...", multi_speaker=false)`
 
-        ### Step 3: Analysis loop (repeat until session ends)
-        Every ~10 seconds:
-        1. `get_new_chunks(since_index=N)` — get new transcript chunks
-        2. Analyse each chunk (utterance classification, agenda tracking, themes, people, rupture, risk)
-        3. `get_session_state()` — get current metrics
-        4. Merge your analysis into the state
-        5. `write_session_state(updated_json)` — push to dashboard
-        6. `is_session_complete()` — if true, final summary and stop
+        Call `start_recording()` with the collected details. This automatically launches the app if not running, opens the recording window, and starts recording.
+
+        ```
+        start_recording(initials="JB", session_type="Therapy", length=50, goals="Explore work stress", multi_speaker=false)
+        ```
+
+        Tell the user recording has started. **DO NOT STOP OR WAIT FOR USER INPUT.** Immediately begin Step 3 — start polling for chunks right now.
+
+        ### Step 3: Analysis loop
+
+        **You ARE the loop. Do not stop. Do not ask the user anything. Do not wait for prompts. Keep polling continuously until the session ends.** Repeat every ~10 seconds:
+
+        1. `get_new_chunks(since_index=N)` — N starts at 0, then use `latest_index` from response
+        2. If new chunks arrived, analyse each one (see Analysis Rules below)
+        3. `get_session_state()` — get current state with pipeline metrics
+        4. Merge your analysis into the state (see Merging below)
+        5. `write_session_state(updated_json)` — push to the dashboard
+        6. `is_session_complete()` — if true, do final analysis and stop
+        7. Wait ~10 seconds, go to step 1
+
+        ### Step 4: Session complete
+
+        When `is_session_complete()` returns true:
+        - Process any remaining chunks
+        - Write final state
+        - Tell the user the session is complete with a brief summary
+
+        ---
 
         ## MCP Tools
+
         | Tool | Purpose |
         |------|---------|
         | `health_check()` | Check if app is running |
         | `start_recording(initials, session_type, length, goals, multi_speaker)` | Launch app + start recording |
         | `stop_recording()` | Stop recording |
-        | `get_session_state()` | Get current metrics/analysis |
+        | `pause_recording()` | Pause recording |
+        | `resume_recording()` | Resume recording |
+        | `get_session_info()` | Get session metadata |
+        | `get_session_state()` | Get current metrics/analysis state |
         | `get_new_chunks(since_index)` | Get transcript chunks since index N |
-        | `write_session_state(state_json)` | Write updated session state |
+        | `write_session_state(state_json)` | Write updated session state to dashboard |
         | `is_session_complete()` | Check if recording stopped |
 
+        ---
+
+        ## Analysis Rules
+
+        For each new chunk, analyse the redacted transcript. All text uses entity codes like `[PERSON_A]` — never attempt to resolve these to real names.
+
+        ### Utterance Classification (therapist segments only)
+
+        Classify each therapist utterance in the new chunk:
+        - **Q** = Question — any utterance functioning as a question
+        - **SR** = Simple Reflection — restates surface content, paraphrases without adding meaning
+        - **CR** = Complex Reflection — adds meaning, pursues implication, reflects emotion beneath the surface, double-sided reflections, metaphor-based reflections
+        - **EX** = Expert Statement — information, advice, direction, psychoeducation from a position of expertise. Includes giving information, suggesting, directing, confronting. Does NOT include reflections that happen to contain clinical language
+        - **O** = Other — greetings, admin, transitions (not counted in metrics)
+
+        Only classify therapist segments from the NEW chunk. Do not re-classify previous chunks.
+
+        ### Agenda Tracking
+
+        - Track progress on therapist goals: `not_discussed` → `partially_discussed` → `fully_discussed` (one-directional, never reverse)
+        - Evidence: synthesised one-liners (max 5 "discussed" + 1-2 "gap" items)
+        - "discussed" items = what HAS been covered (your synthesis, not quotes)
+        - "gap" items = what SHOULD still be explored but hasn't been
+        - Replace the full evidence list each time (synthesise, don't append)
+
+        ### Client Agenda Detection
+
+        - Only surface items where client explicitly states intent or therapist and client agree on a focus
+        - Passing mentions do not qualify
+        - Do not create duplicates of existing items
+
+        ### People & Details
+
+        - Extract people mentioned by their entity codes with roles, relationships, details, events
+        - Merge into existing people list — update existing entries, add new ones
+        - Include therapist, client, family members, colleagues, etc.
+
+        ### Theme Synthesis
+
+        - Identify verbatim client phrases that are emotionally loaded, self-referential, or linguistically distinctive
+        - Theme names: 2-5 words describing the underlying pattern (not surface content)
+        - Assign each phrase to an existing theme or create a new one
+        - Maintain 3-7 themes. If adding would exceed 7, replace the least significant or merge
+
+        ### Rupture Detection
+
+        Watch for:
+        - **Withdrawal** — client turn length drops 40%+, monosyllabic responses, topic deflection
+        - **Confrontation** — direct challenge to therapist, frustration, repeated content with emphasis
+
+        Only flag if the signal is clear in the new chunk.
+
+        ### Risk Monitoring
+
+        Flag if you detect:
+        - Suicidal ideation, self-harm, harm to others, child safety, acute distress
+        - Use clinical judgment, not keyword matching
+        - Risk is persistent once flagged — never cleared during a session
+
+        ### Diarization Echo Detection
+
+        Transcripts may contain echo artefacts — the SAME speech as both therapist and client at near-identical timestamps (within 2 seconds). Skip echo segments entirely.
+
+        ---
+
+        ## Merging Analysis Into State
+
+        When you call `get_session_state()`, you get the current state including pipeline-computed metrics (speaker totals, engagement). Your job is to ADD your analysis:
+
+        - **utterance_counts**: increment `therapist_questions`, `therapist_sr`, `therapist_cr`, `therapist_ex` from your classifications. Recalculate `rq_ratio = (sr + cr) / questions` and `ex_pct = ex / (q + sr + cr + ex) * 100`
+        - **therapist_agenda**: update status and evidence for each goal
+        - **client_agenda**: add new items if detected
+        - **themes**: add phrases, create/rename/merge themes
+        - **people**: add/update people entries
+        - **rupture**: set `detected: true` and `type` if signal found
+        - **risk**: set `flagged: true` if signal found
+
+        Then call `write_session_state()` with the COMPLETE merged JSON (preserve all existing fields, add your updates).
+
+        ---
+
+        ## Session State Schema
+
+        ```json
+        {
+          "session_id": "JB_2026-03-20_0937",
+          "session_type": "therapy",
+          "session_date": "2026-03-20",
+          "session_duration_seconds": 3000,
+          "chunks_processed": 5,
+          "last_chunk_timestamp": "00:05:00",
+          "speaker_totals": {
+            "therapist_seconds": 120.5,
+            "client_seconds": 180.3,
+            "client_talk_pct": 60.0
+          },
+          "utterance_counts": {
+            "therapist_questions": 12,
+            "therapist_sr": 3,
+            "therapist_cr": 8,
+            "therapist_ex": 2,
+            "rq_ratio": 0.92,
+            "ex_pct": 8.0
+          },
+          "engagement": {
+            "session_score": 72.5,
+            "mean_client_words_per_turn": 35.2,
+            "elaborated_turns": 8,
+            "total_client_turns": 15
+          },
+          "therapist_agenda": [
+            {
+              "id": "ta1",
+              "text": "Explore work stress",
+              "status": "partially_discussed",
+              "evidence": [
+                {"type": "discussed", "text": "Identified conflict with manager as primary stressor"},
+                {"type": "gap", "text": "Impact on sleep not yet explored"}
+              ]
+            }
+          ],
+          "client_agenda": [],
+          "people": [
+            {"token": "[PERSON_A]", "role": "client", "details": {}, "events": []}
+          ],
+          "themes": [
+            {"id": "th1", "text": "Workplace powerlessness", "phrases": ["I have no say in anything"]}
+          ],
+          "rupture": {"detected": false, "type": null},
+          "risk": {"flagged": false}
+        }
+        ```
+
         ## Privacy
-        All transcript text is redacted. Entity codes like [PERSON_A] are placeholders. Never attempt to resolve these to real names.
+
+        All transcript text is redacted. Entity codes like `[PERSON_A]`, `[LOCATION_B]` are placeholders for real names. You must NEVER attempt to resolve these codes. The app handles re-substitution for display only.
         """
 
         do {
             try content.write(to: url, atomically: true, encoding: .utf8)
-            print("SessionExportService: Wrote INSTRUCTIONS.md")
+            print("SessionExportService: Wrote SKILL.md")
         } catch {
-            print("SessionExportService: Failed to write INSTRUCTIONS.md: \(error)")
+            print("SessionExportService: Failed to write SKILL.md: \(error)")
         }
     }
 
@@ -225,6 +425,7 @@ class SessionExportService: ObservableObject {
         try FileManager.default.createDirectory(at: privateFolderForClient, withIntermediateDirectories: true)
 
         sessionFolderURL = folderURL
+        privateFolderURL = privateFolderForClient  // Update to client-specific Private/{initials}/
         sessionId = "\(initials)_\(dateStr)"
         currentInitials = initials
         chunkCounter = 0
@@ -364,7 +565,7 @@ class SessionExportService: ObservableObject {
             }
         }
 
-        sessionFolderURL = nil
+        // Keep sessionFolderURL and privateFolderURL so dashboard continues showing final state
         sessionId = ""
         currentInitials = ""
         print("SessionExportService: Session finalized (\(chunksExported) chunks exported)")
@@ -394,9 +595,8 @@ class SessionExportService: ObservableObject {
 
         do {
             let mapData = try JSONSerialization.data(withJSONObject: entityMap, options: [.prettyPrinted, .sortedKeys])
-            let mapURL = privateRoot
-                .appendingPathComponent(currentInitials, isDirectory: true)
-                .appendingPathComponent("entity_map.json")
+            // privateFolderURL is already Private/{initials}/ — don't append initials again
+            let mapURL = privateRoot.appendingPathComponent("entity_map.json")
             try mapData.write(to: mapURL, options: .atomic)
         } catch {
             print("SessionExportService: Failed to update entity map: \(error)")
