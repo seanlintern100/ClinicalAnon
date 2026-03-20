@@ -237,24 +237,38 @@ class SessionExportService: ObservableObject {
         - Passing mentions do not qualify
         - Do not create duplicates of existing items
 
-        ### People & Details
+        ### People
 
-        This section captures the cast of characters and clinically relevant context — not a directory of every name mentioned.
+        The cast of characters in the client's story — not every name mentioned.
 
-        **Who to include:**
-        - The client (always)
-        - People who matter to the client's story — family, partners, key professionals, anyone the client has feelings about or is affected by
-        - Do NOT include every passing mention. Only add a person if they play a role in the client's narrative
+        **Who to include:** The client (always). People who matter to the client — family, partners, key professionals, anyone the client has feelings about. Do NOT include passing mentions.
 
         **What to capture:**
         - `token`: entity code e.g. `[PERSON_B]`
-        - `role`: relationship to the client (e.g. "partner", "mother", "manager", "psychiatrist") — not job title unless clinically relevant
-        - `details`: only clinically relevant facts — NOT demographics for their own sake. Include things like: conditions, medications, key circumstances that affect the client
-        - `events`: significant things that happened involving this person that matter to the session (e.g. "left the family home last week", "changed client's medication")
-
-        **Key details that are NOT about people** (workplaces, services, living situations) should still be captured — attach them to the most relevant person or to the client entry.
+        - `role`: relationship to the client (e.g. "partner", "mother", "manager") — not job title unless clinically relevant
+        - `details`: only clinically relevant facts about this person
+        - `events`: significant things involving this person that matter to the session
 
         Merge into existing people — update, don't duplicate.
+
+        ### Key Details
+
+        A quick-reference pad of standalone facts NOT tied to a specific person. The therapist glances at this to recall a detail mid-session.
+
+        Write to the `key_details` array. Each entry has:
+        - `id`: unique (e.g. "kd1", "kd2")
+        - `category`: organise meaningfully (you decide the categories based on what emerges — e.g. "Medication", "Work", "Living situation", "Key events", "Dates", "Services")
+        - `text`: the detail itself, concise
+
+        **What belongs here:**
+        - Workplace names, services involved, living arrangements
+        - Medications, diagnoses, treatment history
+        - Significant dates or upcoming events
+        - Anything the therapist might want to reference that isn't about a person
+
+        **What does NOT belong:** Things already captured under a person's details or events. No duplication.
+
+        Keep this lean — only facts worth calling out. Update as new details emerge.
 
         ### Theme Synthesis
 

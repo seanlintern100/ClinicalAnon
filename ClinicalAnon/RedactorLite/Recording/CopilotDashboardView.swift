@@ -32,6 +32,7 @@ struct DashboardState: Codable {
     var themes: [ThemeModel]?
     var rupture: RuptureModel?
     var risk: RiskModel?
+    var key_details: [KeyDetailModel]?
 
     // Therapist interaction fields
     var therapist_request: String?
@@ -92,6 +93,12 @@ struct DashboardState: Codable {
         var id: String
         var text: String?
         var phrases: [String]?
+    }
+
+    struct KeyDetailModel: Codable, Identifiable {
+        var id: String
+        var category: String?   // AI decides: e.g. "medication", "event", "living situation"
+        var text: String?
     }
 
     struct RuptureModel: Codable {
@@ -598,8 +605,12 @@ struct CopilotDashboardView: View {
 
             // Right column
             ScrollView {
-                peopleCard(people)
-                    .frame(minHeight: 200)
+                VStack(spacing: 12) {
+                    peopleCard(people)
+                        .frame(minHeight: 120)
+                    keyDetailsCard(s.key_details ?? [])
+                        .frame(minHeight: 120)
+                }
             }
             .frame(maxWidth: .infinity)
         }
@@ -908,6 +919,51 @@ struct CopilotDashboardView: View {
         let m = totalSeconds / 60
         let s = totalSeconds % 60
         return String(format: "%d:%02d", m, s)
+    }
+
+    // MARK: - Key Details Card
+
+    private func keyDetailsCard(_ details: [DashboardState.KeyDetailModel]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            dashSectionLabel("Key Details")
+
+            if details.isEmpty {
+                Text("Listening\u{2026}")
+                    .font(.system(size: 12))
+                    .foregroundColor(DashColors.textDim)
+                    .italic()
+                    .padding(.horizontal, 4)
+            } else {
+                // Group by category (AI-determined)
+                let grouped = Dictionary(grouping: details) { $0.category ?? "Other" }
+                let sortedKeys = grouped.keys.sorted()
+
+                ForEach(sortedKeys, id: \.self) { category in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(category.uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(DashColors.textDim)
+                            .tracking(0.8)
+
+                        ForEach(grouped[category] ?? []) { detail in
+                            HStack(alignment: .top, spacing: 6) {
+                                Circle()
+                                    .fill(DashColors.teal.opacity(0.4))
+                                    .frame(width: 5, height: 5)
+                                    .padding(.top, 5)
+                                Text(sub(detail.text ?? ""))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DashColors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 4)
+                }
+            }
+        }
+        .padding(14)
+        .dashCard()
     }
 }
 
