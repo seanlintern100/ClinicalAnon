@@ -266,13 +266,14 @@ class SessionExportService: ObservableObject {
         | `stop_recording()` | Stop recording |
         | `pause_recording()` | Pause recording |
         | `resume_recording()` | Resume recording |
-        | `get_session_info()` | Get session metadata |
-        | `get_session_state()` | Get current metrics/analysis state |
-        | `get_new_chunks(since_index)` | Get transcript chunks since index N |
+        | `list_sessions(initials?)` | List available sessions on disk |
+        | `get_session_info(initials?, session_date?)` | Get session metadata |
+        | `get_session_state(initials?, session_date?)` | Get current metrics/analysis state |
+        | `get_new_chunks(since_index, initials?, session_date?)` | Get transcript chunks since index N |
         | `write_session_state(state_json)` | Write updated session state to dashboard |
         | `is_session_complete()` | Check if recording stopped |
-        | `write_clinical_notes(notes_json)` | Write clinical notes to session folder |
-        | `get_clinical_notes()` | Read existing clinical notes (if any) |
+        | `write_clinical_notes(notes_json, initials?, session_date?)` | Write clinical notes to session folder |
+        | `get_clinical_notes(initials?, session_date?)` | Read existing clinical notes (if any) |
 
         ---
 
@@ -504,11 +505,17 @@ class SessionExportService: ObservableObject {
 
         ## When the user asks for clinical notes
 
+        ### Step 0: Identify the session
+
+        Ask the user which client (initials) they want notes for. Then call `list_sessions(initials)` to see available sessions. If there's only one recent session, use it. If multiple, ask the user which date.
+
         ### Step 1: Read existing data
 
-        1. Call `get_session_info()` to get session metadata (initials, type, date, duration)
-        2. Call `get_new_chunks(since_index=0)` to get the FULL transcript (all chunks)
-        3. Call `get_clinical_notes()` to check for existing notes
+        Use the client initials (and session_date if needed) to read directly from disk — this works even without an active recording session:
+
+        1. Call `get_session_info(initials="XX")` to get session metadata
+        2. Call `get_new_chunks(since_index=0, initials="XX")` to get the FULL transcript (all chunks)
+        3. Call `get_clinical_notes(initials="XX")` to check for existing notes
 
         If existing notes are found, show the user a brief summary of what's there and ask what they'd like to change. If no notes exist, proceed to generate them.
 
@@ -545,7 +552,7 @@ class SessionExportService: ObservableObject {
 
         ### Step 3: Write notes
 
-        Call `write_clinical_notes()` with this JSON schema:
+        Call `write_clinical_notes(notes_json, initials="XX")` with this JSON schema:
         ```json
         {
           "session_id": "JB_2026-03-20_0937",
@@ -558,11 +565,11 @@ class SessionExportService: ObservableObject {
         }
         ```
 
-        Tell the user their notes are ready in the Notes tab.
+        Tell the user their notes are ready in the Notes tab (if the session is open in the app).
 
         ### Editing existing notes
 
-        If the user wants to modify specific sections, read existing notes via `get_clinical_notes()`, make the requested changes, and write the full updated notes via `write_clinical_notes()`. Always preserve sections the user didn't ask to change.
+        If the user wants to modify specific sections, read existing notes via `get_clinical_notes(initials="XX")`, make the requested changes, and write the full updated notes via `write_clinical_notes(notes_json, initials="XX")`. Always preserve sections the user didn't ask to change.
 
         The user may ask things like:
         - "Make the client summary shorter"
@@ -578,10 +585,11 @@ class SessionExportService: ObservableObject {
 
         | Tool | Purpose |
         |------|---------|
-        | `get_session_info()` | Get session metadata |
-        | `get_new_chunks(since_index)` | Get transcript chunks (use 0 for all) |
-        | `get_clinical_notes()` | Read existing clinical notes |
-        | `write_clinical_notes(notes_json)` | Write/update clinical notes |
+        | `list_sessions(initials?)` | List available sessions (all clients, or for specific initials) |
+        | `get_session_info(initials?, session_date?)` | Get session metadata |
+        | `get_new_chunks(since_index, initials?, session_date?)` | Get transcript chunks (use 0 for all) |
+        | `get_clinical_notes(initials?, session_date?)` | Read existing clinical notes |
+        | `write_clinical_notes(notes_json, initials?, session_date?)` | Write/update clinical notes |
 
         ## Privacy & Entity Code Format
 

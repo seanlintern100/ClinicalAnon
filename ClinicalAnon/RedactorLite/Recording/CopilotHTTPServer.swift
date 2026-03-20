@@ -41,8 +41,16 @@ final class CopilotHTTPServer: ObservableObject {
     /// Private folder URL for entity_map.json (separate from session folder)
     var privateFolderURL: URL?
 
-    /// Whether a session is currently active (folder + token assigned)
+    /// Whether a session is currently active (folder assigned)
     var isSessionActive: Bool { sessionFolder != nil }
+
+    /// Fixed path for persistent app-wide token
+    private var tokenFileURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Redactor")
+            .appendingPathComponent("Workspace")
+            .appendingPathComponent(".server_token")
+    }
 
     private init() {}
 
@@ -51,6 +59,8 @@ final class CopilotHTTPServer: ObservableObject {
     /// Start the TCP listener in standby mode. Only /health responds until a session is activated.
     func startListening() {
         guard !isRunning else { return }
+
+        loadOrCreateToken()
 
         do {
             let params = NWParameters.tcp
@@ -82,12 +92,10 @@ final class CopilotHTTPServer: ObservableObject {
         }
     }
 
-    /// Activate a session: sets folder, generates token, writes token file and initial state.
-    /// Does NOT start the listener (call startListening() first or use start(sessionFolder:)).
+    /// Activate a session: sets folder and writes initial state.
+    /// Token is app-wide and persists across sessions.
     func activateSession(sessionFolder: URL) {
         self.sessionFolder = sessionFolder
-        self.authToken = generateToken()
-        writeTokenFile()
         writeInitialSessionState()
         print("[CopilotHTTPServer] Session activated: \(sessionFolder.lastPathComponent)")
     }
@@ -100,21 +108,19 @@ final class CopilotHTTPServer: ObservableObject {
         activateSession(sessionFolder: sessionFolder)
     }
 
-    /// Deactivate the current session (clears folder/token but keeps listener alive)
+    /// Deactivate the current session (clears folder refs but keeps listener and token alive)
     func deactivateSession() {
         sessionFolder = nil
-        authToken = ""
         privateFolderURL = nil
         print("[CopilotHTTPServer] Session deactivated")
     }
 
-    /// Stop the server entirely
+    /// Stop the server entirely (token persists on disk for next launch)
     func stop() {
         listener?.cancel()
         listener = nil
         isRunning = false
         sessionFolder = nil
-        authToken = ""
         privateFolderURL = nil
         print("[CopilotHTTPServer] Stopped")
     }
@@ -542,15 +548,28 @@ final class CopilotHTTPServer: ObservableObject {
         })
     }
 
-    // MARK: - Token File
+    // MARK: - Persistent Token
 
-    private func writeTokenFile() {
-        guard let folder = sessionFolder else { return }
-        let tokenData: [String: Any] = ["token": authToken, "port": Int(port)]
-        let tokenURL = folder.appendingPathComponent(".server_token")
-        if let data = try? JSONSerialization.data(withJSONObject: tokenData) {
-            try? data.write(to: tokenURL)
+    /// Load existing app-wide token from disk, or generate and persist a new one.
+    private func loadOrCreateToken() {
+        let url = tokenFileURL
+        // Try to read existing token
+        if let data = try? Data(contentsOf: url),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let token = json["token"] as? String, !token.isEmpty {
+            authToken = token
+            print("[CopilotHTTPServer] Loaded persistent token")
+            return
         }
+        // Generate new token and persist
+        authToken = generateToken()
+        let tokenData: [String: Any] = ["token": authToken, "port": Int(port)]
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let data = try? JSONSerialization.data(withJSONObject: tokenData) {
+            try? data.write(to: url)
+        }
+        print("[CopilotHTTPServer] Created persistent token")
     }
 
     // MARK: - Initial Session State
