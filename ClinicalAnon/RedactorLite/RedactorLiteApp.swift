@@ -14,11 +14,9 @@ import SwiftUI
 @main
 struct RedactorLiteApp: App {
 
-    @StateObject private var viewModel = LiteViewModel()
-
     var body: some Scene {
         WindowGroup {
-            LiteRedactorView(viewModel: viewModel)
+            HomeView()
                 .frame(minWidth: 1100, minHeight: 600)
                 .onOpenURL { url in
                     handleRecordingURL(url)
