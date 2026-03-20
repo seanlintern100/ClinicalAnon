@@ -239,9 +239,22 @@ class SessionExportService: ObservableObject {
 
         ### People & Details
 
-        - Extract people mentioned by their entity codes with roles, relationships, details, events
-        - Merge into existing people list — update existing entries, add new ones
-        - Include therapist, client, family members, colleagues, etc.
+        This section captures the cast of characters and clinically relevant context — not a directory of every name mentioned.
+
+        **Who to include:**
+        - The client (always)
+        - People who matter to the client's story — family, partners, key professionals, anyone the client has feelings about or is affected by
+        - Do NOT include every passing mention. Only add a person if they play a role in the client's narrative
+
+        **What to capture:**
+        - `token`: entity code e.g. `[PERSON_B]`
+        - `role`: relationship to the client (e.g. "partner", "mother", "manager", "psychiatrist") — not job title unless clinically relevant
+        - `details`: only clinically relevant facts — NOT demographics for their own sake. Include things like: conditions, medications, key circumstances that affect the client
+        - `events`: significant things that happened involving this person that matter to the session (e.g. "left the family home last week", "changed client's medication")
+
+        **Key details that are NOT about people** (workplaces, services, living situations) should still be captured — attach them to the most relevant person or to the client entry.
+
+        Merge into existing people — update, don't duplicate.
 
         ### Theme Synthesis
 
@@ -296,17 +309,31 @@ class SessionExportService: ObservableObject {
 
         ## Coaching Comment
 
-        On EVERY `write_session_state()`, include a brief `coaching_comment` — one sentence using coaching philosophy (strengths-based, not corrective).
+        On every `write_session_state()`, include a brief `coaching_comment` — one sentence.
 
-        Focus on: what's going well, emerging opportunities, or gentle awareness of process.
+        Focus on the client, not the clinician. Frame every comment as an observation of what's happening in the session — not an evaluation of technique or a directive.
 
-        Examples:
-        - "Strong reflective listening in that exchange — client is opening up"
-        - "Client talk time increasing — good space being held"
-        - "Theme of autonomy emerging strongly — worth exploring further"
-        - "Nice use of open questions — creating space for elaboration"
+        Rotate across three comment types based on what's most salient in the current exchange:
 
-        Do NOT give directives. Frame as observations, not instructions. Update this every cycle — don't repeat the same comment.
+        1. CLIENT SIGNAL — what the client is doing right now that's worth attending to
+           e.g. "Client is qualifying their own statements — something is forming"
+           e.g. "Client pace has slowed — something landed"
+           e.g. "Talk time increasing and client is reaching for their own language"
+
+        2. EMERGING OPPORTUNITY — a thread the client has raised more than once that remains open
+           e.g. "Client has returned to [theme] three times — still unresolved"
+           e.g. "Autonomy thread keeps surfacing unprompted — client is circling something"
+
+        3. NOTABLE MOMENT — only when something genuinely significant occurs (unprompted self-disclosure, marked shift in engagement, client naming their own process)
+           e.g. "Client just named their own pattern without prompting — significant"
+           e.g. "Engagement shifted here — something important was touched"
+
+        Rules:
+        - Never evaluate the clinician's technique
+        - Never give directives or suggestions
+        - Do not repeat the same comment across cycles
+        - If nothing notable is happening, default to a client signal
+        - Keep it to one sentence
 
         ---
 

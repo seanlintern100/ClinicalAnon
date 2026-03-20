@@ -300,7 +300,21 @@ final class CopilotHTTPServer: ObservableObject {
         }
         let stateURL = folder.appendingPathComponent("session_state.json")
         do {
-            try body.write(to: stateURL, atomically: true, encoding: .utf8)
+            // Preserve therapist_request if the incoming state doesn't include one
+            // (prevents Cowork from accidentally overwriting the app's request)
+            if var incoming = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any] {
+                if incoming["therapist_request"] == nil || incoming["therapist_request"] is NSNull {
+                    if let existing = try? Data(contentsOf: stateURL),
+                       let current = try? JSONSerialization.jsonObject(with: existing) as? [String: Any],
+                       let req = current["therapist_request"] as? String, !req.isEmpty {
+                        incoming["therapist_request"] = req
+                    }
+                }
+                let merged = try JSONSerialization.data(withJSONObject: incoming, options: [.prettyPrinted, .sortedKeys])
+                try merged.write(to: stateURL, options: .atomic)
+            } else {
+                try body.write(to: stateURL, atomically: true, encoding: .utf8)
+            }
             sendJSON(connection: connection, json: "{\"status\":\"ok\"}")
         } catch {
             sendResponse(connection: connection, status: 500, body: "{\"error\":\"write failed\"}")
