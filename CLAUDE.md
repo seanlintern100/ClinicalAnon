@@ -119,6 +119,35 @@ Cowork connects via MCP server (`ClinicalAnon/Resources/CopilotMCP/redactor_mcp_
 - All other endpoints require token (query string or Authorization header)
 - Body parsing accumulates TCP packets using Content-Length for reliable large POST bodies
 
+## SKILL.md — How Cowork Gets Its Instructions
+
+The app auto-generates `SKILL.md` at `CoWork Files/.claude/skills/live-session/SKILL.md` on launch. This is the **single source of truth** for Cowork's workflow. It contains:
+
+- Session setup questions (initials, type, length, speakers, goals)
+- MCP tool workflow (start_recording → poll loop → write_session_state → is_session_complete)
+- Analysis rules (utterance classification Q/SR/CR/EX/O, agenda tracking, themes, people, rupture, risk)
+- Entity code rules (always use `[BRACKETS]`)
+- Therapist request handling (`therapist_request` field in session state)
+- Coaching comment rules (strengths-based, one sentence per cycle)
+
+**To modify Cowork's behaviour:** Edit the `writeSkillFile()` method in `SessionExportService.swift`, then re-run the app so it regenerates the file. Do NOT edit the workspace file directly — it gets overwritten on launch.
+
+The app also writes `CLAUDE.md` to `CoWork Files/` root which directs Cowork to use the `/live-session` skill whenever the user says "start a session".
+
+**There is no MCP prompt.** The MCP server (`redactor_mcp_server.py`) only provides tools, not workflow instructions. SKILL.md handles all workflow logic.
+
+## Dashboard Interaction
+
+The dashboard (`CopilotDashboardView.swift`) supports bidirectional communication with Cowork via `session_state.json`:
+
+- **Coaching comment:** Cowork writes `coaching_comment` on every analysis cycle. Dashboard shows it in a teal bar. Strengths-based, not corrective.
+- **Therapist request buttons:** Dashboard has extensible button array. Tapping writes `therapist_request` to `session_state.json`. Cowork reads it on next poll, responds in `therapist_request_response`, clears the request.
+- **Adding new buttons:** Just add a string to the `requestButtons` array in `CopilotDashboardView`.
+
+## Future: Clinical Notes (not yet implemented)
+
+Planned: post-session clinical note generation triggered from Cowork or app button. Notes would be stored as `clinical_notes.json` in the session folder (redacted), with entity substitution at display/export time. New MCP tool `write_clinical_notes()` and `POST /notes` HTTP endpoint needed.
+
 ## Distribution (Lite)
 
 ```bash
