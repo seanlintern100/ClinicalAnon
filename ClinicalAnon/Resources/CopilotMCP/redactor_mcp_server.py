@@ -335,9 +335,26 @@ After get_session_state(), add your analysis to the existing state:
 
 Call write_session_state() with the COMPLETE merged JSON.
 
+─── THERAPIST REQUESTS ───
+
+After each get_session_state(), check if "therapist_request" is not null. If it has a value:
+1. Respond in "therapist_request_response" (concise, 1-3 sentences)
+2. Set "therapist_request" to null
+3. Include both fields in write_session_state()
+
+─── COACHING COMMENT ───
+
+On EVERY write_session_state(), include a brief "coaching_comment" — one sentence using coaching philosophy (strengths-based, not corrective).
+Focus on: what's going well, emerging opportunities, gentle awareness of process.
+Examples:
+- "Strong reflective listening in that exchange — client is opening up"
+- "Client talk time increasing — good space being held"
+- "Theme of autonomy emerging strongly — worth exploring further"
+Do NOT give directives. Frame as observations. Update every cycle — don't repeat.
+
 ─── PRIVACY ───
 
-All transcript text is redacted. Entity codes like [PERSON_A] are placeholders. Never attempt to resolve these to real names."""
+All transcript text is redacted. Entity codes like [PERSON_A] are placeholders — ALWAYS use square brackets. Never attempt to resolve these to real names."""
 
 
 if __name__ == "__main__":

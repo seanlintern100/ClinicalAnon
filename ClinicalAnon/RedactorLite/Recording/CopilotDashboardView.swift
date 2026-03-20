@@ -33,6 +33,11 @@ struct DashboardState: Codable {
     var rupture: RuptureModel?
     var risk: RiskModel?
 
+    // Therapist interaction fields
+    var therapist_request: String?
+    var therapist_request_response: String?
+    var coaching_comment: String?
+
     struct SpeakerTotals: Codable {
         var therapist_seconds: Double?
         var client_seconds: Double?
@@ -181,7 +186,7 @@ struct CopilotDashboardView: View {
     @State private var state: DashboardState?
     @State private var entityMap: [String: String] = [:]
     @State private var viewMode: ViewMode = .session
-    @State private var startTime = Date()
+    @State private var sessionStartTime: Date?  // Set once from session data, never resets
     @State private var wallElapsed: Int = 0
     @State private var expandedAgendaIds: Set<String> = []
     @State private var expandedThemeIds: Set<String> = []
@@ -201,13 +206,13 @@ struct CopilotDashboardView: View {
             }
         }
         .onAppear {
-            startTime = Date()
             loadState()
-            // Foundation Timer — fires reliably regardless of SwiftUI lifecycle
             timer?.invalidate()
             let t = Timer(timeInterval: 2, repeats: true) { _ in
                 Task { @MainActor in
-                    wallElapsed = Int(Date().timeIntervalSince(startTime))
+                    if let start = sessionStartTime {
+                        wallElapsed = Int(Date().timeIntervalSince(start))
+                    }
                     loadState()
                 }
             }
@@ -227,6 +232,11 @@ struct CopilotDashboardView: View {
         do {
             let decoded = try JSONDecoder().decode(DashboardState.self, from: data)
             state = decoded
+            // Set session start time ONCE from folder creation date (survives tab switches)
+            if sessionStartTime == nil {
+                let attrs = try? FileManager.default.attributesOfItem(atPath: folder.path)
+                sessionStartTime = (attrs?[.creationDate] as? Date) ?? Date()
+            }
         } catch {
             print("[Dashboard] Failed to decode session_state.json: \(error)")
             return
@@ -271,6 +281,15 @@ struct CopilotDashboardView: View {
 
     // MARK: - Main Layout
 
+    @State private var activeRequest: String?
+    @State private var responseTimer: Timer?
+
+    private let requestButtons = [
+        "Where should I go next?",
+        "Summarise key themes",
+        "How is engagement?"
+    ]
+
     private func dashboardBody(_ s: DashboardState) -> some View {
         VStack(spacing: 12) {
             headerRow(s)
@@ -278,6 +297,10 @@ struct CopilotDashboardView: View {
             progressBar(s)
                 .padding(.horizontal, 20)
             instrumentsCard(s)
+                .padding(.horizontal, 20)
+            coachingBar(s)
+                .padding(.horizontal, 20)
+            requestBar(s)
                 .padding(.horizontal, 20)
             contentGrid(s)
                 .padding(.horizontal, 20)
@@ -452,6 +475,105 @@ struct CopilotDashboardView: View {
             .frame(width: 1, height: 80)
     }
 
+    // MARK: - Coaching Bar
+
+    private func coachingBar(_ s: DashboardState) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12))
+                .foregroundColor(DashColors.teal)
+            Text(sub(s.coaching_comment ?? "Analysing session\u{2026}"))
+                .font(.system(size: 13))
+                .italic()
+                .foregroundColor(DashColors.textSecondary)
+                .lineLimit(2)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(DashColors.teal.opacity(0.06))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(DashColors.teal.opacity(0.15), lineWidth: 1)
+        )
+        .cornerRadius(10)
+    }
+
+    // MARK: - Request Bar
+
+    private func requestBar(_ s: DashboardState) -> some View {
+        VStack(spacing: 8) {
+            // Buttons row
+            HStack(spacing: 8) {
+                ForEach(requestButtons, id: \.self) { request in
+                    Button {
+                        sendRequest(request)
+                    } label: {
+                        Text(request)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(activeRequest == request ? .white : DashColors.teal)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(activeRequest == request ? DashColors.teal : DashColors.teal.opacity(0.08))
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(DashColors.teal.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(activeRequest != nil)
+                }
+                Spacer()
+            }
+
+            // Response display
+            if let response = s.therapist_request_response, !response.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "bubble.left.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(DashColors.teal)
+                        .padding(.top, 2)
+                    Text(sub(response))
+                        .font(.system(size: 13))
+                        .foregroundColor(DashColors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                }
+                .padding(12)
+                .background(DashColors.teal.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(DashColors.teal.opacity(0.12), lineWidth: 1)
+                )
+                .cornerRadius(10)
+            }
+        }
+    }
+
+    private func sendRequest(_ request: String) {
+        guard let folder = sessionFolder else { return }
+        let stateURL = folder.appendingPathComponent("session_state.json")
+        guard let data = try? Data(contentsOf: stateURL),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        json["therapist_request"] = request
+        json["therapist_request_response"] = nil
+        activeRequest = request
+
+        if let updated = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+            try? updated.write(to: stateURL, options: .atomic)
+        }
+
+        // Auto-clear active state after 30 seconds
+        responseTimer?.invalidate()
+        responseTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { _ in
+            Task { @MainActor in
+                activeRequest = nil
+            }
+        }
+    }
+
     // MARK: - Content Grid
 
     private func contentGrid(_ s: DashboardState) -> some View {
@@ -464,13 +586,12 @@ struct CopilotDashboardView: View {
             // Left column
             ScrollView {
                 VStack(spacing: 12) {
-                    if !tAgenda.isEmpty {
-                        agendaCard("Therapist Focus", items: tAgenda)
-                    }
-                    if !cAgenda.isEmpty {
-                        agendaCard("Client Agenda", items: cAgenda)
-                    }
+                    agendaCard("Therapist Focus", items: tAgenda)
+                        .frame(minHeight: 100)
+                    agendaCard("Client Agenda", items: cAgenda)
+                        .frame(minHeight: 100)
                     themesCard(themes)
+                        .frame(minHeight: 120)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -478,6 +599,7 @@ struct CopilotDashboardView: View {
             // Right column
             ScrollView {
                 peopleCard(people)
+                    .frame(minHeight: 200)
             }
             .frame(maxWidth: .infinity)
         }

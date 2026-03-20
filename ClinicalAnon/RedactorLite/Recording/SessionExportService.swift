@@ -287,6 +287,29 @@ class SessionExportService: ObservableObject {
 
         ---
 
+        ## Therapist Requests
+
+        After each `get_session_state()`, check if `therapist_request` is not null. If it has a value:
+        1. Respond to the request in `therapist_request_response` (concise, 1-3 sentences)
+        2. Set `therapist_request` to null (so you don't respond again)
+        3. Include both fields in your `write_session_state()` call
+
+        ## Coaching Comment
+
+        On EVERY `write_session_state()`, include a brief `coaching_comment` — one sentence using coaching philosophy (strengths-based, not corrective).
+
+        Focus on: what's going well, emerging opportunities, or gentle awareness of process.
+
+        Examples:
+        - "Strong reflective listening in that exchange — client is opening up"
+        - "Client talk time increasing — good space being held"
+        - "Theme of autonomy emerging strongly — worth exploring further"
+        - "Nice use of open questions — creating space for elaboration"
+
+        Do NOT give directives. Frame as observations, not instructions. Update this every cycle — don't repeat the same comment.
+
+        ---
+
         ## Session State Schema
 
         ```json
