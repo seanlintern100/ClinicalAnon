@@ -1,26 +1,52 @@
-# Redactor — Cowork Integration Specification
-## Version 1.0
+# Redactor — AI Integration Specification
+## Version 2.0 — Claude Code Architecture
 
 ---
 
 ## Overview
 
-Redactor uses Claude Cowork as its AI generation layer. The app and Cowork communicate through three interfaces:
+Redactor uses Claude Code (Anthropic's CLI agent tool) as its AI generation layer. The app spawns `claude -p` as a subprocess to trigger AI workflows. Claude Code connects to the app's MCP server for data access and content writing.
 
-1. **MCP Server** — Python process providing MCP tools that Cowork calls
-2. **HTTP Server** — Swift server inside the app that executes MCP tool requests
-3. **SKILL.md Files** — Workflow definitions Cowork discovers as slash commands
+**Three interfaces:**
 
-The app is the system of record. Cowork is the generation engine. All generated content passes through the app's validation and storage layer.
+1. **MCP Server** (`redactor_mcp_server.py`) — Python FastMCP process providing tools. Claude Code connects via stdio. The server proxies requests over HTTP to the app's internal server.
+2. **HTTP Server** (`CopilotHTTPServer.swift`, port 8787) — Swift TCP server inside the app that executes MCP tool requests. Runs in standby on launch.
+3. **System Prompts** — Workflow instructions embedded in the app (one per AI task). Passed to Claude Code via `--append-system-prompt`. Replace the previous SKILL.md file-based approach.
 
-### Future API Migration
-The data layer (database schema, file structure, document format) and UI are designed to work regardless of how AI content arrives — they are transport-agnostic. When migrating to direct API:
-- MCP tools → Swift-executed tool definitions in API requests
-- HTTP server → unnecessary (app calls API directly)
-- SKILL.md workflows → system prompts with tool definitions. **This is a significant rewrite** — skills contain Cowork-specific workflow logic (polling loops, session state management, interaction patterns) that don't translate 1:1 to API tool-use calls
-- Data flow remains identical: AI generates → app validates → app stores → app displays
+The app is the system of record. Claude Code is the generation engine. All generated content passes through the app's validation and storage layer.
+
+### How the App Triggers Claude Code
+
+```swift
+// Example: Generate clinical notes for a session
+let process = Process()
+process.executableURL = URL(fileURLWithPath: "/usr/local/bin/claude")
+process.arguments = [
+    "-p", prompt,
+    "--append-system-prompt", systemPrompt,
+    "--allowedTools", "mcp__redactor__get_new_chunks,mcp__redactor__write_clinical_notes,...",
+    "--output-format", "json",
+    "--json-schema", notesSchema,
+    "--mcp-config", mcpConfigPath
+]
+```
+
+**Key flags:**
+- `-p` — non-interactive mode (run prompt, return result, exit)
+- `--append-system-prompt` — workflow instructions (replaces SKILL.md)
+- `--allowedTools` — restrict to MCP tools only (security)
+- `--output-format json` — structured response with metadata
+- `--json-schema` — enforce response shape (e.g., feedback scores)
+- `--resume SESSION_ID` — multi-turn conversations (live analysis loop)
+- `--output-format stream-json` — real-time streaming for live dashboard
+
+### Future Direct API Migration
+The data layer, document storage, and UI are AI-transport-agnostic. Migration to direct Anthropic API requires:
+- System prompts → API system prompts (identical content)
+- MCP tools → tool definitions in API requests (same schemas)
+- HTTP server + MCP server → unnecessary (app calls API directly)
+- `claude -p` subprocess → `URLSession` API call
 - No changes to database schema, file structure, UI, or document format
-- The app would gain the ability to trigger AI work directly, removing the "clinician must initiate in Cowork" constraint
 
 ---
 
@@ -351,120 +377,107 @@ Verify connection to the app.
 
 ---
 
-## SKILL.md Generation
+## System Prompts (replaces SKILL.md)
 
-The app generates all SKILL.md files on launch via `SessionExportService`. Skills are written to `Workspace/CoWork Files/.claude/skills/`. Cowork discovers them as slash commands when the user opens `CoWork Files/` as their working folder.
+The app embeds system prompts for each AI workflow. These are passed to Claude Code via `--append-system-prompt` when spawning the subprocess. The system prompt content is identical to what was previously in SKILL.md files — workflow instructions, analysis rules, output format constraints.
 
-### Skill Structure
-Each SKILL.md follows this structure:
-```markdown
----
-name: skill-name
-description: One-line description
----
+### System Prompt Structure
+Each workflow has a system prompt containing:
+- **Purpose** — what this workflow does
+- **MCP tools available** — which tools to use and in what order
+- **Workflow steps** — step-by-step process
+- **Analysis rules** — domain-specific rules (utterance classification, feedback scoring, etc.)
+- **Output format** — JSON schema for the response
+- **Privacy rules** — entity code brackets, never infer real names
 
-## Purpose
-What this skill does
+### ClaudeCodeService — Manages AI Workflows
+The app's `ClaudeCodeService` manages all Claude Code interactions:
 
-## Setup
-Questions to ask the user before starting
+```swift
+class ClaudeCodeService {
+    // Check if claude CLI is available
+    func isAvailable() -> Bool
 
-## Workflow
-Step-by-step MCP tool sequence
+    // Spawn claude -p for a one-shot workflow
+    func runWorkflow(
+        prompt: String,
+        systemPrompt: String,
+        allowedTools: [String],
+        jsonSchema: String?,
+        workingDirectory: URL
+    ) async throws -> WorkflowResult
 
-## Rules
-Analysis rules, output format, constraints
+    // Spawn claude -p with streaming for live analysis
+    func runStreamingWorkflow(
+        prompt: String,
+        systemPrompt: String,
+        allowedTools: [String],
+        sessionId: String?,
+        onEvent: (StreamEvent) -> Void
+    ) async throws
 
-## Output
-What to generate and how to write it via MCP tools
+    // Resume a multi-turn conversation
+    func resumeSession(
+        sessionId: String,
+        prompt: String
+    ) async throws -> WorkflowResult
+}
 ```
 
-### CLAUDE.md — Critical for Cowork Discovery
-The app writes `CLAUDE.md` to `CoWork Files/` root. **This file is essential** — Cowork relies on CLAUDE.md to discover available tools, folder structure, and workflow context. Without explicit registration in CLAUDE.md, Cowork may miss MCP tools, skills, or workspace paths.
+### Available Workflows
 
-CLAUDE.md must include:
-- **All MCP tool names and descriptions** — Cowork needs to know what tools are available and what each one does. If a tool is not listed here, Cowork may not use it even if it's defined in the MCP server.
-- **Workspace folder structure** — Explicit description of `Sessions/{initials}/` layout, what files exist where, and what Cowork can read vs write.
-- **Available skills** — List of slash commands with one-line descriptions so Cowork can suggest them to the user.
-- **Privacy rules** — Entity code formatting (always use `[BRACKETS]`), never attempt to infer real names, never include identifying information in outputs.
-- **Clinician context** — Clinician name and title (used in generated outputs).
-- **Output format rules** — JSON schemas for each content type Cowork writes via MCP tools.
+| Workflow | Trigger | Mode | System Prompt |
+|----------|---------|------|---------------|
+| Live Session Analysis | Recording starts | Streaming + multi-turn | `liveSessionPrompt` |
+| Process Sessions | Clinician clicks "Process" | One-shot | `processSessionsPrompt` |
+| Clinical Notes | Clinician clicks "Generate Notes" | One-shot | `clinicalNotesPrompt` |
+| Feedback | Clinician clicks "Generate Feedback" | One-shot | `feedbackPrompt` |
+| Report | Clinician clicks "Generate Report" | One-shot | `reportPrompt` |
+| Pre-Session Brief | Clinician clicks "Pre-Session" | One-shot | `preSessionPrompt` |
+| Caseload Overview | Clinician clicks "Caseload" | One-shot | `caseloadPrompt` |
 
-The app regenerates CLAUDE.md on every launch. To modify what Cowork sees, edit the generation code in `SessionExportService`, not the file directly.
+### MCP Configuration for Claude Code
 
-**Example CLAUDE.md structure:**
-```markdown
-# Redactor Clinical Assistant
+The app writes an MCP config file that Claude Code reads:
 
-You are a clinical assistant working alongside a registered psychologist.
-All client data is de-identified. Use only substitution tokens like [CLIENT_A], [PERSON_B].
-
-## Clinician
-Name: {clinician_name}
-Title: {clinician_title}
-
-## Available Skills
-- /live-session — Record and analyse a therapy session in real time (exits when session ends)
-- /process-sessions — Generate notes and feedback for all sessions awaiting processing
-- /clinical-notes — Generate clinical notes for a specific session
-- /feedback — Generate practitioner feedback for a specific session
-- /report — Generate a formal report from selected documents
-- /pre-session — Generate a pre-session brief for a returning client
-- /caseload — Cross-client caseload overview and metrics
-
-## MCP Tools Available
-- health_check — Check connection to the Redactor app
-- start_recording(initials, session_type, session_goals, duration_minutes) — Start recording
-- stop_recording — Stop recording
-- pause_recording / resume_recording — Pause or resume
-- get_new_chunks(since_index) — Get redacted transcript chunks
-- get_session_info — Session metadata
-- get_session_state — Current dashboard analysis state
-- write_session_state(state_json) — Push analysis to dashboard
-- is_session_complete — Check if recording has ended
-- get_unprocessed_sessions — List sessions ready for processing (redaction confirmed, not yet processed)
-- write_clinical_notes(notes_json) — Save clinical notes
-- write_feedback(feedback_json) — Save feedback scores and narrative
-- write_rolling_summary(initials, summary_text) — Update rolling clinical summary
-- write_report(initials, report_json) — Save a generated report
-- get_client_profile(initials) — Read client profile
-- list_clients — List all clients
-- list_sessions(initials) — List sessions for a client
-- get_document(initials, path) — Read a document
-
-## Workspace Structure
-Sessions/
-  index.json — Root index of all clients (read this first for caseload tasks)
-  {INITIALS}/ — One folder per client
-    client_profile.json — Client metadata (read via get_client_profile)
-    client_index.json — Index of all sessions and documents for this client
-    rolling_summary.md — Running clinical summary
-    reports/ — Generated reports (client-level, not session-level)
-    external/ — Uploaded background documents (redacted)
-    report_request.json — Report generation request (when applicable)
-    {YYYY-MM-DD_HHMM}/ — Session folders
-      session_info.json, chunk_*.json, clinical_notes.json, feedback.json
-      session_complete.json, redaction_confirmed.json — status markers
-
-## Important: Always read index files first
-- For caseload tasks: read Sessions/index.json before accessing client folders
-- For client tasks: read Sessions/{INITIALS}/client_index.json before accessing session folders
-- These files are your navigation map — they tell you what exists and where
-
-## Entity Code Rules
-- Always use square brackets: [PERSON_A], [CLIENT_A_FIRST], [ORG_A]
-- Never use bare codes without brackets
-- Use _FIRST suffix for natural reading throughout generated text
-- Use [THERAPIST] where therapist attribution is needed
+```json
+{
+  "mcpServers": {
+    "redactor": {
+      "command": "python3",
+      "args": ["/path/to/redactor_mcp_server.py"],
+      "env": {
+        "REDACTOR_EXPORT_ROOT": "~/Library/Application Support/Redactor/Workspace/Sessions"
+      }
+    }
+  }
+}
 ```
+
+This is passed to Claude Code via `--mcp-config /path/to/mcp_config.json`.
+
+### Context Passed to Claude Code
+
+Each workflow invocation includes:
+- **System prompt** with workflow instructions, analysis rules, and MCP tool guidance
+- **User prompt** with the specific task (e.g., "Process session JB/2026-03-20_0937")
+- **MCP tools** restricted via `--allowedTools` to only the tools needed for that workflow
+- **JSON schema** (where applicable) via `--json-schema` for structured output
+
+The system prompt includes the same content that was in the CLAUDE.md + SKILL.md files:
+- Clinician name/title
+- MCP tool descriptions
+- Workspace structure
+- Privacy rules (entity code brackets)
+- Analysis rules (utterance classification, feedback scoring, etc.)
 
 ---
 
 ## Content Ingestion
 
-When Cowork writes generated content via MCP tools, the app ingests it:
+When Claude Code writes generated content via MCP tools, the app ingests it:
 
-1. **Detection:** HTTP server receives the write request, or file watcher detects new file
+1. **Detection:** HTTP server receives the write request from the MCP tool
 2. **Validation:** Check JSON schema, verify content is in redacted form (contains substitution tokens, no real names)
 3. **Database update:** Create/update records in documents table, feedback_scores table as appropriate
 4. **UI notification:** Post notification so active views refresh
@@ -472,8 +485,8 @@ When Cowork writes generated content via MCP tools, the app ingests it:
 
 ### Ingestion by content type
 
-| Content | Written by Cowork | Ingested into |
-|---------|------------------|---------------|
+| Content | Written via MCP tool | Ingested into |
+|---------|---------------------|---------------|
 | clinical_notes.json | write_clinical_notes | documents table (session_note, client_note) |
 | feedback.json | write_feedback | feedback_scores table + documents table (feedback_narrative) |
 | rolling_summary.md | write_rolling_summary | documents table (rolling_session_summary) |
@@ -484,24 +497,24 @@ When Cowork writes generated content via MCP tools, the app ingests it:
 
 ## Error Handling
 
-**MCP server errors:** If the app's HTTP server is unreachable, the MCP server returns a structured error to Cowork. Cowork retries on the next polling cycle.
+**MCP server errors:** If the app's HTTP server is unreachable, the MCP server returns a structured error to Claude Code. Claude Code includes the error in its response to the app.
 
-**Live session failures:** If a polling cycle fails, the dashboard holds its last known state and shows a status indicator. Recording and transcription continue unaffected. Recovery is attempted on the next cycle.
+**Claude Code process errors:** If the subprocess crashes or times out, the app shows an error to the clinician and allows retry. Recording and transcription continue unaffected — AI analysis is decoupled from audio capture.
 
-**Invalid content:** If Cowork attempts to write content that fails validation (missing required fields, appears to contain unredacted names), the HTTP server rejects the write and returns an error message instructing Cowork to correct the output.
+**Invalid content:** If Claude Code attempts to write content that fails validation (missing required fields, appears to contain unredacted names), the HTTP server rejects the write and returns an error message.
 
-**Session token expiry:** Tokens are valid for the duration of a session. If a token becomes invalid (session ended, app restarted), the MCP server discovers the current token from the most recent `.server_token` file.
+**Session token management:** The app generates a persistent token stored in `Workspace/.server_token`. The MCP server reads this token fresh on every tool call. The token persists across sessions and app restarts.
 
 ---
 
-## Cowork Setup Instructions
+## Claude Code Setup Instructions
 
-The app provides a first-time setup flow that guides the clinician through:
+The app provides a first-time setup flow:
 
-1. Install Claude Cowork (if not installed)
-2. Open Cowork settings → MCP Servers → Add server with the provided configuration
-3. Set working folder to `~/Library/Application Support/Redactor/Workspace/CoWork Files/`
-4. Verify connection: type `/live-session` and confirm the skill is discovered
-5. Run health_check to confirm MCP → HTTP → app connection
+1. **Check for Claude Code:** App checks if `claude` is in PATH on launch
+2. **If not installed:** Show setup guide with install command: `brew install --cask claude-code`
+3. **Authentication:** Clinician runs `claude` once in terminal to authenticate via browser (one-time)
+4. **Verification:** App spawns `claude -p "hello" --output-format json` to verify the CLI works
+5. **MCP config:** App writes MCP config file and verifies connection via `health_check` tool
 
-The app can verify the connection is working via the HTTP server's health endpoint.
+No manual MCP server configuration needed — the app handles it programmatically via `--mcp-config`.
