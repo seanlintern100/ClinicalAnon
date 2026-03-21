@@ -381,8 +381,8 @@ Build the app entry point and navigation structure.
 
 Create `RedactorApp.swift`:
 - App lifecycle management
-- On launch: ensure workspace, generate SKILL.md files, start HTTP server in standby
-- Initialise DatabaseManager, WorkspaceManager, IndexManager
+- On launch: ensure workspace, start HTTP server in standby, write MCP config
+- Initialise DatabaseManager, WorkspaceManager, IndexManager, ClaudeCodeService
 - Check for expired transcripts → show forced-choice modal
 - Check for discharged clients past 30 days → execute cascade deletion
 
@@ -391,11 +391,14 @@ Create `RedactorApp.swift`:
 Create `OnboardingView.swift`:
 - Step 1: Enter clinician name and title → write to `clinician` table
 - Step 2: Grant microphone permission
-- Step 3: Cowork setup instructions (MCP server config, working folder)
-- Step 4: Health check verification
+- Step 3: Claude Code installation — app calls `ClaudeCodeService.isAvailable()`. If not installed:
+  - Show install guide with one-click "Install Now" button (runs `brew install --cask claude-code` via Process, shows progress bar) OR copy-paste terminal command
+  - After install: clinician runs `claude` once in terminal to authenticate via browser (one-time)
+  - App re-checks `isAvailable()` and confirms success
+- Step 4: Health check — app spawns `claude -p "hello" --output-format json` to verify CLI works, then tests MCP connection via `health_check` tool
 - On completion: flag onboarding complete in UserDefaults
 
-**Reference:** Design doc Section 9 (Onboarding), Cowork integration spec (Cowork Setup Instructions)
+**Reference:** Design doc Section 2 (AI Integration), AI integration spec (Claude Code Setup Instructions)
 
 ### 6.3 Main navigation
 
