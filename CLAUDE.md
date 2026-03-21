@@ -113,10 +113,12 @@ Cowork connects via MCP server (`ClinicalAnon/Resources/CopilotMCP/redactor_mcp_
 
 **DO NOT** add `get_entity_map` as an MCP tool — entity maps contain real names and must not be exposed to AI.
 
+**Communication path:** Cowork → stdio → Python MCP server → HTTP → app's CopilotHTTPServer (port 8787)
+
 **HTTP server notes:**
 - Starts in standby mode on app launch (only `/health` responds)
 - `/start` endpoint is auth-free (creates the session and token)
-- All other endpoints require token (query string or Authorization header)
+- All other endpoints require persistent app token from `Workspace/.server_token` (query string or Authorization header)
 - Body parsing accumulates TCP packets using Content-Length for reliable large POST bodies
 
 ## SKILL.md — How Cowork Gets Its Instructions
