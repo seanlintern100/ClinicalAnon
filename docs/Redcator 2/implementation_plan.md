@@ -416,23 +416,24 @@ Import and adapt `RecordingSettingsView.swift` for transcription model, audio de
 
 ## Phase 7: Client Management
 
-### 7.1 Client CRUD
+### 7.1 Client CRUD ✅
 
 Create views and logic for:
 - **Create client:** Name, initials (auto-suggest from name, check uniqueness), title, pronouns, DOB, session type default, duration default → write to DB → create workspace folders → write `client_profile.json` → create pre-seeded entity mappings (CLIENT_A + THERAPIST_A) → update `index.json`
 - **Edit client:** Update name, pronouns, defaults → update DB → update `client_profile.json` → update `index.json`
 - **Discharge client:** Set status, discharge_date → notification about 30-day deletion → update `index.json` (remove entry)
+- **Deferred:** CMS identifier field in create/edit form (field exists in model/DB, UI not yet exposed)
 
-### 7.2 Client workspace view
+### 7.2 Client workspace view ✅ (partial)
 
 Create `ClientWorkspaceView.swift`:
-- Client demographics header (real names from DB)
-- Session history list with processing status indicators (colour-coded per schema doc table)
-- Document library (notes, feedback, reports, external docs) with type grouping
-- Feedback metrics summary (longitudinal chart of scores across sessions)
-- Action cards:
+- ✅ Client demographics header (real names from DB) with edit/discharge
+- ✅ Session history list with processing status indicators (colour-coded per schema doc table)
+- ✅ Document library (notes, feedback, reports, external docs) with type grouping
+- **Deferred to Phase 10.3:** Feedback metrics tab (longitudinal chart of scores across sessions)
+- **Deferred to Phase 9:** Action cards for redaction review launch:
   - "Review Redaction" (amber, when sessions at `ended` or `pending_redaction`)
-  - "Ready to Process" (blue, when sessions at `redacted` — directs to Cowork)
+  - "Ready to Process" (blue, when sessions at `redacted` — directs to Claude Code)
   - "View Notes" / "View Feedback" (green, when `processed`)
 
 ---
@@ -512,6 +513,13 @@ When therapist confirms:
 
 The caseload view should highlight clients with sessions awaiting review. The therapist can review multiple sessions in sequence. Each confirmation is independent.
 
+### 9.4 Action cards in ClientWorkspaceView (deferred from Phase 7)
+
+Add session action cards to ClientWorkspaceView:
+- "Review Redaction" button/card (amber) — appears when client has sessions at `ended` or `pending_redaction`. Opens RedactionReviewView.
+- "Ready to Process" indicator (blue) — appears when sessions at `redacted` status. Triggers Claude Code `/process-sessions` workflow.
+- "View Notes" / "View Feedback" links (green) — appears when sessions are `processed`.
+
 ---
 
 ## Phase 10: Document Viewer and Export
@@ -540,6 +548,10 @@ Create `FeedbackDetailView.swift`:
 Create `FeedbackHistoryView.swift`:
 - Longitudinal chart of scores across sessions for a client
 - Show trends, highlight changes
+
+### 10.3a Feedback metrics tab in ClientWorkspaceView (deferred from Phase 7)
+
+Add "Feedback" tab to ClientWorkspaceView's segmented picker (alongside Sessions and Documents). Shows FeedbackHistoryView with longitudinal chart for the selected client.
 
 ### 10.4 Export
 
