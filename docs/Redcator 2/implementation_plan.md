@@ -481,6 +481,19 @@ Import `CopilotDashboardView.swift`. It already:
 
 Verify it works with the new workspace paths.
 
+### 8.4 Recording UI rebuild (deferred)
+
+The imported v2 recording UI uses the old design system and asks for information the app already has (client initials, session type, duration). Needs a full rebuild to:
+- Use Minimal Frost design system (Sora font, slate palette, glass panels, gradient background)
+- Pre-fill session setup from the selected client's defaults (type, duration, initials)
+- Remove manual initials entry (app knows the client)
+- Integrate the Claude Code warning banner into the Minimal Frost visual language
+- Simplify the recording flow: client selected → click Record → confirm goals → start
+
+### 8.5 URL scheme handler (deferred)
+
+Register URL scheme in Info.plist for external app triggering (e.g., `redactor3://record?initials=JB`). Not needed for core workflow — the clinician starts recording from within the app. Add when external integration is required.
+
 ---
 
 ## Phase 9: Redaction Review
