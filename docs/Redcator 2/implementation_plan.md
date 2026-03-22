@@ -481,18 +481,30 @@ Import `CopilotDashboardView.swift`. It already:
 
 Verify it works with the new workspace paths.
 
-### 8.4 Recording UI rebuild (deferred)
+### 8.4 Session auto-population from client ✅ (was deferred, completing now)
 
-The imported v2 recording UI uses the old design system and asks for information the app already has (client initials, session type, duration). Needs a full rebuild to:
-- Use Minimal Frost design system (Sora font, slate palette, glass panels, gradient background)
-- Pre-fill session setup from the selected client's defaults (type, duration, initials)
-- Remove manual initials entry (app knows the client)
-- Integrate the Claude Code warning banner into the Minimal Frost visual language
-- Simplify the recording flow: client selected → click Record → confirm goals → start
+**Critical fix:** The recording setup must pre-fill from the selected client's data:
+- Client initials (auto-set, not manually entered — prevents orphaned sessions)
+- Default session type (from client record)
+- Default duration (from client record)
+- Only ask for: session goals and multi-speaker toggle
 
-### 8.5 URL scheme handler (deferred)
+Pass the Client object through RecordingWindowController → RecordingWindowView → SessionSetupPanel.
 
-Register URL scheme in Info.plist for external app triggering (e.g., `redactor3://record?initials=JB`). Not needed for core workflow — the clinician starts recording from within the app. Add when external integration is required.
+### 8.5 Save detected entities to DB during recording ✅ (was missing, completing now)
+
+Entities detected by LiveRedactor during recording are in-memory only (LiveSession.detectedEntities). They're lost on app restart and unavailable in the review view. Fix: save session-scoped entity mappings to DB when recording stops, so the review can load them.
+
+### 8.6 Recording UI design migration (deferred to Phase 14)
+
+The imported v2 recording UI uses the old design system. Migrate to Minimal Frost:
+- Sora font, slate palette, glass panels, gradient background
+- Claude Code warning banner in Minimal Frost visual language
+- Simplified recording flow
+
+### 8.7 URL scheme handler (deferred — add when needed)
+
+Register URL scheme for external app triggering. Not needed for core workflow.
 
 ---
 
@@ -526,12 +538,18 @@ When therapist confirms:
 
 The caseload view should highlight clients with sessions awaiting review. The therapist can review multiple sessions in sequence. Each confirmation is independent.
 
-### 9.4 Action cards in ClientWorkspaceView (deferred from Phase 7)
+### 9.4 Action cards in ClientWorkspaceView (deferred from Phase 7) — PARTIAL ✅
 
-Add session action cards to ClientWorkspaceView:
-- "Review Redaction" button/card (amber) — appears when client has sessions at `ended` or `pending_redaction`. Opens RedactionReviewView.
-- "Ready to Process" indicator (blue) — appears when sessions at `redacted` status. Triggers Claude Code `/process-sessions` workflow.
-- "View Notes" / "View Feedback" links (green) — appears when sessions are `processed`.
+- ✅ "Review Redaction" button (amber) — opens RedactionReviewView
+- ✅ "View" button — reopens transcript for reviewed/processed sessions
+- ✅ "Ready" indicator (blue) — shows on redacted sessions
+- **Deferred to Phase 10:** "View Notes" / "View Feedback" links (need document viewer first)
+
+### 9.5 Save live-detected entities to DB ✅ (completing now)
+
+Entities detected during recording by LiveRedactor are saved to `entity_mappings` table with `persistence_scope = 'session'` when recording stops. This allows the review view to display them alongside the persistent library entities.
+
+Without this, the review view only shows persistent library entities — new names detected during THIS recording would be invisible.
 
 ---
 
@@ -569,6 +587,10 @@ Add "Feedback" tab to ClientWorkspaceView's segmented picker (alongside Sessions
 ### 10.4 Export
 
 All document views include "Copy to Clipboard" with real names substituted. This is the primary export path to CMS. Entity substitution happens in memory at copy time — never written to storage.
+
+### 10.5 "View Notes" / "View Feedback" links in SessionHistoryView (deferred from Phase 9.4)
+
+Wire the existing notes/feedback icons in SessionHistoryView to open the document viewer when clicked. Currently they're display-only indicators.
 
 ---
 
