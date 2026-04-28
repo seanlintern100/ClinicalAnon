@@ -3,7 +3,7 @@
 //  Redactor Lite
 //
 //  Purpose: Simplified Redactor app — redact, copy out, paste back, restore.
-//           No AI analysis, no live sessions.
+//           No AI analysis, no recording, no live sessions.
 //  Organization: 3 Big Things
 //
 
@@ -14,21 +14,19 @@ import SwiftUI
 @main
 struct RedactorLiteApp: App {
 
+    @StateObject private var viewModel = LiteViewModel()
+
     var body: some Scene {
         WindowGroup {
-            HomeView()
-                .frame(minWidth: 1100, minHeight: 600)
-                .onOpenURL { url in
-                    handleRecordingURL(url)
-                }
-                .onAppear {
-                    CopilotHTTPServer.shared.startListening()
-                }
+            ZStack {
+                GradientPageBackground()
+                LiteRedactorView(viewModel: viewModel)
+            }
+            .frame(minWidth: 1100, minHeight: 600)
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1400, height: 800)
         .commands {
-            // Remove unused menu items
             CommandGroup(replacing: .newItem) {}
         }
 
@@ -36,49 +34,18 @@ struct RedactorLiteApp: App {
             LiteSettingsView()
         }
     }
-
-    // MARK: - URL Scheme Handler
-
-    /// Handles `redactor-lite://record?initials=JB&type=Therapy&length=50&goals=...&multiSpeaker=false`
-    private func handleRecordingURL(_ url: URL) {
-        guard url.scheme == "redactor-lite",
-              url.host == "record" else { return }
-
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let params = components?.queryItems ?? []
-
-        var info: [String: String] = [:]
-        for item in params {
-            if let value = item.value {
-                info[item.name] = value
-            }
-        }
-
-        // Open recording window, then post notification with metadata params
-        RecordingWindowController.shared.showRecordingWindow()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            NotificationCenter.default.post(
-                name: .autoStartRecording,
-                object: nil,
-                userInfo: info
-            )
-        }
-    }
 }
 
 // MARK: - Lite Settings View
 
-/// Settings — detection, exclusions, inclusions, and recording
 struct LiteSettingsView: View {
     private enum Tab: String, Hashable {
         case detection = "Detection"
         case exclusions = "Exclusions"
         case inclusions = "Inclusions"
-        case recording = "Recording"
     }
 
     @State private var selectedTab: Tab = .detection
-    @StateObject private var exportService = SessionExportService()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -93,10 +60,6 @@ struct LiteSettingsView: View {
             InclusionSettingsView()
                 .tabItem { Label("Inclusions", systemImage: "plus.circle") }
                 .tag(Tab.inclusions)
-
-            RecordingSettingsView(exportService: exportService)
-                .tabItem { Label("Recording", systemImage: "mic.circle") }
-                .tag(Tab.recording)
         }
         .frame(width: 500, height: 650)
     }

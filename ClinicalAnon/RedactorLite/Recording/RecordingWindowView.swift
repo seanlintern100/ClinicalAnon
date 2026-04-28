@@ -60,22 +60,8 @@ struct RecordingWindowView: View {
             GradientPageBackground()
 
             VStack(spacing: 0) {
-                // Tab bar (only shows Dashboard when copilot is active)
-                if CopilotHTTPServer.shared.isRunning {
-                    tabBar
-                        .padding(.horizontal, DesignSystem.Spacing.medium)
-                        .padding(.top, DesignSystem.Spacing.small)
-                }
-
-                // Content
-                switch activeTab {
-                case .transcript:
-                    transcriptContent
-                case .dashboard:
-                    dashboardContent
-                case .notes:
-                    notesContent
-                }
+                // Content — transcript only (redaction-only build)
+                transcriptContent
             }
         }
         .onAppear {
@@ -108,18 +94,7 @@ struct RecordingWindowView: View {
                   let info = notification.userInfo as? [String: String] else { return }
             applyURLMetadata(info)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .mcpStopRecording)) { _ in
-            stopRecording()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .mcpPauseRecording)) { _ in
-            pauseRecording()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .mcpResumeRecording)) { _ in
-            resumeRecording()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .clinicalNotesReceived)) { _ in
-            notesAvailable = true
-        }
+        // MCP notifications disabled — redaction-only build
     }
 
     // MARK: - Tab Bar
@@ -254,11 +229,7 @@ struct RecordingWindowView: View {
                 errorMessage = nil
                 startLevelTimer()
 
-                // Activate HTTP server session (listener already running in standby)
-                if let sessionFolder = exportService.sessionFolderURL {
-                    CopilotHTTPServer.shared.privateFolderURL = exportService.privateFolderURL
-                    CopilotHTTPServer.shared.start(sessionFolder: sessionFolder)
-                }
+                // HTTP server disabled — redaction-only build
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -291,7 +262,6 @@ struct RecordingWindowView: View {
     }
 
     private func newSession() {
-        CopilotHTTPServer.shared.deactivateSession()
         currentSession = nil
         phase = .setup
         metadata = SessionMetadata.fromLastUsed()

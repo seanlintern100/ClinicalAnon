@@ -16,20 +16,7 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.3bigthings.Redactor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>redactor-lite</string>
-			</array>
-		</dict>
-	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Redactor needs microphone access to record your voice during clinical sessions.</string>
 </dict>
 </plist>
